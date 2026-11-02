@@ -18,11 +18,13 @@
           pname = "nixup";
           version = "0.1.0";
           src = self;
+          subPackages = [ "cmd/nixup" ];
           vendorHash = null; # standard library only
+          nativeCheckInputs = [ pkgs.git ]; # one test runs against a real repository
           ldflags = [
             "-s"
             "-w"
-            "-X main.version=${self.shortRev or self.dirtyShortRev or "dev"}"
+            "-X github.com/Villoh/nixup/internal/cli.Version=${self.shortRev or self.dirtyShortRev or "dev"}"
           ];
           # The tools it shells out to; PATH is left alone so the system's own nh/nix win.
           meta = {

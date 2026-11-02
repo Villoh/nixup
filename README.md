@@ -50,7 +50,7 @@ between (prereleases are skipped and counted). Jumps that are probably breaking 
 `nixup lock -y --no-build --report r.md` and `nixup pkg -y --report r.md`, then open a PR with
 `r.md`; the full-system build stays local. Not wired yet.
 
-## Install and develop
+## Install
 
 ```bash
 nix run github:Villoh/nixup -- check       # try it without installing
@@ -64,11 +64,41 @@ nixup = {
 };
 ```
 
-```bash
-nix build .      # package
-nix develop      # go, gopls, nix-update
-go test ./...
+## Layout
+
+```text
+cmd/nixup/          main: wires the real terminal, process runner and GitHub client
+internal/
+  cli/              flag parsing, subcommands, exit codes
+  check/            the read-only checks: inputs, packages, profile, flatpak
+  update/           the two commands that write: Lock (flake.lock) and Pkg (packages/)
+  report/           terminal text and Markdown rendering
+  flake/            flake.lock, repo discovery, hosts, own packages, scratch copy
+  gh/               tags and heads through git; commits and release notes through the API
+  ver/              version ordering, prerelease detection, major-jump warnings
+  run/              the only place that starts processes (Runner), plus a scripted Fake
+  ui/               terminal output, color, yes/no questions
+  par/              bounded concurrency
+  exit/             exit codes shared by every command
+  testutil/         fake GitHub API, temp trees and terminals (tests only)
 ```
+
+Dependencies point one way: `cli → update → check → gh/flake → run/ver`. Nothing outside
+`run` starts a process and nothing outside `ui` talks to the terminal, so every command
+can be tested against a scripted runner.
+
+## Develop
+
+```bash
+nix develop        # go, gopls, nix-update
+go test -race ./...
+nix build          # also runs the tests inside the Nix sandbox
+```
+
+The tests never touch the network, your repos or your system: `run.Fake` answers every
+`git`, `nix`, `nh`, `nix-update` and `flatpak` call from a script, and `testutil` serves a
+fake GitHub API. Two tests use a real temporary `git` repository. CI runs gofmt, vet, the
+tests with `-race`, and `nix build`.
 
 Needs `git`, `nix`, `nh` (for `lock` builds) and `nix-update` (or it runs it through
 `nix run nixpkgs#nix-update`). `flatpak` is optional. GitHub API calls use `GH_TOKEN`,
