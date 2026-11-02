@@ -1,0 +1,182 @@
+package cli_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/Villoh/nixup/internal/check"
+	"github.com/Villoh/nixup/internal/cli"
+	"github.com/Villoh/nixup/internal/exit"
+	"github.com/Villoh/nixup/internal/run"
+	"github.com/Villoh/nixup/internal/testutil"
+)
+
+type fixture struct {
+	e         *testutil.Env
+	repo      string
+	out, errb *bytes.Buffer
+	deps      cli.Deps
+}
+
+func newFixture(t *testing.T, inputs map[string]string) *fixture {
+	t.Helper()
+	e := testutil.New(t)
+	term, out, errb := testutil.Term("")
+	repo := testutil.Tree(t, map[string]string{"flake.nix": "{}", "flake.lock": testutil.LockJSON(inputs)})
+	return &fixture{e: e, repo: repo, out: out, errb: errb, deps: cli.Deps{T: term, R: e.Run, GH: e.GH}}
+}
+
+func (f *fixture) run(args ...string) int { return cli.Run(args, f.deps) }
+
+func TestVersionAndHelp(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("version"); code != exit.OK || strings.TrimSpace(f.out.String()) != "nixup dev" {
+		t.Errorf("code %d out %q", code, f.out)
+	}
+	f.out.Reset()
+	if code := f.run("help"); code != exit.OK || !strings.Contains(f.out.String(), "nixup lock") {
+		t.Errorf("code %d out %q", code, f.out)
+	}
+}
+
+func TestUnknownCommand(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("frobnicate"); code != exit.Error {
+		t.Errorf("code %d", code)
+	}
+	if !strings.Contains(f.errb.String(), "nixup lock") || f.out.Len() != 0 {
+		t.Errorf("usage goes to stderr: out=%q err=%q", f.out, f.errb)
+	}
+}
+
+func TestFlagProblems(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("check", "-C", f.repo, "--bogus"); code != exit.Error {
+		t.Errorf("unknown flag: code %d", code)
+	}
+	if code := f.run("check", "-h"); code != exit.OK {
+		t.Errorf("-h is not an error: code %d", code)
+	}
+	if code := f.run("check", "-C", filepath.Join(t.TempDir(), "nowhere")); code != exit.Error ||
+		!strings.Contains(f.errb.String(), "no flake.nix") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+}
+
+func TestCheckDefaultsToCheck(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
+	f.e.Head("o/np", "", "aaa")
+	// `nixup -C dir` without a subcommand is `nixup check -C dir`.
+	if code := f.run("-C", f.repo, "--only", "inputs"); code != exit.OK {
+		t.Errorf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if !strings.Contains(f.out.String(), "1 up to date") {
+		t.Errorf("%q", f.out)
+	}
+}
+
+func TestCheckExitCodeAndJSON(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa1111"})
+	f.e.Head("o/np", "", "bbb2222")
+	code := f.run("check", "-C", f.repo, "--only", "inputs", "--json")
+	if code != exit.Pending {
+		t.Errorf("outdated must exit 1, got %d", code)
+	}
+	var rows []check.Row
+	if err := json.Unmarshal(f.out.Bytes(), &rows); err != nil {
+		t.Fatalf("--json must be valid JSON: %v\n%s", err, f.out)
+	}
+	if len(rows) != 1 || rows[0].Name != "np" || rows[0].Status != check.Outdated || rows[0].Latest != "bbb2222" {
+		t.Errorf("rows: %+v", rows)
+	}
+}
+
+func TestCheckErrorExitCode(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
+	f.e.Run.On(run.Rule{Prefix: "git ls-remote", Fail: os.ErrDeadlineExceeded, Err: "fatal: timeout\n"})
+	if code := f.run("check", "-C", f.repo, "--only", "inputs"); code != exit.Error {
+		t.Errorf("a failing check exits 2, got %d", code)
+	}
+}
+
+func TestCheckMarkdown(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa1111"})
+	f.e.Head("o/np", "", "bbb2222")
+	f.run("check", "-C", f.repo, "--only", "inputs", "--markdown", "--review")
+	if !strings.Contains(f.out.String(), "### inputs / np `aaa1111 (") {
+		t.Errorf("%q", f.out)
+	}
+	f2 := newFixture(t, map[string]string{"np": "o/np@#aaa"})
+	f2.e.Head("o/np", "", "aaa")
+	f2.run("check", "-C", f2.repo, "--only", "inputs", "--markdown")
+	if f2.out.String() != "Everything is up to date.\n" {
+		t.Errorf("%q", f2.out)
+	}
+}
+
+func TestCheckUnknownSection(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("check", "-C", f.repo, "--only", "inputs,bogus"); code != exit.Error ||
+		!strings.Contains(f.errb.String(), `unknown section "bogus"`) {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	if f.e.Run.Count("git") != 0 {
+		t.Error("validate before doing any work")
+	}
+}
+
+func TestLockParsesFlagsAfterInputs(t *testing.T) {
+	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	// `nixup lock nixpkgs home-manager --no-build -C repo`: Go's flag package alone stops at "nixpkgs".
+	f.run("lock", "nixpkgs", "home-manager", "--no-build", "-C", f.repo)
+	for _, c := range f.e.Run.Calls() {
+		if strings.HasPrefix(c.String(), "nix flake update") {
+			if !strings.HasSuffix(c.String(), "nixpkgs home-manager") {
+				t.Errorf("inputs were not forwarded: %s", c)
+			}
+			return
+		}
+	}
+	t.Errorf("nix flake update did not run: %v", f.e.Run.Calls())
+}
+
+func TestLockRepeatedHostFlags(t *testing.T) {
+	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	f.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
+		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"nixpkgs": "NixOS/nixpkgs@#bbb"})), 0o644)
+	}})
+	f.run("lock", "-C", f.repo, "-H", "desktop", "-H", "zenbook")
+	if f.e.Run.Count("nh os build") != 2 || f.e.Run.Count("nix eval --json") != 0 {
+		t.Errorf("calls: %v", f.e.Run.Calls())
+	}
+}
+
+func TestPkgFlagsAfterNames(t *testing.T) {
+	f := newFixture(t, nil)
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
+	// The bug this guards: `pkg padpoll --no-build -y` once read "--no-build" as a package name.
+	if code := f.run("pkg", "padpoll", "--no-build", "-y", "-C", f.repo); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if f.e.Run.Count("nix-update --flake padpoll --version=1.1.0") != 1 || f.e.Run.Count("nix build") != 0 {
+		t.Errorf("calls: %v", f.e.Run.Calls())
+	}
+}
+
+func TestPkgUnknownName(t *testing.T) {
+	f := newFixture(t, nil)
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	if code := f.run("pkg", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no such package: nope") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+}
