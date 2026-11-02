@@ -52,9 +52,16 @@ between (prereleases are skipped and counted). Jumps that are probably breaking 
 
 ## Install and develop
 
+```bash
+nix run github:Villoh/nixup -- check       # try it without installing
+```
+
 ```nix
 # flake input; then add inputs.nixup.packages.${system}.default to systemPackages
-nixup.url = "path:/home/mikel/development/personal/projects/nixup";
+nixup = {
+  url = "github:Villoh/nixup";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
 ```
 
 ```bash
