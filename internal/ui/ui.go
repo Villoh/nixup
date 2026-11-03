@@ -23,7 +23,13 @@ type Term struct {
 // Stdio is the process's real terminal.
 func Stdio() *Term {
 	return &Term{Out: os.Stdout, Err: os.Stderr, In: os.Stdin,
-		Color: isTTY(os.Stdout), Interactive: isTTY(os.Stdin)}
+		Color: colorEnabled(isTTY(os.Stdout), os.Getenv), Interactive: isTTY(os.Stdin)}
+}
+
+// colorEnabled follows https://no-color.org: any non-empty NO_COLOR turns color off, as does
+// TERM=dumb. Without a terminal there is no color either.
+func colorEnabled(tty bool, getenv func(string) string) bool {
+	return tty && getenv("NO_COLOR") == "" && getenv("TERM") != "dumb"
 }
 
 func isTTY(f *os.File) bool {

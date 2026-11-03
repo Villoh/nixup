@@ -55,3 +55,34 @@ func TestConfirmReadsOneLinePerQuestion(t *testing.T) {
 		t.Errorf("answers must not be lost between questions: %v", got)
 	}
 }
+
+func TestColorEnabled(t *testing.T) {
+	env := func(kv ...string) func(string) string {
+		return func(k string) string {
+			for i := 0; i < len(kv); i += 2 {
+				if kv[i] == k {
+					return kv[i+1]
+				}
+			}
+			return ""
+		}
+	}
+	cases := []struct {
+		name string
+		tty  bool
+		env  func(string) string
+		want bool
+	}{
+		{"terminal", true, env("TERM", "xterm-256color"), true},
+		{"pipe", false, env("TERM", "xterm"), false},
+		{"NO_COLOR set", true, env("NO_COLOR", "1"), false},
+		{"NO_COLOR any non-empty value", true, env("NO_COLOR", "false"), false},
+		{"NO_COLOR empty is ignored", true, env("NO_COLOR", ""), true},
+		{"dumb terminal", true, env("TERM", "dumb"), false},
+	}
+	for _, c := range cases {
+		if got := colorEnabled(c.tty, c.env); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
