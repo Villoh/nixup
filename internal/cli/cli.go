@@ -38,8 +38,16 @@ type Deps struct {
 // Run executes one nixup invocation and returns its exit code.
 func Run(args []string, d Deps) int {
 	cmd := "check"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd, args = args[0], args[1:]
+	if len(args) > 0 {
+		switch args[0] {
+		case "-version", "--version", "-v":
+			args[0] = "version"
+		case "-h", "-help", "--help":
+			args[0] = "help"
+		}
+		if !strings.HasPrefix(args[0], "-") {
+			cmd, args = args[0], args[1:]
+		}
 	}
 	switch cmd {
 	case "check":

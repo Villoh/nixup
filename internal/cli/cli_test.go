@@ -43,6 +43,27 @@ func TestVersionAndHelp(t *testing.T) {
 	}
 }
 
+func TestVersionAndHelpFlags(t *testing.T) {
+	for _, flag := range []string{"-version", "--version", "-v"} {
+		f := newFixture(t, nil)
+		if code := f.run(flag); code != exit.OK || strings.TrimSpace(f.out.String()) != "nixup dev" {
+			t.Errorf("%s: code %d out %q", flag, code, f.out)
+		}
+	}
+	for _, flag := range []string{"-h", "--help"} {
+		f := newFixture(t, nil)
+		if code := f.run(flag); code != exit.OK || !strings.Contains(f.out.String(), "nixup lock") {
+			t.Errorf("%s: code %d out %q", flag, code, f.out)
+		}
+	}
+	// A subcommand keeps its own -h.
+	f := newFixture(t, nil)
+	f.run("check", "-h")
+	if !strings.Contains(f.errb.String(), "-only") {
+		t.Errorf("check -h must list check's flags: %q", f.errb)
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	f := newFixture(t, nil)
 	if code := f.run("frobnicate"); code != exit.Error {
