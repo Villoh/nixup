@@ -27,6 +27,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release notes read the history since the last tag
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -53,6 +55,17 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
+      - name: release notes from the commits since the last tag
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --unreleased --tag v${{ inputs.version }} --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: show the notes
+        run: cat RELEASE_NOTES.md
+
       - name: commit to main and publish
         if: ${{ !inputs.dry_run }}
         run: |
@@ -69,4 +82,4 @@ jobs:
             -f msg="chore(release): v$VERSION" -f content="$(base64 -w0 flake.nix)" \
             --jq .data.createCommitOnBranch.commit.oid)"
           echo "release commit: $sha"
-          gh release create "v$VERSION" --target "$sha" --title "v$VERSION" --generate-notes --latest
+          gh release create "v$VERSION" --target "$sha" --title "v$VERSION" --notes-file RELEASE_NOTES.md --latest

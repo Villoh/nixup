@@ -115,7 +115,7 @@ gh workflow run release -f version=0.2.0 -f dry_run=true # validate only, publis
 
 It checks the version is `X.Y.Z` and higher than the current one, bumps `flake.nix`, runs
 vet and the tests, commits `chore(release): vX.Y.Z` to `main` through the API (so GitHub signs
-it) and publishes the `vX.Y.Z` release with generated notes on that commit.
+it) and publishes the `vX.Y.Z` release with notes built from the Conventional Commits since the last tag (`cliff.toml`).
 
 ## Not included
 
