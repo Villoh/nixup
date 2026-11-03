@@ -1,0 +1,33 @@
+# Release notes for GitHub releases, built from Conventional Commits.
+# Used by .github/workflows/release.yml; try it locally with:
+#   git cliff --unreleased --tag v0.2.0 --strip header
+[changelog]
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}\
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{{ commit.message | split(pat="\n") | first | upper_first | trim }} \
+([{{ commit.id | truncate(length=7, end="") }}](https://github.com/Villoh/nixup/commit/{{ commit.id }}))
+{% endfor %}
+{% endfor %}\
+{% if previous.version %}**Full Changelog**: https://github.com/Villoh/nixup/compare/{{ previous.version }}...{{ version }}{% endif %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^(test|ci|build)", group = "<!-- 5 -->Tests, CI and build" },
+  { message = "^chore", group = "<!-- 6 -->Maintenance" },
+  { message = ".*", group = "<!-- 7 -->Other" },
+]
