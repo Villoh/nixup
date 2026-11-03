@@ -10,7 +10,7 @@ nixup check --review   # + upstream commits and release notes for each outdated 
 nixup lock             # update flake.lock in a scratch copy, show changes, build, ask, apply
 nixup lock nixpkgs home-manager        # only those inputs
 nixup pkg              # update own packages/ one by one, after reviewing each
-nixup pkg strata -y    # no questions (CI)
+nixup pkg mypkg -y     # no questions (CI)
 ```
 
 Flags work before, between and after names. `-C <dir>` selects the flake (default: search
@@ -106,6 +106,7 @@ Needs `git`, `nix`, `nh` (for `lock` builds) and `nix-update` (or it runs it thr
 
 ## Not included
 
-- `dms-bitwarden` (pinned on purpose, lives in a module, not in `packages/`).
+- Anything defined outside the flake's `packages` output (a `fetchurl` inside a module, a pinned
+  `rev`): nixup does not see it. Move it to `packages/` to have it checked.
 - Non-GitHub upstreams: reported as `info`.
 - Bumping hashes by itself: that is `nix-update`'s job.
