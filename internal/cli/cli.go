@@ -15,8 +15,18 @@ import (
 	"github.com/Villoh/nixup/internal/update"
 )
 
-// Version is set at build time with -ldflags "-X .../internal/cli.Version=...".
-var Version = "dev"
+// Version and Commit are set at build time with -ldflags "-X .../internal/cli.Version=...".
+var (
+	Version = "dev"
+	Commit  = ""
+)
+
+func versionString() string {
+	if Commit == "" {
+		return "nixup " + Version
+	}
+	return "nixup " + Version + " (" + Commit + ")"
+}
 
 const usage = `nixup — update checker and safe updater for flake-based NixOS
 
@@ -60,7 +70,7 @@ func Run(args []string, d Deps) int {
 	case "pkg":
 		return runPkg(args, d)
 	case "version":
-		d.T.Println("nixup", Version)
+		d.T.Println(versionString())
 		return exit.OK
 	case "help":
 		d.T.Println(usage)

@@ -11,12 +11,13 @@
         "aarch64-linux"
       ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      version = "0.1.0"; # the one place the version lives; a v<version> tag releases it
     in
     {
       packages = forAll (pkgs: rec {
         nixup = pkgs.buildGoModule {
           pname = "nixup";
-          version = "0.1.0";
+          inherit version;
           src = self;
           subPackages = [ "cmd/nixup" ];
           vendorHash = null; # standard library only
@@ -24,7 +25,8 @@
           ldflags = [
             "-s"
             "-w"
-            "-X github.com/Villoh/nixup/internal/cli.Version=${self.shortRev or self.dirtyShortRev or "dev"}"
+            "-X github.com/Villoh/nixup/internal/cli.Version=${version}"
+            "-X github.com/Villoh/nixup/internal/cli.Commit=${self.shortRev or self.dirtyShortRev or ""}"
           ];
           # The tools it shells out to; PATH is left alone so the system's own nh/nix win.
           meta = {

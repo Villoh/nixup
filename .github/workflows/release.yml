@@ -1,0 +1,27 @@
+name: release
+
+# Push a tag v<version> (the version in flake.nix) to publish a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: tag matches the version in flake.nix
+        run: |
+          want="$(sed -n 's/^ *version = "\(.*\)"; # the one place.*/\1/p' flake.nix)"
+          [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != flake.nix version v$want"; exit 1; }
+      - run: go test -race -count=1 ./...
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag --title "$GITHUB_REF_NAME"
