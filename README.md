@@ -104,6 +104,19 @@ Needs `git`, `nix`, `nh` (for `lock` builds) and `nix-update` (or it runs it thr
 `nix run nixpkgs#nix-update`). `flatpak` is optional. GitHub API calls use `GH_TOKEN`,
 `GITHUB_TOKEN` or `gh auth token`; without one the rate limit is low.
 
+## Releases
+
+Do not edit the version or tag by hand. Run the workflow with the new version:
+
+```bash
+gh workflow run release -f version=0.2.0                 # or the Actions tab
+gh workflow run release -f version=0.2.0 -f dry_run=true # validate only, publish nothing
+```
+
+It checks the version is `X.Y.Z` and higher than the current one, bumps `flake.nix`, runs
+vet and the tests, commits `chore(release): vX.Y.Z` to `main` through the API (so GitHub signs
+it) and publishes the `vX.Y.Z` release with generated notes on that commit.
+
 ## Not included
 
 - Anything defined outside the flake's `packages` output (a `fetchurl` inside a module, a pinned
