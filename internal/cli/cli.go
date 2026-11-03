@@ -33,11 +33,13 @@ type Deps struct {
 	T  *ui.Term
 	R  run.Runner
 	GH *gh.Client
+
+	implicit bool // the subcommand was not typed: `check` was assumed
 }
 
 // Run executes one nixup invocation and returns its exit code.
 func Run(args []string, d Deps) int {
-	cmd := "check"
+	cmd, origArgs := "check", args
 	if len(args) > 0 {
 		switch args[0] {
 		case "-version", "--version", "-v":
@@ -49,6 +51,7 @@ func Run(args []string, d Deps) int {
 			cmd, args = args[0], args[1:]
 		}
 	}
+	d.implicit = len(args) == len(origArgs)
 	switch cmd {
 	case "check":
 		return runCheck(args, d)
@@ -105,6 +108,9 @@ func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string,
 	case help:
 		return nil, "", exit.OK, false
 	case err != nil:
+		if d.implicit {
+			d.T.Errorln("nixup: no command given, 'check' was assumed (see 'nixup help' for the others)")
+		}
 		return nil, "", exit.Error, false
 	}
 	repo, err = flake.FindRepo(*dir)
