@@ -1,27 +1,72 @@
 name: release
 
-# Push a tag v<version> (the version in flake.nix) to publish a GitHub release.
+# Run from the Actions tab or: gh workflow run release -f version=0.2.0
+# Bumps the version in flake.nix, commits it to main, and publishes v<version> on that commit.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version, X.Y.Z (must be higher than the current one)"
+        required: true
+      dry_run:
+        description: "Check everything and show the change, but commit and publish nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency: release
+
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: tag matches the version in flake.nix
+
+      - name: validate the version
         run: |
-          want="$(sed -n 's/^ *version = "\(.*\)"; # the one place.*/\1/p' flake.nix)"
-          [ "v$want" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != flake.nix version v$want"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be X.Y.Z, got '$VERSION'"; exit 1; }
+          current="$(sed -n 's/^ *version = "\(.*\)"; # the one place.*/\1/p' flake.nix)"
+          [ -n "$current" ] || { echo "no version line found in flake.nix"; exit 1; }
+          [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" = "$VERSION" ] && [ "$current" != "$VERSION" ] \
+            || { echo "$VERSION is not higher than the current $current"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "tag v$VERSION already exists"; exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_ENV"
+          echo "bumping $current -> $VERSION"
+
+      - name: bump flake.nix
+        run: |
+          sed -i "s/^\( *version = \"\)[^\"]*\(\"; # the one place\)/\1${VERSION}\2/" flake.nix
+          git diff --exit-code flake.nix >/dev/null && { echo "flake.nix did not change"; exit 1; }
+          git diff flake.nix
+
+      - run: go vet ./...
       - run: go test -race -count=1 ./...
-      - name: publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag --title "$GITHUB_REF_NAME"
+
+      - name: commit to main and publish
+        if: ${{ !inputs.dry_run }}
+        run: |
+          # Committed through the API, so GitHub signs it and it shows as Verified.
+          sha="$(gh api graphql \
+            -f query='mutation($repo:String!,$oid:GitObjectID!,$msg:String!,$content:Base64String!){
+              createCommitOnBranch(input:{
+                branch:{repositoryNameWithOwner:$repo,branchName:"main"},
+                message:{headline:$msg},
+                expectedHeadOid:$oid,
+                fileChanges:{additions:[{path:"flake.nix",contents:$content}]}
+              }){commit{oid}}}' \
+            -f repo="$GITHUB_REPOSITORY" -f oid="$GITHUB_SHA" \
+            -f msg="chore(release): v$VERSION" -f content="$(base64 -w0 flake.nix)" \
+            --jq .data.createCommitOnBranch.commit.oid)"
+          echo "release commit: $sha"
+          gh release create "v$VERSION" --target "$sha" --title "v$VERSION" --generate-notes --latest
