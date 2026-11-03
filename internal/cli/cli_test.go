@@ -79,6 +79,17 @@ func TestUnknownFlagExplainsTheAssumedCommand(t *testing.T) {
 	}
 }
 
+func TestVersionString(t *testing.T) {
+	oldV, oldC := cli.Version, cli.Commit
+	defer func() { cli.Version, cli.Commit = oldV, oldC }()
+	cli.Version, cli.Commit = "1.2.3", "a4a2eed"
+	f := newFixture(t, nil)
+	f.run("--version")
+	if got := strings.TrimSpace(f.out.String()); got != "nixup 1.2.3 (a4a2eed)" {
+		t.Errorf("got %q", got)
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	f := newFixture(t, nil)
 	if code := f.run("frobnicate"); code != exit.Error {
