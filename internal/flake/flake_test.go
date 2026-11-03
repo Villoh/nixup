@@ -292,3 +292,99 @@ func TestScratchCopyAndDirtyWithRealGit(t *testing.T) {
 		t.Errorf("Restore must bring back the committed content, got %q", b)
 	}
 }
+
+func env(kv ...string) func(string) string {
+	return func(k string) string {
+		for i := 0; i < len(kv); i += 2 {
+			if kv[i] == k {
+				return kv[i+1]
+			}
+		}
+		return ""
+	}
+}
+
+func flakeDir(t *testing.T) string {
+	t.Helper()
+	return testutil.Tree(t, map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+}
+
+func TestResolvePrecedence(t *testing.T) {
+	flagDir, nixup, nhOS, nh := flakeDir(t), flakeDir(t), flakeDir(t), flakeDir(t)
+	cases := []struct {
+		name       string
+		flag       string
+		env        func(string) string
+		want, from string
+	}{
+		{"flag beats everything", flagDir, env("NIXUP_FLAKE", nixup, "NH_FLAKE", nh), flagDir, "-C"},
+		{"NIXUP_FLAKE beats nh's", "", env("NIXUP_FLAKE", nixup, "NH_OS_FLAKE", nhOS, "NH_FLAKE", nh), nixup, "$NIXUP_FLAKE"},
+		{"NH_OS_FLAKE beats NH_FLAKE", "", env("NH_OS_FLAKE", nhOS, "NH_FLAKE", nh), nhOS, "$NH_OS_FLAKE"},
+		{"NH_FLAKE is reused", "", env("NH_FLAKE", nh), nh, "$NH_FLAKE"},
+		{"nh's host suffix is dropped", "", env("NH_FLAKE", nh+"#desktop"), nh, "$NH_FLAKE"},
+		{"path: prefix is accepted", "", env("NIXUP_FLAKE", "path:"+nixup), nixup, "$NIXUP_FLAKE"},
+	}
+	for _, c := range cases {
+		got, from, err := flake.Resolve(c.flag, c.env)
+		if err != nil || got != c.want || from != c.from {
+			t.Errorf("%s: got %q from %q, err %v; want %q from %q", c.name, got, from, err, c.want, c.from)
+		}
+	}
+}
+
+func TestResolveTildeAndRelative(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "cfg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(home, "cfg", "flake.nix"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(home, "cfg", "flake.lock"), []byte("{}"), 0o644)
+	got, _, err := flake.Resolve("", env("NIXUP_FLAKE", "~/cfg#desktop"))
+	if err != nil || got != filepath.Join(home, "cfg") {
+		t.Errorf("got %q, %v", got, err)
+	}
+}
+
+func TestResolveFallsBackToSearchingUpwards(t *testing.T) {
+	root := flakeDir(t)
+	sub := filepath.Join(root, "modules")
+	os.MkdirAll(sub, 0o755)
+	t.Chdir(sub)
+	got, from, err := flake.Resolve("", env())
+	if err != nil || from != "" {
+		t.Fatalf("got %q from %q, %v", got, from, err)
+	}
+	if want, _ := filepath.EvalSymlinks(root); got != want && got != root {
+		t.Errorf("got %q, want %q", got, root)
+	}
+}
+
+func TestResolveErrors(t *testing.T) {
+	// A configured path that is wrong is an error, never silently replaced by the current directory
+	// or by a parent: the user asked for that exact flake.
+	inside := flakeDir(t)
+	child := filepath.Join(inside, "sub")
+	os.MkdirAll(child, 0o755)
+	t.Chdir(inside)
+	for name, e := range map[string]func(string) string{
+		"parent flake is not used": env("NIXUP_FLAKE", child),
+		"missing directory":        env("NIXUP_FLAKE", filepath.Join(inside, "nope")),
+		"github reference":         env("NH_FLAKE", "github:Villoh/nixos-config"),
+		"git url":                  env("NH_FLAKE", "git+https://example.org/x.git"),
+	} {
+		if _, _, err := flake.Resolve("", e); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	_, _, err := flake.Resolve("", env("NH_FLAKE", "github:Villoh/nixos-config"))
+	if err == nil || !strings.Contains(err.Error(), "$NH_FLAKE") || !strings.Contains(err.Error(), "not a local directory") {
+		t.Errorf("the error must name the variable and the problem: %v", err)
+	}
+
+	t.Chdir(t.TempDir())
+	_, _, err = flake.Resolve("", env())
+	if err == nil || !strings.Contains(err.Error(), "NIXUP_FLAKE") {
+		t.Errorf("with nothing configured, the error must say how to configure it: %v", err)
+	}
+}

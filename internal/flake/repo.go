@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -31,6 +32,60 @@ func FindRepo(dir string) (string, error) {
 		p = parent
 	}
 }
+
+// envVars are checked in order. NH_* are the ones nh itself reads, so a configured nh
+// needs no extra setup here.
+var envVars = []string{"NIXUP_FLAKE", "NH_OS_FLAKE", "NH_FLAKE"}
+
+// Resolve finds the flake to work on. Precedence: the -C flag, then NIXUP_FLAKE,
+// NH_OS_FLAKE and NH_FLAKE, then a search upwards from the current directory.
+// source says where the answer came from: "-C", "$NIXUP_FLAKE", ... or "" for the search.
+func Resolve(flagDir string, getenv func(string) string) (repo, source string, err error) {
+	if flagDir != "" {
+		repo, err = FindRepo(flagDir)
+		return repo, "-C", err
+	}
+	for _, name := range envVars {
+		v := getenv(name)
+		if v == "" {
+			continue
+		}
+		dir, err := localPath(v)
+		if err != nil {
+			return "", "", fmt.Errorf("$%s: %w", name, err)
+		}
+		// An explicitly configured path is used as is: never silently pick a parent directory.
+		if !exists(filepath.Join(dir, "flake.nix")) || !exists(filepath.Join(dir, "flake.lock")) {
+			return "", "", fmt.Errorf("$%s=%s: no flake.nix + flake.lock there", name, v)
+		}
+		return dir, "$" + name, nil
+	}
+	repo, err = FindRepo(".")
+	if err != nil {
+		err = fmt.Errorf("%w (run it inside the flake, use -C, or set NIXUP_FLAKE or NH_FLAKE)", err)
+	}
+	return repo, "", err
+}
+
+// localPath turns a value such as "~/nixos#desktop" or "path:/etc/nixos" into a directory.
+// Remote references (github:, git+https:, ...) cannot be updated in place.
+func localPath(v string) (string, error) {
+	v, _, _ = strings.Cut(v, "#") // nh accepts "<flake>#<host>"
+	v = strings.TrimPrefix(v, "path:")
+	if m := schemeRe.FindString(v); m != "" {
+		return "", fmt.Errorf("%q is not a local directory", v)
+	}
+	if v == "~" || strings.HasPrefix(v, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		v = filepath.Join(home, strings.TrimPrefix(v, "~"))
+	}
+	return filepath.Abs(v)
+}
+
+var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
 // System is the nix system string of this machine, e.g. "x86_64-linux".
 func System() string {
