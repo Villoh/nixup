@@ -13,8 +13,22 @@ nixup pkg              # update own packages/ one by one, after reviewing each
 nixup pkg mypkg -y     # no questions (CI)
 ```
 
-Flags work before, between and after names. `-C <dir>` selects the flake (default: search
-upwards from the current directory). `check` exits 0 (all fine), 1 (something outdated), 2 (error).
+Flags work before, between and after names.
+
+## Which flake
+
+You do not have to be inside it. In order of precedence:
+
+1. `-C <dir>`
+2. `$NIXUP_FLAKE`
+3. `$NH_OS_FLAKE`, then `$NH_FLAKE`: the variables [nh](https://github.com/nix-community/nh)
+   reads, so a configured `nh` needs no extra setup (a `#host` suffix is ignored)
+4. otherwise, search upwards from the current directory
+
+A configured path must be a local directory with `flake.nix` and `flake.lock`; it is never
+replaced by a parent or by the current directory. When the flake comes from an environment
+variable, nixup says so on stderr (`nixup: using /path ($NH_FLAKE)`), so `--json` stays clean.
+There is no config file: on NixOS `programs.nh.flake` sets `NH_FLAKE` declaratively. `check` exits 0 (all fine), 1 (something outdated), 2 (error).
 
 ## What it covers
 

@@ -27,7 +27,7 @@ func newFixture(t *testing.T, inputs map[string]string) *fixture {
 	e := testutil.New(t)
 	term, out, errb := testutil.Term("")
 	repo := testutil.Tree(t, map[string]string{"flake.nix": "{}", "flake.lock": testutil.LockJSON(inputs)})
-	return &fixture{e: e, repo: repo, out: out, errb: errb, deps: cli.Deps{T: term, R: e.Run, GH: e.GH}}
+	return &fixture{e: e, repo: repo, out: out, errb: errb, deps: cli.Deps{T: term, R: e.Run, GH: e.GH, Env: func(string) string { return "" }}}
 }
 
 func (f *fixture) run(args ...string) int { return cli.Run(args, f.deps) }
@@ -225,5 +225,56 @@ func TestPkgUnknownName(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
 	if code := f.run("pkg", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no such package: nope") {
 		t.Errorf("code %d err %q", code, f.errb)
+	}
+}
+
+func TestFlakeFromEnvironment(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
+	f.e.Head("o/np", "", "aaa")
+	other := t.TempDir()
+	t.Chdir(other) // nowhere near a flake
+	f.deps.Env = func(k string) string {
+		if k == "NH_FLAKE" {
+			return f.repo + "#desktop"
+		}
+		return ""
+	}
+	if code := f.run("check", "--only", "inputs", "--json"); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if !strings.Contains(f.errb.String(), "using "+f.repo+" ($NH_FLAKE)") {
+		t.Errorf("must say which flake it picked, on stderr: %q", f.errb)
+	}
+	var rows []check.Row
+	if err := json.Unmarshal(f.out.Bytes(), &rows); err != nil {
+		t.Errorf("the notice must not pollute stdout (--json): %v", err)
+	}
+}
+
+func TestFlagBeatsEnvironmentAndStaysQuiet(t *testing.T) {
+	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
+	f.e.Head("o/np", "", "aaa")
+	f.deps.Env = func(string) string { return "/does/not/exist" }
+	if code := f.run("check", "-C", f.repo, "--only", "inputs"); code != exit.OK {
+		t.Fatalf("code %d\n%s", code, f.errb)
+	}
+	if strings.Contains(f.errb.String(), "using") {
+		t.Errorf("an explicit -C needs no notice: %q", f.errb)
+	}
+}
+
+func TestBadEnvironmentFlakeIsAnError(t *testing.T) {
+	f := newFixture(t, nil)
+	f.deps.Env = func(k string) string {
+		if k == "NIXUP_FLAKE" {
+			return "github:Villoh/nixos-config"
+		}
+		return ""
+	}
+	if code := f.run("check"); code != exit.Error || !strings.Contains(f.errb.String(), "$NIXUP_FLAKE") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	if f.e.Run.Count("git") != 0 {
+		t.Error("fail before doing any work")
 	}
 }

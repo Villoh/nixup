@@ -4,6 +4,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"os"
 	"strings"
 
 	"github.com/Villoh/nixup/internal/check"
@@ -43,6 +44,9 @@ type Deps struct {
 	T  *ui.Term
 	R  run.Runner
 	GH *gh.Client
+
+	// Env reads environment variables; nil means the process environment.
+	Env func(string) string
 
 	implicit bool // the subcommand was not typed: `check` was assumed
 }
@@ -93,7 +97,7 @@ func (d Deps) updater() *update.Updater {
 func (d Deps) flags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(d.T.Err)
-	return fs, fs.String("C", ".", "flake directory")
+	return fs, fs.String("C", "", "flake directory (default: $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE, else search upwards from here)")
 }
 
 // parse accepts flags before, between and after positional arguments (Go's flag package
@@ -123,9 +127,16 @@ func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string,
 		}
 		return nil, "", exit.Error, false
 	}
-	repo, err = flake.FindRepo(*dir)
+	getenv := d.Env
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	repo, source, err := flake.Resolve(*dir, getenv)
 	if err != nil {
 		return nil, "", d.fail(err), false
+	}
+	if strings.HasPrefix(source, "$") { // the user did not point here in this command: say where we are
+		d.T.Errorln("nixup: using", repo, "("+source+")")
 	}
 	return pos, repo, exit.OK, true
 }
