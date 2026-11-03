@@ -64,6 +64,21 @@ func TestVersionAndHelpFlags(t *testing.T) {
 	}
 }
 
+func TestUnknownFlagExplainsTheAssumedCommand(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("--bogus"); code != exit.Error {
+		t.Errorf("code %d", code)
+	}
+	if !strings.Contains(f.errb.String(), "'check' was assumed") {
+		t.Errorf("a flag error without a typed command must say check was assumed: %q", f.errb)
+	}
+	g := newFixture(t, nil)
+	g.run("check", "--bogus")
+	if strings.Contains(g.errb.String(), "was assumed") {
+		t.Errorf("an explicit command needs no such hint: %q", g.errb)
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	f := newFixture(t, nil)
 	if code := f.run("frobnicate"); code != exit.Error {
