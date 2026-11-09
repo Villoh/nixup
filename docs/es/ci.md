@@ -52,7 +52,7 @@ jobs:
       - name: pending updates
         run: |
           # el código de salida 1 solo significa "hay algo desactualizado"
-          nix run "$NIXUP" -- check --only inputs,packages --markdown --review \
+          nix run "$NIXUP" -- check --source input,package --markdown --review \
             >> "$GITHUB_STEP_SUMMARY" || [ $? -eq 1 ]
 
       - name: update flake.lock and packages
@@ -71,7 +71,7 @@ jobs:
 
 Detalles de este workflow:
 
-- `--only inputs,packages` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
+- `--source input,package` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
 - El runner no tiene `nix-update`, así que `pkg` lo ejecuta con `nix run nixpkgs#nix-update`.
 - `pkg -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, `pkg` sale con 2 y el job para antes de la pull request.
 - Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.2.0`.

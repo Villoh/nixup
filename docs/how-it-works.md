@@ -38,7 +38,7 @@ If `nix` is installed, nixup reads `nix profile list --json`. For each entry who
 
 ### flatpak
 
-If `flatpak` is installed, nixup runs `flatpak remote-ls --updates --columns=application` and lists each application or runtime once. It only reports; `flatpak update` is up to you.
+If `flatpak` is installed, nixup runs `flatpak remote-ls --updates` and lists each application or runtime once, with the installed version (from `flatpak list`) and the new one. Runtimes have no version, so their branch is shown; an update that keeps the same version shows as `new build`. It only reports; `flatpak update` is up to you.
 
 ## Versions
 
@@ -108,7 +108,8 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `nix-store --query --requisites /run/current-system` | search (what is in the system) |
 | `flatpak list --app --columns=...` | list, search |
 | `flatpak search --columns=... <name>` | search |
-| `flatpak remote-ls --updates --columns=application` | flatpak |
+| `flatpak remote-ls --updates --columns=application,version,branch` | flatpak |
+| `flatpak list --columns=application,version,branch` | flatpak (installed versions) |
 | `gh auth token` | GitHub token, if no variable is set |
 
 nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-update` reach the network on their own.

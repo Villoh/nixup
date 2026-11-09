@@ -10,21 +10,17 @@ nixup checks a flake-based NixOS configuration for updates and applies them only
 ## Example
 
 ```text
-$ nixup check --only inputs,packages
+$ nixup check --source input,package
+SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
 
-inputs
-  UPDATE home-manager               4839ed6 (20d) -> 2c0c1f0       nixup lock home-manager
-  UPDATE lanzaboote                 v0.4.1 -> v1.2.0               pinned tag: edit flake.nix
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
-  UPDATE nixpkgs                    0bb2eed (8d) -> f4a03c0        nixup lock nixpkgs
-  1 up to date (use --all to list)
-
-packages
-  UPDATE ripgrep                    14.0.0 -> 15.2.0               nixup pkg ripgrep
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
+4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-Add `--review` to see, under every `UPDATE` line, the source repository, the commit count with a compare link, the latest commit subjects and, for tagged versions, the release notes in between.
+Add `--review` to see, after the table and for every update, the source repository, the commit count with a compare link, the latest commit subjects and, for tagged versions, the release notes in between.
 
 ## Install
 

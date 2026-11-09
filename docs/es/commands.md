@@ -22,7 +22,7 @@ nixup help
 
 Sin comando, nixup ejecuta `check`, así que `nixup`, `nixup --review` y `nixup check --review` hacen lo mismo.
 
-Los flags pueden ir antes, entre o después de los nombres: `nixup lock nixpkgs -y home-manager` actualiza dos inputs sin preguntar. Los flags admiten uno o dos guiones (`-y`, `--review`, `--only=inputs`).
+Los flags pueden ir antes, entre o después de los nombres: `nixup lock nixpkgs -y home-manager` actualiza dos inputs sin preguntar. Los flags admiten uno o dos guiones (`-y`, `--review`, `--source=input`).
 
 Todos los comandos que trabajan sobre un flake aceptan `-C <dir>`. En [Configuración](configuration.md) se explica cómo se encuentra el flake si no pasas `-C`.
 
@@ -43,7 +43,7 @@ Lista lo que está desactualizado. Solo lee.
 ```bash
 nixup check
 nixup check --review
-nixup check --only inputs,packages --all
+nixup check --source input,package --all
 nixup check --json
 nixup check --markdown --review
 ```
@@ -51,7 +51,7 @@ nixup check --markdown --review
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `--only <lista>` | Secciones a ejecutar, separadas por comas: `inputs`, `packages`, `profile`, `flatpak`. Por defecto, todas. Un nombre desconocido es un error. |
+| `--source <lista>` | Orígenes a comprobar, separados por comas: `input`, `package`, `profile`, `flatpak` (también en plural). Por defecto, todos. Un nombre desconocido es un error. |
 | `--all` | Lista también las entradas al día en la salida de texto. Sin él solo se cuentan. |
 | `--review` | Añade la revisión de upstream (commits, enlace de comparación, release notes) a cada entrada desactualizada. |
 | `--json` | Imprime todas las filas en JSON, incluidas las que están al día. Tiene prioridad sobre `--markdown`. |
@@ -59,7 +59,7 @@ nixup check --markdown --review
 
 `check` no recibe nombres; lo que escribas detrás se ignora.
 
-La salida de texto marca cada entrada como `UPDATE`, `ok`, `info` o `ERROR`. En JSON esos estados son `outdated`, `ok`, `info` y `error`:
+La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` y `ACTION`, seguida de una línea de resumen y, con `--review`, un bloque de cambios de upstream por cada actualización. `STATUS` es `update`, `major` o `0.x-minor` (probablemente incompatible), `ok`, `info` o `error`; ver [Primeros pasos](getting-started.md#cómo-leer-el-informe). En JSON los estados son `outdated`, `ok`, `info` y `error`, y un salto probablemente incompatible lleva `warning`:
 
 ```json
 [
@@ -176,13 +176,26 @@ nixup list --json
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `--json` | Un array JSON de fuentes, cada una con `source`, `items` (`name`, `version`, `note`) y, si ha fallado, `error`. |
+| `--source <lista>` | Orígenes separados por comas: `input`, `package`, `profile`, `flatpak`. Por defecto, todos. |
+| `--json` | Un array JSON de fuentes, cada una con `source`, `items` (`name`, `version`, `note`, el origen) y, si ha fallado, `error`. |
 
-Los inputs muestran el tag al que están fijados, o el commit bloqueado y su antigüedad; la nota dice de dónde vienen (`github:owner/repo/ref`). Los paquetes muestran su upstream de GitHub. Sale con 0, o con 2 si ha fallado alguna fuente.
+La salida es una tabla, `SOURCE`, `NAME`, `VERSION` y `ORIGIN`, y un recuento por origen:
+
+```text
+SOURCE   NAME                  VERSION        ORIGIN
+input    home-manager          4839ed6 · 20d  github:nix-community/home-manager
+input    nixpkgs               0bb2eed · 8d   github:NixOS/nixpkgs/nixos-unstable
+package  ripgrep               14.0.0         github:BurntSushi/ripgrep
+flatpak  md.obsidian.Obsidian  1.15.0         flathub
+
+2 inputs · 1 package · 1 flatpak
+```
+
+Los inputs muestran el tag al que están fijados, o el commit bloqueado y su antigüedad. Los orígenes usan la sintaxis de los flakes (`github:owner/repo/ref`); en una entrada de `nix profile` es su flake sin la revisión fijada, y en una app de Flatpak, su remoto. Sale con 0, o con 2 si ha fallado alguna fuente.
 
 ## search
 
-Busca un nombre en todos los sitios de los que puede venir un paquete, y marca con un `●` verde lo que está en el sistema en marcha.
+Busca un nombre en todos los sitios de los que puede venir un paquete, y marca en `INSTALLED` con un `●` verde lo que está en el sistema en marcha.
 
 ```bash
 nixup search ripgrep
@@ -190,12 +203,21 @@ nixup search obsidian --limit 20
 nixup search hex --json
 ```
 
-| Fuente | Dónde busca |
+| `SOURCE` | Dónde busca |
 |---|---|
-| `nixpkgs <rev>` | La revisión de nixpkgs que fija tu `flake.lock`, así que las versiones son las que instalarías hoy. Necesita un input llamado `nixpkgs`. |
-| `packages (yours)` | La salida `packages.<system>` de tu propio flake. |
-| `input <name>` | La salida `packages.<system>` de cada input. |
+| `nixpkgs` | La revisión de nixpkgs que fija tu `flake.lock`, así que las versiones son las que instalarías hoy. La revisión aparece en la línea de resumen. Necesita un input llamado `nixpkgs`. |
+| `package` | La salida `packages.<system>` de tu propio flake. |
+| `input:<nombre>` | La salida `packages.<system>` de cada input. |
 | `flatpak` | Todos los remotos de Flatpak que tengas configurados, normalmente Flathub. |
+
+```text
+SOURCE   NAME                      VERSION  INSTALLED  DESCRIPTION
+nixpkgs  ripgrep                   15.2.0   ●          Utility that combines the usability of The Silver Searcher with the raw…
+nixpkgs  ripgrep-all               0.10.10             Ripgrep, but also search in PDFs, E-Books, Office documents, zip, tar.g…
+flatpak  de.leopoldluley.Clapgrep  26.09               Search through all your files
+
+3 results (nixpkgs 0bb2eed)
+```
 
 La búsqueda compara con los nombres de los paquetes (nombres de atributo, IDs y nombres de Flatpak), no con las descripciones, sin distinguir mayúsculas. Primero salen las coincidencias exactas, luego los nombres que empiezan así y luego el resto. Puede tener letras, dígitos y `. _ + -`.
 
@@ -203,7 +225,8 @@ La búsqueda compara con los nombres de los paquetes (nombres de atributo, IDs y
 |---|---|
 | `-C <dir>` | Directorio del flake. |
 | `--limit <n>` | Resultados por fuente (10 por defecto). Se indica cuántos se han quedado fuera. |
-| `--json` | El mismo formato que `list --json`, más `more` (resultados que no se muestran) e `in_system`. |
+| `--source <lista>` | Orígenes separados por comas: `nixpkgs`, `package`, `input`, `flatpak`. `input` abarca todos los inputs. Los orígenes que no pides ni se consultan. |
+| `--json` | El mismo formato que `list --json` (`note` es la descripción), más `rev` para nixpkgs, `more` (resultados que no se muestran) e `in_system`. |
 
 `●` significa que en `/run/current-system` hay una ruta del store con el mismo nombre y versión. En una máquina sin él (CI, un contenedor) no se marca nada.
 

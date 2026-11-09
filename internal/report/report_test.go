@@ -10,6 +10,7 @@ import (
 	"github.com/Villoh/nixup/internal/inventory"
 	"github.com/Villoh/nixup/internal/report"
 	"github.com/Villoh/nixup/internal/testutil"
+	"github.com/Villoh/nixup/internal/ver"
 )
 
 func sampleReview() *gh.Review {
@@ -26,26 +27,45 @@ func rows() []check.Row {
 	return []check.Row{
 		{Section: "inputs", Name: "nixpkgs", Current: "aaa1111", Status: check.OK},
 		{Section: "inputs", Name: "dms", Current: "v1.6.2", Latest: "v2.0.0", Status: check.Outdated,
-			Note: "pinned tag: edit flake.nix", Warn: "MAJOR version jump", Review: sampleReview()},
+			Note: "pinned tag: edit flake.nix", Warn: ver.Major.Warning(), Review: sampleReview()},
 		{Section: "packages", Name: "strata", Current: "0.21.0", Status: check.Info, Note: "no updateScript"},
 		{Section: "flatpak", Name: "broken", Status: check.Error, Note: "no remotes"},
 	}
 }
 
-func TestTextHidesUpToDateRows(t *testing.T) {
+// lines splits output into lines, dropping the trailing empty one.
+func lines(s string) []string { return strings.Split(strings.TrimRight(s, "\n"), "\n") }
+
+// col is the rune position where needle starts in line, or -1.
+func col(line, needle string) int {
+	i := strings.Index(line, needle)
+	if i < 0 {
+		return -1
+	}
+	return utf8.RuneCountInString(line[:i])
+}
+
+func TestTextIsOneTable(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, rows(), false, false)
-	s := out.String()
-	for _, want := range []string{"inputs", "UPDATE", "dms", "v1.6.2 -> v2.0.0", "⚠ MAJOR version jump", "ERROR", "no remotes", "1 up to date (use --all to list)"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("missing %q in:\n%s", want, s)
+	l := lines(out.String())
+	if l[0] != "SOURCE   NAME    CURRENT  LATEST  STATUS  ACTION" {
+		t.Errorf("header: %q", l[0])
+	}
+	want := []string{
+		"input    dms     v1.6.2   v2.0.0  major   pinned tag: edit flake.nix",
+		"package  strata  0.21.0           info    no updateScript",
+		"flatpak  broken                   error   no remotes",
+		"",
+		"1 to update (1 likely breaking) · 1 info · 1 error · 1 up to date (--all to show them)",
+	}
+	if got := l[1:]; strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	for _, line := range l {
+		if strings.HasPrefix(line, " ") || strings.HasSuffix(line, " ") {
+			t.Errorf("no indentation, no trailing spaces: %q", line)
 		}
-	}
-	if strings.Contains(s, "nixpkgs") {
-		t.Errorf("up-to-date rows are only counted:\n%s", s)
-	}
-	if strings.Contains(s, "source ") {
-		t.Errorf("no review without the flag:\n%s", s)
 	}
 }
 
@@ -53,73 +73,81 @@ func TestTextAllAndReview(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, rows(), true, true)
 	s := out.String()
-	for _, want := range []string{"nixpkgs", "source   https://github.com/lgse/strata", "14 commits", "· feat: a"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("missing %q in:\n%s", want, s)
-		}
+	if l := lines(s); !strings.HasPrefix(l[1], "input    nixpkgs  aaa1111") || !strings.HasSuffix(l[1], "ok") {
+		t.Errorf("--all shows up-to-date rows:\n%s", s)
 	}
-	if strings.Contains(s, "up to date (use") {
-		t.Errorf("nothing is hidden with --all:\n%s", s)
+	if strings.Contains(s, "up to date (--all") {
+		t.Errorf("nothing hidden with --all:\n%s", s)
 	}
-	// Sections follow the fixed order, not the order of the rows.
-	if strings.Index(s, "inputs") > strings.Index(s, "packages") || strings.Index(s, "packages") > strings.Index(s, "flatpak") {
-		t.Errorf("section order:\n%s", s)
+	review := strings.Index(s, "dms input  v1.6.2 → v2.0.0\n  source   https://github.com/lgse/strata")
+	if review < 0 || review < strings.Index(s, "1 to update") {
+		t.Errorf("reviews follow the table, one block per update:\n%s", s)
 	}
 }
 
-func TestTextAlignsColumnsForLongNames(t *testing.T) {
+func TestTextStatusKinds(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{
-		{Section: "inputs", Name: "noctalia-community-plugins-extra", Current: "aaa1111 (3d)", Latest: "bbb2222", Status: check.Outdated, Note: "nixup lock noctalia-community-plugins-extra"},
-		{Section: "inputs", Name: "hm", Current: "v1", Latest: "v2", Status: check.Outdated, Note: "nixup lock hm"},
-		{Section: "flatpak", Name: "com.cherry_ai.CherryStudio", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "flatpak update"},
-		{Section: "flatpak", Name: "ok-but-hidden-and-much-longer-than-the-rest", Current: "1", Status: check.OK},
+		{Section: "packages", Name: "a", Current: "0.6.1", Latest: "0.7.0", Status: check.Outdated, Warn: ver.ZeroMinor.Warning()},
+		{Section: "packages", Name: "b", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "nixup pkg b",
+			Hint: "nixpkgs has b 1.1: pkgs.b could replace this package"},
+		{Section: "packages", Name: "c", Current: "1", Status: check.Info, Hint: "nixpkgs has c 2: pkgs.c could replace this package"},
 	}, false, false)
-	// The note column starts at the same position on every row, in every section;
-	// hidden rows do not widen it.
-	col := -1
-	for _, line := range strings.Split(out.String(), "\n") {
-		i := strings.Index(line, "nixup lock")
-		if i < 0 {
-			i = strings.Index(line, "flatpak update")
-		}
-		if i < 0 {
-			continue
-		}
-		if col == -1 {
-			col = i
-		}
-		if i != col {
-			t.Errorf("note column at %d, want %d:\n%s", i, col, out)
-		}
+	l := lines(out.String())
+	if !strings.Contains(l[1], "0.x-minor") || !strings.Contains(l[2], " update ") {
+		t.Errorf("status names the kind of jump:\n%s", out)
 	}
-	if want := len("  UPDATE ") + len("noctalia-community-plugins-extra") + 3 + len("aaa1111 (3d) -> bbb2222") + 3; col != want {
-		t.Errorf("note column at %d, want %d (hidden rows must not count):\n%s", col, want, out)
-	}
-	for _, line := range strings.Split(out.String(), "\n") {
-		if strings.HasSuffix(line, " ") {
-			t.Errorf("trailing spaces in %q", line)
-		}
+	if !strings.HasSuffix(l[2], "nixup pkg b · nixpkgs has b 1.1: pkgs.b could replace this package") ||
+		!strings.HasSuffix(l[3], "info       nixpkgs has c 2: pkgs.c could replace this package") {
+		t.Errorf("the nixpkgs hint goes in ACTION, after the note if any:\n%s", out)
 	}
 }
 
-func TestHintIsShown(t *testing.T) {
-	row := check.Row{Section: "packages", Name: "x", Current: "1", Latest: "2", Status: check.Outdated, Hint: "nixpkgs has x 2: pkgs.x could replace this package"}
-	term, out, _ := testutil.Term("")
-	report.Text(term, []check.Row{row}, false, false)
-	if !strings.Contains(out.String(), "→ nixpkgs has x 2") {
-		t.Errorf("text: %q", out)
-	}
-	if md := report.Markdown([]check.Row{row}); !strings.Contains(md, "> → nixpkgs has x 2") {
-		t.Errorf("markdown: %q", md)
-	}
-}
-
-func TestTextOmitsEmptySections(t *testing.T) {
+func TestTextEverythingUpToDate(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{{Section: "inputs", Name: "x", Status: check.OK}}, false, false)
-	if strings.Contains(out.String(), "flatpak") || strings.Contains(out.String(), "profile") {
-		t.Errorf("%q", out.String())
+	if got := out.String(); got != "Everything is up to date. · 1 up to date (--all to show them)\n" {
+		t.Errorf("no table, just the summary: %q", got)
+	}
+}
+
+func TestTableColumnsAndCuts(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	report.Table(term, []string{"A", "B", "LAST"}, [][]string{
+		{"ünïcode", "x", strings.Repeat("d", 100)},
+		{"a", "", ""},
+	}, nil)
+	l := lines(out.String())
+	if col(l[0], "B") != col(l[1], "x") || col(l[1], "x") != len("ünïcode")-2+2 {
+		t.Errorf("columns as wide as their widest cell, counted in runes:\n%s", out)
+	}
+	if !strings.HasSuffix(l[1], strings.Repeat("d", 71)+"…") || strings.Contains(l[1], strings.Repeat("d", 72)) {
+		t.Errorf("the last column is cut:\n%s", out)
+	}
+	if l[2] != "a" {
+		t.Errorf("empty cells leave no trailing spaces: %q", l[2])
+	}
+}
+
+func TestTableColorsDoNotBreakAlignment(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	term.Color = true
+	report.Table(term, []string{"S", "N"}, [][]string{{"major", "x"}, {"ok", "y"}}, func(_, c int) int {
+		if c == 0 {
+			return 31
+		}
+		return 0
+	})
+	l := lines(out.String())
+	strip := func(s string) string {
+		for strings.Contains(s, "\x1b[") {
+			i := strings.Index(s, "\x1b[")
+			s = s[:i] + s[i+strings.Index(s[i:], "m")+1:]
+		}
+		return s
+	}
+	if col(strip(l[1]), "x") != col(strip(l[2]), "y") || !strings.Contains(l[1], "\x1b[31mmajor\x1b[0m  x") {
+		t.Errorf("padding is added outside the color codes:\n%q", l)
 	}
 }
 
@@ -184,35 +212,42 @@ func TestReviewWithError(t *testing.T) {
 	}
 }
 
-func TestInventory(t *testing.T) {
+func TestList(t *testing.T) {
 	term, out, _ := testutil.Term("")
-	report.Inventory(term, []inventory.Group{
-		{Source: "nixpkgs abc", More: 3, Items: []inventory.Item{
-			{Name: "ripgrep", Version: "15.2.0", Note: strings.Repeat("d", 100), InSystem: true},
-			{Name: "ripgrep-all", Version: "0.10.10"}}},
+	report.List(term, []inventory.Group{
+		{Source: "input", Items: []inventory.Item{{Name: "nixpkgs", Version: "e7439b6 · 32d", Note: "github:NixOS/nixpkgs/nixos-unstable"}}},
+		{Source: "package", Items: []inventory.Item{{Name: "a", Version: "1"}, {Name: "b", Version: "2", Note: "github:o/b"}}},
 		{Source: "flatpak", Err: "no remotes"},
 	})
-	s := out.String()
-	for _, want := range []string{"nixpkgs abc", "● ripgrep ", "… 3 more", "ERROR no remotes", strings.Repeat("d", 71) + "…"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("missing %q in:\n%s", want, s)
-		}
+	want := `SOURCE   NAME     VERSION        ORIGIN
+input    nixpkgs  e7439b6 · 32d  github:NixOS/nixpkgs/nixos-unstable
+package  a        1
+package  b        2              github:o/b
+
+flatpak: no remotes
+1 input · 2 packages
+`
+	if out.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
-	if strings.Contains(s, strings.Repeat("d", 72)) {
-		t.Errorf("long descriptions are cut:\n%s", s)
-	}
-	lines := strings.Split(s, "\n")
-	var a, b string
-	for _, l := range lines {
-		if strings.Contains(l, "15.2.0") {
-			a = l
-		}
-		if strings.Contains(l, "0.10.10") {
-			b = l
-		}
-	}
-	col := func(line, s string) int { return utf8.RuneCountInString(line[:strings.Index(line, s)]) }
-	if col(a, "15.2.0") != col(b, "0.10.10") {
-		t.Errorf("versions aligned:\n%s\n%s", a, b)
+}
+
+func TestSearch(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	report.Search(term, []inventory.Group{
+		{Source: "nixpkgs", Rev: "abc", More: 3, Items: []inventory.Item{
+			{Name: "ripgrep", Version: "15.2.0", Note: "Fast grep", InSystem: true},
+			{Name: "ripgrep-all", Version: "0.10.10"}}},
+		{Source: "input:strata", Items: []inventory.Item{{Name: "strata", Version: "1.1.1", Note: "Files"}}},
+	})
+	want := `SOURCE        NAME         VERSION  INSTALLED  DESCRIPTION
+nixpkgs       ripgrep      15.2.0   ●          Fast grep
+nixpkgs       ripgrep-all  0.10.10
+input:strata  strata       1.1.1               Files
+
+3 results (nixpkgs abc) · 3 more not shown (refine the search or raise --limit)
+`
+	if out.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
 }

@@ -22,7 +22,7 @@ nixup help
 
 Without a command nixup runs `check`, so `nixup`, `nixup --review` and `nixup check --review` do the same thing.
 
-Flags can go before, between or after names: `nixup lock nixpkgs -y home-manager` updates two inputs without asking. Flags take one dash or two (`-y`, `--review`, `--only=inputs`).
+Flags can go before, between or after names: `nixup lock nixpkgs -y home-manager` updates two inputs without asking. Flags take one dash or two (`-y`, `--review`, `--source=input`).
 
 Every command that works on a flake accepts `-C <dir>`. See [Configuration](configuration.md) for how the flake is found when `-C` is not given.
 
@@ -43,7 +43,7 @@ Lists what is outdated. Read-only.
 ```bash
 nixup check
 nixup check --review
-nixup check --only inputs,packages --all
+nixup check --source input,package --all
 nixup check --json
 nixup check --markdown --review
 ```
@@ -51,7 +51,7 @@ nixup check --markdown --review
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `--only <list>` | Comma-separated sections to run: `inputs`, `packages`, `profile`, `flatpak`. Default: all. An unknown name is an error. |
+| `--source <list>` | Comma-separated sources to check: `input`, `package`, `profile`, `flatpak` (plurals work too). Default: all. An unknown name is an error. |
 | `--all` | Also list up-to-date entries in the text output. Without it they are only counted. |
 | `--review` | Add the upstream review (commits, compare link, release notes) to every outdated entry. |
 | `--json` | Print every row as JSON, up-to-date ones included. Takes precedence over `--markdown`. |
@@ -59,7 +59,7 @@ nixup check --markdown --review
 
 `check` takes no names; extra words after it are ignored.
 
-The text output marks each entry `UPDATE`, `ok`, `info` or `ERROR`. In JSON the same statuses are `outdated`, `ok`, `info` and `error`:
+The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` and `ACTION`, followed by a summary line and, with `--review`, one block of upstream changes per update. `STATUS` is `update`, `major` or `0.x-minor` (likely breaking), `ok`, `info` or `error`; see [Getting started](getting-started.md#reading-the-report). In JSON the statuses are `outdated`, `ok`, `info` and `error`, and a likely breaking jump has a `warning`:
 
 ```json
 [
@@ -176,13 +176,26 @@ nixup list --json
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `--json` | A JSON array of sources, each with `source`, `items` (`name`, `version`, `note`) and, if it failed, `error`. |
+| `--source <list>` | Comma-separated sources: `input`, `package`, `profile`, `flatpak`. Default: all. |
+| `--json` | A JSON array of sources, each with `source`, `items` (`name`, `version`, `note`, the origin) and, if it failed, `error`. |
 
-Inputs show the tag they are pinned to, or the locked commit and its age; the note is where they come from (`github:owner/repo/ref`). Packages show their GitHub upstream. Exit code 0, or 2 if a source failed.
+The output is one table, `SOURCE`, `NAME`, `VERSION` and `ORIGIN`, and a count per source:
+
+```text
+SOURCE   NAME                  VERSION        ORIGIN
+input    home-manager          4839ed6 · 20d  github:nix-community/home-manager
+input    nixpkgs               0bb2eed · 8d   github:NixOS/nixpkgs/nixos-unstable
+package  ripgrep               14.0.0         github:BurntSushi/ripgrep
+flatpak  md.obsidian.Obsidian  1.15.0         flathub
+
+2 inputs · 1 package · 1 flatpak
+```
+
+Inputs show the tag they are pinned to, or the locked commit and its age. Origins use flake syntax (`github:owner/repo/ref`); for a `nix profile` entry it is its flake without the pinned revision, for a Flatpak app its remote. Exit code 0, or 2 if a source failed.
 
 ## search
 
-Looks a name up in every place a package can come from, and marks with a green `●` what is in the running system.
+Looks a name up in every place a package can come from, and marks in `INSTALLED` with a green `●` what is in the running system.
 
 ```bash
 nixup search ripgrep
@@ -190,12 +203,21 @@ nixup search obsidian --limit 20
 nixup search hex --json
 ```
 
-| Source | What is searched |
+| `SOURCE` | What is searched |
 |---|---|
-| `nixpkgs <rev>` | The nixpkgs revision your `flake.lock` pins, so versions are the ones you would install today. Needs an input called `nixpkgs`. |
-| `packages (yours)` | Your flake's own `packages.<system>`. |
-| `input <name>` | The `packages.<system>` output of each input. |
+| `nixpkgs` | The nixpkgs revision your `flake.lock` pins, so versions are the ones you would install today. The revision is in the summary line. Needs an input called `nixpkgs`. |
+| `package` | Your flake's own `packages.<system>`. |
+| `input:<name>` | The `packages.<system>` output of each input. |
 | `flatpak` | Every Flatpak remote you have configured, usually Flathub. |
+
+```text
+SOURCE   NAME                      VERSION  INSTALLED  DESCRIPTION
+nixpkgs  ripgrep                   15.2.0   ●          Utility that combines the usability of The Silver Searcher with the raw…
+nixpkgs  ripgrep-all               0.10.10             Ripgrep, but also search in PDFs, E-Books, Office documents, zip, tar.g…
+flatpak  de.leopoldluley.Clapgrep  26.09               Search through all your files
+
+3 results (nixpkgs 0bb2eed)
+```
 
 The query matches package names (attribute names, Flatpak IDs and names), not descriptions, without regard to case. Exact matches come first, then names that start with it, then the rest. It can contain letters, digits and `. _ + -`.
 
@@ -203,7 +225,8 @@ The query matches package names (attribute names, Flatpak IDs and names), not de
 |---|---|
 | `-C <dir>` | Flake directory. |
 | `--limit <n>` | Results shown per source (default 10). How many were left out is printed. |
-| `--json` | Same shape as `list --json`, plus `more` (results left out) and `in_system`. |
+| `--source <list>` | Comma-separated sources: `nixpkgs`, `package`, `input`, `flatpak`. `input` covers every input. Sources not asked for are not searched at all. |
+| `--json` | Same shape as `list --json` (`note` is the description), plus `rev` for nixpkgs, `more` (results left out) and `in_system`. |
 
 `●` means a store path with the same name and version is in `/run/current-system`. On a machine without it (CI, a container) nothing is marked.
 

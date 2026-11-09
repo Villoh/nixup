@@ -79,28 +79,26 @@ No hace falta estar dentro del flake. `nixup -C ~/nixos-config` funciona desde c
 ## Cómo leer el informe
 
 ```text
-inputs
-  UPDATE home-manager               4839ed6 (20d) -> 2c0c1f0       nixup lock home-manager
-  UPDATE lanzaboote                 v0.4.1 -> v1.2.0               pinned tag: edit flake.nix
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
-  UPDATE nixpkgs                    0bb2eed (8d) -> f4a03c0        nixup lock nixpkgs
-  1 up to date (use --all to list)
+SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
 
-packages
-  UPDATE ripgrep                    14.0.0 -> 15.2.0               nixup pkg ripgrep
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
+4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-Cada línea tiene un estado, un nombre, la versión actual y la más nueva, y el comando que aplica la actualización.
+Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `profile`, `flatpak`), su nombre, la versión actual y la más nueva, un estado y el comando que aplica la actualización. La última línea lo resume todo.
 
-- `UPDATE`: hay una versión más nueva.
-- `ok`: está al día. Estas líneas solo se cuentan; con `--all` se listan.
-- `info`: nixup no puede comprobar esta entrada, y la nota dice por qué (por ejemplo `no GitHub upstream: check by hand`).
-- `ERROR`: la comprobación ha fallado, y la nota trae el motivo.
+`STATUS` puede ser:
 
-En los inputs de rama, la columna actual muestra el commit bloqueado y cuántos días tiene: `4839ed6 (20d)` se hizo upstream hace 20 días.
+- `update`: hay una versión más nueva.
+- `major` o `0.x-minor`: hay una versión más nueva y el salto pinta a cambio incompatible, una versión mayor nueva o una versión menor nueva cuando todavía estás en `0.x`. Lee primero el changelog.
+- `ok`: está al día. Estas filas solo se cuentan; con `--all` se listan.
+- `info`: nixup no puede comprobar esta entrada, y `ACTION` dice por qué (por ejemplo `no GitHub upstream: check by hand`).
+- `error`: la comprobación ha fallado, y `ACTION` trae el motivo.
 
-La línea con `⚠` sale cuando el salto pinta a cambio incompatible: una versión mayor nueva, o una versión menor nueva cuando todavía estás en `0.x`.
+En los inputs de rama, `CURRENT` muestra el commit bloqueado y cuántos días tiene: `4839ed6 · 20d` se hizo upstream hace 20 días.
 
 ## Lee qué ha cambiado
 
@@ -108,7 +106,7 @@ La línea con `⚠` sale cuando el salto pinta a cambio incompatible: una versi�
 nixup check --review
 ```
 
-Debajo de cada línea `UPDATE` añade el repositorio de origen, el número de commits con un enlace de comparación, los últimos mensajes de commit y, si las versiones son tags, las release notes entre medias.
+Después de la tabla, para cada actualización, añade el repositorio de origen, el número de commits con un enlace de comparación, los últimos mensajes de commit y, si las versiones son tags, las release notes entre medias.
 
 ## Aplica las actualizaciones
 

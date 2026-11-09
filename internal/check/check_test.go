@@ -238,10 +238,20 @@ func TestProfileUnavailable(t *testing.T) {
 
 func TestFlatpak(t *testing.T) {
 	e := testutil.New(t)
-	e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "org.gnome.Platform\n\norg.gnome.Platform\n co.hyprlab.Hylki \n"})
+	e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "org.gnome.Platform\t\t50\n\norg.gnome.Platform\t\t50\n co.hyprlab.Hylki \t1.42.0\tstable\nio.x.Same\t2.0\tstable\n"})
+	e.Run.On(run.Rule{Prefix: "flatpak list --columns=application,version,branch", Out: "org.gnome.Platform\t\t50\nco.hyprlab.Hylki\t1.41.1\tstable\nio.x.Same\t2.0\tstable\n"})
 	rows := checker(e).Flatpak()
-	if len(rows) != 2 || rows[0].Name != "org.gnome.Platform" || rows[1].Name != "co.hyprlab.Hylki" {
-		t.Errorf("duplicates collapse, blanks and spaces are dropped: %+v", rows)
+	if len(rows) != 3 || rows[0].Name != "org.gnome.Platform" || rows[1].Name != "co.hyprlab.Hylki" {
+		t.Fatalf("duplicates collapse, blanks and spaces are dropped: %+v", rows)
+	}
+	if r := rows[0]; r.Current != "50" || r.Latest != "new build" {
+		t.Errorf("a runtime shows its branch, and an update without a version is a new build: %+v", r)
+	}
+	if r := rows[1]; r.Current != "1.41.1" || r.Latest != "1.42.0" {
+		t.Errorf("an app shows both versions: %+v", r)
+	}
+	if r := rows[2]; r.Latest != "new build" {
+		t.Errorf("same version offered again is a new build: %+v", r)
 	}
 
 	e.Run.Missing["flatpak"] = true

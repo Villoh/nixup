@@ -69,7 +69,7 @@ func TestVersionAndHelpFlags(t *testing.T) {
 	// A subcommand keeps its own -h.
 	f := newFixture(t, nil)
 	f.run("check", "-h")
-	if !strings.Contains(f.errb.String(), "-only") {
+	if !strings.Contains(f.errb.String(), "-source") {
 		t.Errorf("check -h must list check's flags: %q", f.errb)
 	}
 }
@@ -128,7 +128,7 @@ func TestCheckDefaultsToCheck(t *testing.T) {
 	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
 	f.e.Head("o/np", "", "aaa")
 	// `nixup -C dir` without a subcommand is `nixup check -C dir`.
-	if code := f.run("-C", f.repo, "--only", "inputs"); code != exit.OK {
+	if code := f.run("-C", f.repo, "--source", "inputs"); code != exit.OK {
 		t.Errorf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	if !strings.Contains(f.out.String(), "1 up to date") {
@@ -139,7 +139,7 @@ func TestCheckDefaultsToCheck(t *testing.T) {
 func TestCheckExitCodeAndJSON(t *testing.T) {
 	f := newFixture(t, map[string]string{"np": "o/np@#aaa1111"})
 	f.e.Head("o/np", "", "bbb2222")
-	code := f.run("check", "-C", f.repo, "--only", "inputs", "--json")
+	code := f.run("check", "-C", f.repo, "--source", "inputs", "--json")
 	if code != exit.Pending {
 		t.Errorf("outdated must exit 1, got %d", code)
 	}
@@ -155,7 +155,7 @@ func TestCheckExitCodeAndJSON(t *testing.T) {
 func TestCheckErrorExitCode(t *testing.T) {
 	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
 	f.e.Run.On(run.Rule{Prefix: "git ls-remote", Fail: os.ErrDeadlineExceeded, Err: "fatal: timeout\n"})
-	if code := f.run("check", "-C", f.repo, "--only", "inputs"); code != exit.Error {
+	if code := f.run("check", "-C", f.repo, "--source", "inputs"); code != exit.Error {
 		t.Errorf("a failing check exits 2, got %d", code)
 	}
 }
@@ -163,13 +163,13 @@ func TestCheckErrorExitCode(t *testing.T) {
 func TestCheckMarkdown(t *testing.T) {
 	f := newFixture(t, map[string]string{"np": "o/np@#aaa1111"})
 	f.e.Head("o/np", "", "bbb2222")
-	f.run("check", "-C", f.repo, "--only", "inputs", "--markdown", "--review")
-	if !strings.Contains(f.out.String(), "### inputs / np `aaa1111 (") {
+	f.run("check", "-C", f.repo, "--source", "inputs", "--markdown", "--review")
+	if !strings.Contains(f.out.String(), "### inputs / np `aaa1111 · ") {
 		t.Errorf("%q", f.out)
 	}
 	f2 := newFixture(t, map[string]string{"np": "o/np@#aaa"})
 	f2.e.Head("o/np", "", "aaa")
-	f2.run("check", "-C", f2.repo, "--only", "inputs", "--markdown")
+	f2.run("check", "-C", f2.repo, "--source", "inputs", "--markdown")
 	if f2.out.String() != "Everything is up to date.\n" {
 		t.Errorf("%q", f2.out)
 	}
@@ -177,8 +177,8 @@ func TestCheckMarkdown(t *testing.T) {
 
 func TestCheckUnknownSection(t *testing.T) {
 	f := newFixture(t, nil)
-	if code := f.run("check", "-C", f.repo, "--only", "inputs,bogus"); code != exit.Error ||
-		!strings.Contains(f.errb.String(), `unknown section "bogus"`) {
+	if code := f.run("check", "-C", f.repo, "--source", "inputs,bogus"); code != exit.Error ||
+		!strings.Contains(f.errb.String(), `unknown source "bogus" (one of: input, package, profile, flatpak)`) {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 	if f.e.Run.Count("git") != 0 {
@@ -249,7 +249,7 @@ func TestFlakeFromEnvironment(t *testing.T) {
 		}
 		return ""
 	}
-	if code := f.run("check", "--only", "inputs", "--json"); code != exit.OK {
+	if code := f.run("check", "--source", "inputs", "--json"); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	if f.errb.Len() != 0 {
@@ -303,7 +303,7 @@ func TestFlagBeatsEnvironmentAndStaysQuiet(t *testing.T) {
 	f := newFixture(t, map[string]string{"np": "o/np@#aaa"})
 	f.e.Head("o/np", "", "aaa")
 	f.deps.Env = func(string) string { return "/does/not/exist" }
-	if code := f.run("check", "-C", f.repo, "--only", "inputs"); code != exit.OK {
+	if code := f.run("check", "-C", f.repo, "--source", "inputs"); code != exit.OK {
 		t.Fatalf("code %d\n%s", code, f.errb)
 	}
 	if strings.Contains(f.errb.String(), "using") {
@@ -345,7 +345,7 @@ func TestListCommand(t *testing.T) {
 	f.out.Reset()
 	f.run("list", "-C", f.repo, "--json")
 	var groups []map[string]any
-	if err := json.Unmarshal(f.out.Bytes(), &groups); err != nil || len(groups) == 0 || groups[0]["source"] != "inputs" {
+	if err := json.Unmarshal(f.out.Bytes(), &groups); err != nil || len(groups) == 0 || groups[0]["source"] != "input" {
 		t.Errorf("json: %v %q", err, f.out)
 	}
 }

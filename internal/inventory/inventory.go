@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/flake"
 	"github.com/Villoh/nixup/internal/par"
 	"github.com/Villoh/nixup/internal/run"
@@ -31,19 +30,45 @@ type Item struct {
 // Group is the items of one source, in display order.
 type Group struct {
 	Source string `json:"source"`
+	Rev    string `json:"rev,omitempty"` // the nixpkgs revision searched
 	Items  []Item `json:"items"`
 	More   int    `json:"more,omitempty"` // matches left out by the limit
 	Err    string `json:"error,omitempty"`
 }
 
+// ListSources and SearchSources are the values --source accepts, in display order.
+var (
+	ListSources   = []string{"input", "package", "profile", "flatpak"}
+	SearchSources = []string{"nixpkgs", "package", "input", "flatpak"}
+)
+
+func want(sources []string, s string) bool {
+	if len(sources) == 0 {
+		return true
+	}
+	for _, x := range sources {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
 // List reads, without asking any remote, everything nixup watches: the flake's inputs and
-// own packages, `nix profile` entries and installed Flatpak apps.
-func List(r run.Runner, repo string) []Group {
-	jobs := []func() Group{
-		func() Group { return listInputs(repo) },
-		func() Group { return listPackages(r, repo) },
-		func() Group { return listProfile(r, repo) },
-		func() Group { return listFlatpak(r) },
+// own packages, `nix profile` entries and installed Flatpak apps. sources limits it to
+// some of ListSources; empty means all.
+func List(r run.Runner, repo string, sources []string) []Group {
+	all := map[string]func() Group{
+		"input":   func() Group { return listInputs(repo) },
+		"package": func() Group { return listPackages(r, repo) },
+		"profile": func() Group { return listProfile(r) },
+		"flatpak": func() Group { return listFlatpak(r) },
+	}
+	var jobs []func() Group
+	for _, s := range ListSources {
+		if want(sources, s) {
+			jobs = append(jobs, all[s])
+		}
 	}
 	var out []Group
 	for _, g := range par.Map(len(jobs), len(jobs), func(i int) Group { return jobs[i]() }) {
@@ -55,7 +80,7 @@ func List(r run.Runner, repo string) []Group {
 }
 
 func listInputs(repo string) Group {
-	g := Group{Source: "inputs"}
+	g := Group{Source: "input"}
 	lock, err := flake.ReadLock(filepath.Join(repo, "flake.lock"))
 	if err != nil {
 		g.Err = err.Error()
@@ -69,7 +94,7 @@ func listInputs(repo string) Group {
 			it.Version = o.Ref
 		case node.Locked.Rev != "":
 			age := int(time.Since(time.Unix(node.Locked.LastModified, 0)).Hours() / 24)
-			it.Version = fmt.Sprintf("%s (%dd)", flake.ShortRev(node.Locked.Rev), age)
+			it.Version = fmt.Sprintf("%s · %dd", flake.ShortRev(node.Locked.Rev), age)
 		}
 		if o := node.Original; o.Type == "github" {
 			it.Note = "github:" + o.Owner + "/" + o.Repo
@@ -83,23 +108,57 @@ func listInputs(repo string) Group {
 }
 
 func listPackages(r run.Runner, repo string) Group {
-	g := Group{Source: "packages"}
+	g := Group{Source: "package"}
 	pkgs, err := flake.Packages(r, repo)
 	if err != nil {
 		g.Err = err.Error()
 		return g
 	}
 	for _, p := range pkgs {
-		g.Items = append(g.Items, Item{Name: p.Name, Version: p.Version, Note: p.Upstream()})
+		it := Item{Name: p.Name, Version: p.Version}
+		if up := p.Upstream(); up != "" {
+			it.Note = "github:" + up
+		}
+		g.Items = append(g.Items, it)
 	}
 	return g
 }
 
-func listProfile(r run.Runner, repo string) Group {
+var pinnedRev = regexp.MustCompile(`/([0-9a-f]{40})$`)
+
+// listProfile shows each `nix profile` entry with the revision it is pinned to, if any,
+// and where it comes from without that revision.
+func listProfile(r run.Runner) Group {
 	g := Group{Source: "profile"}
-	for _, row := range (&check.Checker{R: r}).Profile(repo) {
-		g.Items = append(g.Items, Item{Name: row.Name, Version: row.Current, Note: row.Note})
+	if !r.Has("nix") {
+		return g
 	}
+	out, errs, err := r.Capture("", "nix", "profile", "list", "--json")
+	if err != nil {
+		g.Err = run.LastLine(errs)
+		return g
+	}
+	if strings.TrimSpace(out) == "" {
+		return g
+	}
+	var data struct {
+		Elements map[string]struct {
+			OriginalURL string `json:"originalUrl"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(out), &data); err != nil {
+		g.Err = "nix profile list: " + err.Error()
+		return g
+	}
+	for name, e := range data.Elements {
+		it := Item{Name: name, Note: e.OriginalURL}
+		if m := pinnedRev.FindStringSubmatchIndex(e.OriginalURL); m != nil {
+			it.Version = flake.ShortRev(e.OriginalURL[m[2]:m[3]])
+			it.Note = e.OriginalURL[:m[0]]
+		}
+		g.Items = append(g.Items, it)
+	}
+	sort.Slice(g.Items, func(i, j int) bool { return g.Items[i].Name < g.Items[j].Name })
 	return g
 }
 
@@ -108,13 +167,13 @@ func listFlatpak(r run.Runner) Group {
 	if !r.Has("flatpak") {
 		return g
 	}
-	out, errs, err := r.Capture("", "flatpak", "list", "--app", "--columns=application,version")
+	out, errs, err := r.Capture("", "flatpak", "list", "--app", "--columns=application,version,origin")
 	if err != nil {
 		g.Err = run.LastLine(errs)
 		return g
 	}
 	for _, f := range tsv(out) {
-		g.Items = append(g.Items, Item{Name: f[0], Version: at(f, 1)})
+		g.Items = append(g.Items, Item{Name: f[0], Version: at(f, 1), Note: at(f, 2)})
 	}
 	return g
 }
@@ -194,17 +253,20 @@ type found struct {
 }
 
 // Search looks query up, by name, in the flake's locked nixpkgs, its own packages, the
-// packages of every input, and Flathub. Items in the running system are marked.
-func Search(r run.Runner, repo, query string, limit int) ([]Group, error) {
+// packages of every input, and Flatpak remotes. Items in the running system are marked.
+// sources limits it to some of SearchSources; empty means all.
+func Search(r run.Runner, repo, query string, limit int, sources []string) ([]Group, error) {
 	if !queryRe.MatchString(query) {
 		return nil, fmt.Errorf("search for a package name: letters, digits and . _ + - only")
 	}
 	var nixGroups, fpGroups []Group
 	var nixErr error
+	nix := want(sources, "nixpkgs") || want(sources, "package") || want(sources, "input")
 	par.Map(2, 2, func(i int) struct{} {
-		if i == 0 {
+		switch {
+		case i == 0 && nix:
 			nixGroups, nixErr = searchNix(r, repo, query, limit)
-		} else {
+		case i == 1 && want(sources, "flatpak"):
 			fpGroups = searchFlatpak(r, query, limit)
 		}
 		return struct{}{}
@@ -212,7 +274,13 @@ func Search(r run.Runner, repo, query string, limit int) ([]Group, error) {
 	if nixErr != nil {
 		return nil, nixErr
 	}
-	return append(nixGroups, fpGroups...), nil
+	var out []Group
+	for _, g := range append(nixGroups, fpGroups...) {
+		if s, _, _ := strings.Cut(g.Source, ":"); want(sources, s) {
+			out = append(out, g)
+		}
+	}
+	return out, nil
 }
 
 func searchNix(r run.Runner, repo, query string, limit int) ([]Group, error) {
@@ -245,10 +313,12 @@ func searchNix(r run.Runner, repo, query string, limit int) ([]Group, error) {
 	}
 	var groups []Group
 	if res.Nixpkgs != nil && res.Nixpkgs.Total > 0 {
-		groups = append(groups, group(strings.TrimSpace("nixpkgs "+res.Rev), *res.Nixpkgs))
+		g := group("nixpkgs", *res.Nixpkgs)
+		g.Rev = res.Rev
+		groups = append(groups, g)
 	}
 	if res.Own.Total > 0 {
-		groups = append(groups, group("packages (yours)", res.Own))
+		groups = append(groups, group("package", res.Own))
 	}
 	names := make([]string, 0, len(res.Inputs))
 	for n := range res.Inputs {
@@ -257,7 +327,7 @@ func searchNix(r run.Runner, repo, query string, limit int) ([]Group, error) {
 	sort.Strings(names)
 	for _, n := range names {
 		if res.Inputs[n].Total > 0 {
-			groups = append(groups, group("input "+n, res.Inputs[n]))
+			groups = append(groups, group("input:"+n, res.Inputs[n]))
 		}
 	}
 	return groups, nil

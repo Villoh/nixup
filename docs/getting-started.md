@@ -79,28 +79,26 @@ You do not have to be inside the flake. `nixup -C ~/nixos-config` works from any
 ## Reading the report
 
 ```text
-inputs
-  UPDATE home-manager               4839ed6 (20d) -> 2c0c1f0       nixup lock home-manager
-  UPDATE lanzaboote                 v0.4.1 -> v1.2.0               pinned tag: edit flake.nix
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
-  UPDATE nixpkgs                    0bb2eed (8d) -> f4a03c0        nixup lock nixpkgs
-  1 up to date (use --all to list)
+SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
 
-packages
-  UPDATE ripgrep                    14.0.0 -> 15.2.0               nixup pkg ripgrep
-         ⚠ MAJOR version jump: read the changelog, expect breaking changes
+4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-Each line has a status, a name, the current and newest version, and the command that applies the update.
+One row per entry: where it comes from (`SOURCE`: `input`, `package`, `profile`, `flatpak`), its name, the current and newest version, a status, and the command that applies the update. The last line counts it all.
 
-- `UPDATE`: a newer version exists.
-- `ok`: up to date. These lines are only counted; `--all` lists them.
-- `info`: nixup cannot check this entry, and the note says why (for example `no GitHub upstream: check by hand`).
-- `ERROR`: the check failed, and the note has the reason.
+`STATUS` is one of:
 
-For branch inputs the current column shows the locked commit and how many days old it is: `4839ed6 (20d)` was committed upstream 20 days ago.
+- `update`: a newer version exists.
+- `major` or `0.x-minor`: a newer version exists and the jump looks breaking, a new major version or a new minor version while still at `0.x`. Read the changelog first.
+- `ok`: up to date. These rows are only counted; `--all` lists them.
+- `info`: nixup cannot check this entry, and `ACTION` says why (for example `no GitHub upstream: check by hand`).
+- `error`: the check failed, and `ACTION` has the reason.
 
-The `⚠` line appears when a jump looks breaking: a new major version, or a new minor version while still at `0.x`.
+For branch inputs `CURRENT` shows the locked commit and how many days old it is: `4839ed6 · 20d` was committed upstream 20 days ago.
 
 ## Read what changed
 
@@ -108,7 +106,7 @@ The `⚠` line appears when a jump looks breaking: a new major version, or a new
 nixup check --review
 ```
 
-Under every `UPDATE` line this adds the source repository, the number of commits with a compare link, the last commit subjects and, for tagged versions, the release notes in between.
+After the table, for every update, this adds the source repository, the number of commits with a compare link, the last commit subjects and, for tagged versions, the release notes in between.
 
 ## Apply updates
 

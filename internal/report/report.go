@@ -10,15 +10,14 @@ import (
 	"github.com/Villoh/nixup/internal/gh"
 	"github.com/Villoh/nixup/internal/inventory"
 	"github.com/Villoh/nixup/internal/ui"
+	"github.com/Villoh/nixup/internal/ver"
 )
 
 // maxNotes caps how many release notes are shown per update; the compare link has the rest.
 const maxNotes = 3
 
-var (
-	colors = map[string]int{check.OK: 32, check.Outdated: 33, check.Info: 36, check.Error: 31}
-	marks  = map[string]string{check.OK: "ok", check.Outdated: "UPDATE", check.Info: "info", check.Error: "ERROR"}
-)
+// statusColor is the SGR color of each STATUS value.
+var statusColor = map[string]int{"ok": 32, "update": 33, "major": 31, "0.x-minor": 31, "info": 36, "error": 31}
 
 func firstLines(s string, n int) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
@@ -28,56 +27,140 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-func versionText(r check.Row) string {
-	if r.Latest == "" {
-		return r.Current
+// status is the STATUS column: ok, update, info, error, or the kind of a likely
+// breaking jump (major, 0.x-minor).
+func status(r check.Row) string {
+	switch {
+	case r.Status == check.Outdated && r.Warn == ver.Major.Warning():
+		return string(ver.Major)
+	case r.Status == check.Outdated && r.Warn == ver.ZeroMinor.Warning():
+		return string(ver.ZeroMinor)
+	case r.Status == check.Outdated:
+		return "update"
 	}
-	return r.Current + " -> " + r.Latest
+	return r.Status
 }
 
-// Text prints rows grouped by section. Up-to-date rows are only counted unless all is set.
-// Name and version columns are as wide as the longest shown value, the same in every section.
+// Text prints check results as one table. Up-to-date rows are only counted unless all is
+// set; with review, the upstream changes of each update follow the table.
 func Text(t *ui.Term, rows []check.Row, all, review bool) {
-	nameW, verW := 0, 0
+	var shown []check.Row
+	updates, breaking, info, errs, hidden := 0, 0, 0, 0, 0
 	for _, r := range rows {
-		if r.Status != check.OK || all {
-			nameW = max(nameW, utf8.RuneCountInString(r.Name))
-			verW = max(verW, utf8.RuneCountInString(versionText(r)))
+		switch st := status(r); {
+		case r.Status == check.OK && !all:
+			hidden++
+			continue
+		case r.Status == check.Outdated:
+			updates++
+			if st != "update" {
+				breaking++
+			}
+		case r.Status == check.Info:
+			info++
+		case r.Status == check.Error:
+			errs++
+		}
+		shown = append(shown, r)
+	}
+	if len(shown) > 0 {
+		cells := make([][]string, len(shown))
+		for i, r := range shown {
+			action := r.Note
+			if r.Hint != "" {
+				action = strings.TrimPrefix(action+" · "+r.Hint, " · ")
+			}
+			cells[i] = []string{check.Source(r.Section), r.Name, r.Current, r.Latest, status(r), action}
+		}
+		Table(t, []string{"SOURCE", "NAME", "CURRENT", "LATEST", "STATUS", "ACTION"}, cells,
+			func(row, col int) int {
+				if col == 4 {
+					return statusColor[cells[row][4]]
+				}
+				return 0
+			})
+		t.Println()
+	}
+	var sum []string
+	if updates > 0 {
+		u := fmt.Sprintf("%d to update", updates)
+		if breaking > 0 {
+			u += fmt.Sprintf(" (%d likely breaking)", breaking)
+		}
+		sum = append(sum, u)
+	}
+	if info > 0 {
+		sum = append(sum, fmt.Sprintf("%d info", info))
+	}
+	if errs > 0 {
+		sum = append(sum, plural(errs, "error", "errors"))
+	}
+	if hidden > 0 {
+		sum = append(sum, fmt.Sprintf("%d up to date (--all to show them)", hidden))
+	}
+	if updates == 0 && errs == 0 {
+		sum = append([]string{"Everything is up to date."}, sum...)
+	}
+	t.Println(t.Paint(strings.Join(sum, " · "), 2))
+	if !review {
+		return
+	}
+	for _, r := range shown {
+		if r.Review != nil {
+			t.Printf("\n%s %s  %s → %s\n", t.Bold(r.Name), t.Paint(check.Source(r.Section), 2), r.Current, r.Latest)
+			t.Printf("%s", ReviewText(r.Review, "  "))
 		}
 	}
-	for _, sec := range check.Sections {
-		var group []check.Row
-		for _, r := range rows {
-			if r.Section == sec {
-				group = append(group, r)
-			}
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// lastWidth caps the last column so a long description does not wrap the table.
+const lastWidth = 72
+
+// Table prints rows under a dim header row. Every column is as wide as its widest cell
+// and the last one is cut at lastWidth. color returns an SGR code for a cell, 0 for none.
+func Table(t *ui.Term, header []string, rows [][]string, color func(row, col int) int) {
+	last := len(header) - 1
+	cut := func(c int, s string) string {
+		if r := []rune(s); c == last && len(r) > lastWidth {
+			return string(r[:lastWidth-1]) + "…"
 		}
-		if len(group) == 0 {
-			continue
+		return s
+	}
+	width := make([]int, len(header))
+	for _, r := range append([][]string{header}, rows...) {
+		for c, s := range r {
+			width[c] = max(width[c], utf8.RuneCountInString(cut(c, s)))
 		}
-		t.Println("\n" + t.Bold(sec))
-		hidden := 0
-		for _, r := range group {
-			if r.Status == check.OK && !all {
-				hidden++
-				continue
+	}
+	line := func(r []string, paint func(c int, s string) string) {
+		var b strings.Builder
+		for c, s := range r {
+			s = cut(c, s)
+			pad := strings.Repeat(" ", width[c]-utf8.RuneCountInString(s))
+			if c < last {
+				pad += "  "
 			}
-			mark := t.Paint(fmt.Sprintf("%-6s", marks[r.Status]), colors[r.Status])
-			line := fmt.Sprintf("  %s %-*s   %-*s   %s", mark, nameW, r.Name, verW, versionText(r), r.Note)
-			t.Println(strings.TrimRight(line, " "))
-			if r.Warn != "" {
-				t.Println("         " + t.Paint("⚠ "+r.Warn, 33))
-			}
-			if r.Hint != "" {
-				t.Println("         " + t.Paint("→ "+r.Hint, 36))
-			}
-			if review && r.Review != nil {
-				t.Printf("%s", ReviewText(r.Review, "         "))
-			}
+			b.WriteString(paint(c, s) + pad)
 		}
-		if hidden > 0 {
-			t.Printf("  %d up to date (use --all to list)\n", hidden)
-		}
+		t.Println(strings.TrimRight(b.String(), " "))
+	}
+	line(header, func(_ int, s string) string { return t.Paint(s, 2) })
+	for i, r := range rows {
+		line(r, func(c int, s string) string {
+			if color != nil && s != "" {
+				if code := color(i, c); code != 0 {
+					return t.Paint(s, code)
+				}
+			}
+			return s
+		})
 	}
 }
 
@@ -164,38 +247,68 @@ func ReviewMarkdown(r *gh.Review) string {
 	return b.String()
 }
 
-// noteWidth caps descriptions in Inventory so one long line does not wrap the table.
-const noteWidth = 72
-
-// Inventory prints list and search results: one block per source, aligned columns, a
-// green ● before what is in the running system.
-func Inventory(t *ui.Term, groups []inventory.Group) {
-	nameW, verW := 0, 0
+// List prints the inventory as one table, the errors of failed sources, and a count.
+func List(t *ui.Term, groups []inventory.Group) {
+	var cells [][]string
+	var sum []string
 	for _, g := range groups {
 		for _, it := range g.Items {
-			nameW = max(nameW, utf8.RuneCountInString(it.Name))
-			verW = max(verW, utf8.RuneCountInString(it.Version))
+			cells = append(cells, []string{g.Source, it.Name, it.Version, it.Note})
+		}
+		if n := len(g.Items); n > 0 {
+			sum = append(sum, plural(n, g.Source, g.Source+"s"))
 		}
 	}
+	if len(cells) > 0 {
+		Table(t, []string{"SOURCE", "NAME", "VERSION", "ORIGIN"}, cells, nil)
+		t.Println()
+	}
+	printErrors(t, groups)
+	t.Println(t.Paint(strings.Join(sum, " · "), 2))
+}
+
+// Search prints search results as one table, marking with a green ● what is installed.
+func Search(t *ui.Term, groups []inventory.Group) {
+	var cells [][]string
+	more, rev := 0, ""
 	for _, g := range groups {
-		t.Println("\n" + t.Bold(g.Source))
-		if g.Err != "" {
-			t.Println("  " + t.Paint("ERROR "+g.Err, 31))
-		}
 		for _, it := range g.Items {
-			mark := " "
+			mark := ""
 			if it.InSystem {
-				mark = t.Paint("●", 32)
+				mark = "●"
 			}
-			note := it.Note
-			if r := []rune(note); len(r) > noteWidth {
-				note = string(r[:noteWidth-1]) + "…"
-			}
-			line := fmt.Sprintf("  %s %-*s   %-*s   %s", mark, nameW, it.Name, verW, it.Version, note)
-			t.Println(strings.TrimRight(line, " "))
+			cells = append(cells, []string{g.Source, it.Name, it.Version, mark, it.Note})
 		}
-		if g.More > 0 {
-			t.Printf("    … %d more (refine the search or raise --limit)\n", g.More)
+		more += g.More
+		if g.Rev != "" {
+			rev = g.Rev
+		}
+	}
+	if len(cells) > 0 {
+		Table(t, []string{"SOURCE", "NAME", "VERSION", "INSTALLED", "DESCRIPTION"}, cells,
+			func(_, col int) int {
+				if col == 3 {
+					return 32
+				}
+				return 0
+			})
+		t.Println()
+	}
+	printErrors(t, groups)
+	sum := plural(len(cells), "result", "results")
+	if rev != "" {
+		sum += " (nixpkgs " + rev + ")"
+	}
+	if more > 0 {
+		sum += fmt.Sprintf(" · %d more not shown (refine the search or raise --limit)", more)
+	}
+	t.Println(t.Paint(sum, 2))
+}
+
+func printErrors(t *ui.Term, groups []inventory.Group) {
+	for _, g := range groups {
+		if g.Err != "" {
+			t.Println(t.Paint(g.Source+": "+g.Err, 31))
 		}
 	}
 }

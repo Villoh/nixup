@@ -3,6 +3,7 @@
 package check
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -28,6 +29,10 @@ const (
 
 // Sections in display order.
 var Sections = []string{"inputs", "packages", "profile", "flatpak"}
+
+// Source is the singular name of a section, as shown in the SOURCE column and accepted
+// by --source: input, package, profile, flatpak.
+func Source(section string) string { return strings.TrimSuffix(section, "s") }
 
 type Row struct {
 	Section string     `json:"section"`
@@ -142,7 +147,7 @@ func (c *Checker) input(name string, node flake.Node, review bool) Row {
 	if head == rev {
 		return Row{Section: "inputs", Name: name, Current: flake.ShortRev(rev), Status: OK}
 	}
-	row := Row{Section: "inputs", Name: name, Current: fmt.Sprintf("%s (%dd)", flake.ShortRev(rev), age),
+	row := Row{Section: "inputs", Name: name, Current: fmt.Sprintf("%s · %dd", flake.ShortRev(rev), age),
 		Latest: flake.ShortRev(head), Status: Outdated, Note: "nixup lock " + name}
 	if review {
 		row.Review = c.GH.Review(id, rev, head, false)
@@ -271,22 +276,51 @@ func (c *Checker) Profile(repo string) []Row {
 	return rows
 }
 
-// Flatpak lists applications and runtimes with a pending update.
+// Flatpak lists applications and runtimes with a pending update, with the installed and
+// the new version when flatpak knows them. Runtimes have no version, only a branch.
 func (c *Checker) Flatpak() []Row {
 	if !c.R.Has("flatpak") {
 		return nil
 	}
-	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=application")
+	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=application,version,branch")
 	if err != nil {
 		return []Row{{Section: "flatpak", Name: "flatpak", Status: Error, Note: run.LastLine(errs)}}
 	}
+	installed := map[string]string{} // "app/branch" -> version, or the branch for runtimes
+	if list, _, err := c.R.Capture("", "flatpak", "list", "--columns=application,version,branch"); err == nil {
+		for _, f := range fields(list) {
+			installed[f[0]+"/"+f[2]] = cmp.Or(f[1], f[2])
+		}
+	}
 	var rows []Row
-	seen := map[string]bool{} // one application can be listed for several branches
+	seen := map[string]bool{}
+	for _, f := range fields(out) {
+		key := f[0] + "/" + f[2]
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		latest := f[1]
+		if latest == "" || latest == installed[key] {
+			latest = "new build" // same version rebuilt: flatpak still offers it
+		}
+		rows = append(rows, Row{Section: "flatpak", Name: f[0], Current: installed[key], Latest: latest,
+			Status: Outdated, Note: "flatpak update"})
+	}
+	return rows
+}
+
+// fields splits flatpak's tab-separated columns into exactly three trimmed fields per
+// line, skipping empty lines.
+func fields(out string) [][]string {
+	var rows [][]string
 	for _, line := range strings.Split(out, "\n") {
-		if app := strings.TrimSpace(line); app != "" && !seen[app] {
-			seen[app] = true
-			rows = append(rows, Row{Section: "flatpak", Name: app, Latest: "update", Status: Outdated,
-				Note: "flatpak update"})
+		f := append(strings.Split(line, "\t"), "", "", "")[:3]
+		for i := range f {
+			f[i] = strings.TrimSpace(f[i])
+		}
+		if f[0] != "" {
+			rows = append(rows, f)
 		}
 	}
 	return rows

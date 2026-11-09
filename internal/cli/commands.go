@@ -15,7 +15,7 @@ import (
 
 func runCheck(args []string, d Deps) int {
 	fs, dir := d.flags("check")
-	only := fs.String("only", "", "comma list of: "+strings.Join(check.Sections, ", "))
+	only := fs.String("source", "", "comma list of: input, package, profile, flatpak (default: all)")
 	all := fs.Bool("all", false, "also list up-to-date entries")
 	asJSON := fs.Bool("json", false, "machine-readable output")
 	md := fs.Bool("markdown", false, "Markdown output (PR body, CI summary)")
@@ -25,15 +25,17 @@ func runCheck(args []string, d Deps) int {
 		return code
 	}
 
-	var sections []string
-	for _, s := range strings.Split(*only, ",") {
-		if s == "" {
-			continue
+	sources, err := parseSources(*only, []string{"input", "package", "profile", "flatpak"})
+	if err != nil {
+		return d.fail(err)
+	}
+	var sections []string // check names its sections in the plural
+	for _, s := range sources {
+		for _, sec := range check.Sections {
+			if check.Source(sec) == s {
+				sections = append(sections, sec)
+			}
 		}
-		if !contains(check.Sections, s) {
-			return d.fail(fmt.Errorf("unknown section %q", s))
-		}
-		sections = append(sections, s)
 	}
 
 	rows := (&check.Checker{R: d.R, GH: d.GH}).All(repo, sections, *review)
@@ -47,6 +49,25 @@ func runCheck(args []string, d Deps) int {
 		report.Text(d.T, rows, *all, *review)
 	}
 	return check.ExitCode(rows)
+}
+
+// parseSources reads a --source list. Plurals are accepted too (inputs, packages).
+func parseSources(list string, allowed []string) ([]string, error) {
+	var out []string
+	for _, s := range strings.Split(list, ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if !contains(allowed, s) && contains(allowed, strings.TrimSuffix(s, "s")) {
+			s = strings.TrimSuffix(s, "s")
+		}
+		if !contains(allowed, s) {
+			return nil, fmt.Errorf("unknown source %q (one of: %s)", s, strings.Join(allowed, ", "))
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 func contains(list []string, v string) bool {
@@ -92,24 +113,29 @@ func runPkg(args []string, d Deps) int {
 		NoBuild: *noBuild, Yes: *yes, Report: *reportFile})
 }
 
-func printGroups(d Deps, groups []inventory.Group, asJSON bool) {
-	if asJSON {
-		b, _ := json.MarshalIndent(groups, "", "  ")
-		d.T.Println(string(b))
-		return
-	}
-	report.Inventory(d.T, groups)
+func printJSON(d Deps, v any) {
+	b, _ := json.MarshalIndent(v, "", "  ")
+	d.T.Println(string(b))
 }
 
 func runList(args []string, d Deps) int {
 	fs, dir := d.flags("list")
 	asJSON := fs.Bool("json", false, "machine-readable output")
+	source := fs.String("source", "", "comma list of: "+strings.Join(inventory.ListSources, ", ")+" (default: all)")
 	_, repo, code, ok := d.setup(fs, dir, args)
 	if !ok {
 		return code
 	}
-	groups := inventory.List(d.R, repo)
-	printGroups(d, groups, *asJSON)
+	sources, err := parseSources(*source, inventory.ListSources)
+	if err != nil {
+		return d.fail(err)
+	}
+	groups := inventory.List(d.R, repo, sources)
+	if *asJSON {
+		printJSON(d, groups)
+	} else {
+		report.List(d.T, groups)
+	}
 	for _, g := range groups {
 		if g.Err != "" {
 			return exit.Error
@@ -122,6 +148,7 @@ func runSearch(args []string, d Deps) int {
 	fs, dir := d.flags("search")
 	asJSON := fs.Bool("json", false, "machine-readable output")
 	limit := fs.Int("limit", 10, "results per source")
+	source := fs.String("source", "", "comma list of: "+strings.Join(inventory.SearchSources, ", ")+" (default: all)")
 	words, repo, code, ok := d.setup(fs, dir, args)
 	if !ok {
 		return code
@@ -129,15 +156,23 @@ func runSearch(args []string, d Deps) int {
 	if len(words) != 1 {
 		return d.fail(fmt.Errorf("usage: nixup search <name>"))
 	}
-	groups, err := inventory.Search(d.R, repo, words[0], max(*limit, 1))
+	sources, err := parseSources(*source, inventory.SearchSources)
+	if err != nil {
+		return d.fail(err)
+	}
+	groups, err := inventory.Search(d.R, repo, words[0], max(*limit, 1), sources)
 	if err != nil {
 		return d.fail(err)
 	}
 	if len(groups) == 0 && !*asJSON {
-		d.T.Println("Nothing called " + strconv.Quote(words[0]) + " in nixpkgs, your packages, your inputs or Flatpak.")
+		d.T.Println("Nothing called " + strconv.Quote(words[0]) + " found.")
 		return exit.Pending
 	}
-	printGroups(d, groups, *asJSON)
+	if *asJSON {
+		printJSON(d, groups)
+	} else {
+		report.Search(d.T, groups)
+	}
 	if len(groups) == 0 {
 		return exit.Pending
 	}
