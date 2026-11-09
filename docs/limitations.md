@@ -1,0 +1,45 @@
+---
+title: Limitations
+description: What nixup does not see, check or do.
+lang: en
+---
+
+# Limitations
+
+English | [Español](es/limitations.md)
+
+## Only GitHub upstreams
+
+- Inputs: only direct inputs of type `github` are checked. `gitlab:`, `git+https:`, `path:`, tarball and other inputs do not appear in the report at all.
+- Packages: a package whose source URLs and homepage do not point to github.com is reported as `info` with `no GitHub upstream: check by hand`.
+- Reviews (commits, compare links, release notes) come from the GitHub API only.
+
+## Only what the flake exposes
+
+- The `packages` section reads the flake's own `packages.<system>` output, for the system nixup runs on. A `fetchurl` inside a module, a pinned `rev` in an overlay, or a package defined only for another system is invisible. Move it into the `packages` output to have it checked.
+- A package needs `passthru.updateScript` to be checked. Without it nixup reports `info` with `no passthru.updateScript`.
+- `nixup pkg` assumes each package's files live in `packages/<name>`. The uncommitted-changes check, the rollback and the printed diff all use that path.
+- Transitive inputs are not checked. `lock` updates them with everything else and only reports how many moved.
+
+## lock builds NixOS hosts only
+
+`lock` builds each entry in `nixosConfigurations` with `nh os build`. Home Manager, nix-darwin and other outputs are not built. On a flake without `nixosConfigurations`, run `lock --no-build`; otherwise listing the hosts fails with exit code 2.
+
+## Some sections only report
+
+- `flatpak`: nixup lists pending updates. Run `flatpak update` yourself.
+- `profile`: nixup compares the nixpkgs revision of `nix profile` entries with your flake's input named `nixpkgs`. Run `nix profile upgrade` yourself.
+- Pinned tag inputs: `nix flake update` does not move a tag, so `lock` does not either. Edit the tag in `flake.nix`.
+
+## Version heuristics
+
+- A `ref` that starts with a digit, `v` plus a digit, or a `word/` prefix followed by those (`v1.2`, `1.2`, `dms/1.2`) is treated as a release tag. Everything else is a branch.
+- Date-based versions such as `20240101.1` get no major-jump warning: a first number of 1000 or more is read as a year or a date, so a real major version that high would be missed too.
+- Release notes are read from the 50 most recent GitHub releases, and nixup shows at most three per update.
+
+## Other limits
+
+- nixup does not compute hashes. `nix-update` does.
+- There is no configuration file, daemon, timer or notification. Schedule it yourself, for example [in CI](ci.md).
+- Without a GitHub token the API allows 60 requests per hour, which a large `--review` can exceed.
+- The flake provides builds for `x86_64-linux` and `aarch64-linux` only.
