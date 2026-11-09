@@ -26,10 +26,10 @@ jobs:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # release notes read the history since the last tag
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
