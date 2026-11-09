@@ -97,55 +97,89 @@ func (c *Client) Tags(repo string) ([]string, error) {
 	return tags, nil
 }
 
+// Extract reads the version a tag carries; ok is false for tags that are not versions.
+type Extract func(tag string) (version string, ok bool)
+
+// plain accepts tags that start with a digit or v plus a digit and drops the leading v.
+func plain(tag string) (string, bool) { return ver.Strip(tag), ver.HasPrefix(tag, "") }
+
+// highest is the tag with the highest version, skipping prereleases unless allowed.
+func highest(tags []string, extract Extract, allowPre bool) (tag, version string) {
+	for _, t := range tags {
+		v, ok := extract(t)
+		if !ok || (!allowPre && ver.IsPre(v)) {
+			continue
+		}
+		if tag == "" || ver.Newer(v, version) {
+			tag, version = t, v
+		}
+	}
+	return tag, version
+}
+
 // LatestTag is the highest version-like tag that starts with prefix.
 func (c *Client) LatestTag(repo, prefix string, allowPre bool) (string, error) {
 	tags, err := c.Tags(repo)
 	if err != nil {
 		return "", err
 	}
-	best := ""
-	for _, t := range tags {
-		if !ver.HasPrefix(t, prefix) || (!allowPre && ver.IsPre(t)) {
-			continue
-		}
-		if best == "" || ver.Newer(t, best) {
-			best = t
-		}
-	}
+	best, _ := highest(tags, func(t string) (string, bool) { return t, ver.HasPrefix(t, prefix) }, allowPre)
 	if best == "" {
 		return "", fmt.Errorf("no matching tag in %s", repo)
 	}
 	return best, nil
 }
 
+// LatestVersionTag is the tag carrying the highest version, read with extract (nil: tags
+// that start with a digit or v plus a digit).
+func (c *Client) LatestVersionTag(repo string, extract Extract, allowPre bool) (tag, version string, err error) {
+	tags, err := c.Tags(repo)
+	if err != nil {
+		return "", "", err
+	}
+	if extract == nil {
+		extract = plain
+	}
+	if tag, version = highest(tags, extract, allowPre); tag == "" {
+		return "", "", fmt.Errorf("no matching tag in %s", repo)
+	}
+	return tag, version, nil
+}
+
 // LatestRelease is the highest version among the repo's published GitHub releases. Unlike
 // LatestTag it ignores tags that were never released, which matters for repos that also
 // push unrelated tag series (v97.000, v111111) next to their real versions.
-func (c *Client) LatestRelease(repo string, allowPre bool) (string, error) {
+// The version is read from the tag with extract (nil: every tag, minus a leading v).
+func (c *Client) LatestRelease(repo string, extract Extract, allowPre bool) (tag, version string, err error) {
 	var rels []releaseResp
 	if err := c.Get(fmt.Sprintf("repos/%s/releases?per_page=100", repo), &rels); err != nil {
-		return "", err
+		return "", "", err
 	}
-	best := ""
+	if extract == nil {
+		extract = func(t string) (string, bool) { return ver.Strip(t), true }
+	}
+	var tags []string
 	for _, r := range rels {
-		if r.Draft || ((r.Prerelease || ver.IsPre(r.Tag)) && !allowPre) {
-			continue
-		}
-		if best == "" || ver.Newer(r.Tag, best) {
-			best = r.Tag
+		if !r.Draft && (!r.Prerelease || allowPre) {
+			tags = append(tags, r.Tag)
 		}
 	}
-	if best == "" {
-		return "", fmt.Errorf("no matching release in %s", repo)
+	if tag, version = highest(tags, extract, allowPre); tag == "" {
+		return "", "", fmt.Errorf("no matching release in %s", repo)
 	}
-	return best, nil
+	return tag, version, nil
 }
 
-// TagFor finds the upstream tag that carries a version ("1.1.12" -> "v1.1.12").
-func (c *Client) TagFor(repo, version string) string {
+// TagFor finds the upstream tag that carries a version ("1.1.12" -> "v1.1.12"), read
+// with extract (nil: the tag minus its leading non-digits).
+func (c *Client) TagFor(repo, version string, extract Extract) string {
 	tags, _ := c.Tags(repo)
 	for _, t := range tags {
-		if ver.Strip(t) == version {
+		if extract == nil {
+			if ver.Strip(t) == version {
+				return t
+			}
+		} else if v, ok := extract(t); ok && v == version {
 			return t
 		}
 	}

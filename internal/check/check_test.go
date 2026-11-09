@@ -390,3 +390,17 @@ func TestPackagesNixpkgsLookupFailureKeepsTheRows(t *testing.T) {
 		t.Errorf("%+v", rows)
 	}
 }
+
+func TestPackageFollowsVersionRegex(t *testing.T) {
+	e := testutil.New(t)
+	e.Tags("elianiva/meiro", "desktop-minimal-v0.6.1", "desktop-v0.6.1", "desktop-minimal-v0.8.0", "desktop-v0.7.0")
+	p := flake.Package{Name: "meiro", Version: "0.6.1", Homepage: "https://github.com/elianiva/meiro",
+		Update: []string{"nix-update", "--version-regex", "desktop-v(.*)"}}
+	row := checker(e).Package(p, true)
+	if row.Status != check.Outdated || row.Latest != "0.7.0" || !strings.Contains(row.Warn, "0.x") {
+		t.Errorf("the update script's regex picks the series and reads the version: %+v", row)
+	}
+	if row.Review == nil || row.Review.From != "desktop-v0.6.1" || row.Review.To != "desktop-v0.7.0" {
+		t.Errorf("the review compares the real tags: %+v", row.Review)
+	}
+}

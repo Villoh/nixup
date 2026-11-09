@@ -77,13 +77,13 @@ func TestLatestTag(t *testing.T) {
 func TestTagFor(t *testing.T) {
 	e := testutil.New(t)
 	e.Tags("o/r", "v1.1.12", "1.01", "dms/1.2.0")
-	if got := e.GH.TagFor("o/r", "1.1.12"); got != "v1.1.12" {
+	if got := e.GH.TagFor("o/r", "1.1.12", nil); got != "v1.1.12" {
 		t.Errorf("got %q", got)
 	}
-	if got := e.GH.TagFor("o/r", "1.01"); got != "1.01" {
+	if got := e.GH.TagFor("o/r", "1.01", nil); got != "1.01" {
 		t.Errorf("got %q", got)
 	}
-	if got := e.GH.TagFor("o/r", "9.9.9"); got != "v9.9.9" {
+	if got := e.GH.TagFor("o/r", "9.9.9", nil); got != "v9.9.9" {
 		t.Errorf("unknown versions fall back to v<version>, got %q", got)
 	}
 }
@@ -236,22 +236,49 @@ func TestLatestRelease(t *testing.T) {
 		testutil.Release{Tag: "v5.001-rc.1", Body: "rc", Prerelease: true},
 		testutil.Release{Tag: "v6.000", Body: "unpublished", Draft: true},
 	)
-	got, err := e.GH.LatestRelease("o/r", false)
-	if err != nil || got != "v5.000" {
-		t.Errorf("got %q, %v: drafts and prereleases must not count", got, err)
+	got, v, err := e.GH.LatestRelease("o/r", nil, false)
+	if err != nil || got != "v5.000" || v != "5.000" {
+		t.Errorf("got %q (%q), %v: drafts and prereleases must not count", got, v, err)
 	}
-	if got, _ := e.GH.LatestRelease("o/r", true); got != "v5.001-rc.1" {
+	if got, _, _ := e.GH.LatestRelease("o/r", nil, true); got != "v5.001-rc.1" {
 		t.Errorf("with prereleases allowed, got %q", got)
 	}
 }
 
 func TestLatestReleaseErrors(t *testing.T) {
 	e := testutil.New(t)
-	if _, err := e.GH.LatestRelease("o/none", false); err == nil || !strings.Contains(err.Error(), "404") {
+	if _, _, err := e.GH.LatestRelease("o/none", nil, false); err == nil || !strings.Contains(err.Error(), "404") {
 		t.Errorf("an unknown repo is an error: %v", err)
 	}
 	e.Releases("o/empty")
-	if _, err := e.GH.LatestRelease("o/empty", false); err == nil {
+	if _, _, err := e.GH.LatestRelease("o/empty", nil, false); err == nil {
 		t.Error("no releases is an error, not an empty version")
+	}
+}
+
+func TestLatestVersionTagWithExtract(t *testing.T) {
+	e := testutil.New(t)
+	// meiro: two release series share the repo; only desktop-v* is the packaged one.
+	e.Tags("o/r", "desktop-v0.6.0", "desktop-v0.6.1", "desktop-minimal-v0.7.0", "desktop-v0.7.0-rc.1", "v9.0.0")
+	desktop := func(tag string) (string, bool) {
+		v, ok := strings.CutPrefix(tag, "desktop-v")
+		return v, ok
+	}
+	tag, v, err := e.GH.LatestVersionTag("o/r", desktop, false)
+	if err != nil || tag != "desktop-v0.6.1" || v != "0.6.1" {
+		t.Errorf("got %q (%q), %v", tag, v, err)
+	}
+	if tag, _, _ := e.GH.LatestVersionTag("o/r", desktop, true); tag != "desktop-v0.7.0-rc.1" {
+		t.Errorf("prereleases allowed: %q", tag)
+	}
+	if tag, v, _ := e.GH.LatestVersionTag("o/r", nil, false); tag != "v9.0.0" || v != "9.0.0" {
+		t.Errorf("default rule: %q (%q)", tag, v)
+	}
+	if got := e.GH.TagFor("o/r", "0.6.0", desktop); got != "desktop-v0.6.0" {
+		t.Errorf("TagFor with extract: %q", got)
+	}
+	none := func(string) (string, bool) { return "", false }
+	if _, _, err := e.GH.LatestVersionTag("o/r", none, false); err == nil {
+		t.Error("nothing matches: an error")
 	}
 }

@@ -199,25 +199,28 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 	}
 	_, allowPre := p.ExtraArgs()
 	pre := allowPre || ver.IsPre(p.Version)
-	var top string
-	var err error
+	extract, err := p.TagVersion()
+	if err != nil {
+		return errRow("packages", p.Name, err)
+	}
+	var top, latest string
 	if p.UsesReleases() { // mirror nix-update: only published releases count, not every tag
-		top, err = c.GH.LatestRelease(id, pre)
+		top, latest, err = c.GH.LatestRelease(id, extract, pre)
 	} else {
-		top, err = c.GH.LatestTag(id, "", pre)
+		top, latest, err = c.GH.LatestVersionTag(id, extract, pre)
 	}
 	if err != nil {
 		return errRow("packages", p.Name, err)
 	}
-	if !ver.Newer(top, p.Version) {
+	if !ver.Newer(latest, p.Version) {
 		row.Status = OK
 		return row
 	}
-	row.Latest, row.Status = ver.Strip(top), Outdated
-	row.Warn = ver.Bump(p.Version, top).Warning()
+	row.Latest, row.Status = latest, Outdated
+	row.Warn = ver.Bump(p.Version, latest).Warning()
 	row.Note = "nixup pkg " + p.Name
 	if review {
-		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version), top, true)
+		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version, extract), top, true)
 	}
 	return row
 }

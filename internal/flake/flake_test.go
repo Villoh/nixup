@@ -460,3 +460,33 @@ func TestSameProject(t *testing.T) {
 		}
 	}
 }
+
+func TestTagVersion(t *testing.T) {
+	for _, c := range []struct {
+		update []string
+		tag    string
+		want   string
+		ok     bool
+	}{
+		{[]string{"nix-update", "--version-regex", "desktop-v(.*)"}, "desktop-v0.6.1", "0.6.1", true},
+		{[]string{"nix-update", "--version-regex", "desktop-v(.*)"}, "desktop-minimal-v0.6.1", "", false},
+		{[]string{"nix-update", "--version-regex", "desktop-v(.*)"}, "x-desktop-v0.6.1", "", false}, // anchored at the start, like re.match
+		{[]string{"nix-update", "--version-regex=v(\\d+)_(\\d+)"}, "v1_2", "1.2", true},             // groups joined with "."
+		{[]string{"nix-update", "--version-regex", "(\\d+)-?(rc\\d+)?"}, "3", "3", true},            // empty groups are dropped
+	} {
+		p := flake.Package{Name: "x", Update: c.update}
+		extract, err := p.TagVersion()
+		if err != nil || extract == nil {
+			t.Fatalf("%v: %v", c.update, err)
+		}
+		if got, ok := extract(c.tag); got != c.want || ok != c.ok {
+			t.Errorf("%v on %q = %q, %v; want %q, %v", c.update[1:], c.tag, got, ok, c.want, c.ok)
+		}
+	}
+	if e, err := (flake.Package{Update: []string{"nix-update"}}).TagVersion(); e != nil || err != nil {
+		t.Errorf("without --version-regex the default rules apply: %v", err)
+	}
+	if _, err := (flake.Package{Name: "x", Update: []string{"nix-update", "--version-regex", "("}}).TagVersion(); err == nil {
+		t.Error("a broken regex is an error")
+	}
+}

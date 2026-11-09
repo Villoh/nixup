@@ -94,6 +94,41 @@ func (p Package) UsesReleases() bool {
 	return false
 }
 
+// TagVersion reads a version out of a tag the way nix-update does when the update script
+// passes --version-regex: the regex must match at the start of the tag, and its non-empty
+// groups joined by "." are the version (nix-update's extract_version). Without the flag
+// it returns nil, and the default rules apply.
+func (p Package) TagVersion() (gh.Extract, error) {
+	expr := ""
+	for i, a := range p.Update {
+		if v, ok := strings.CutPrefix(a, "--version-regex="); ok {
+			expr = v
+		} else if a == "--version-regex" && i+1 < len(p.Update) {
+			expr = p.Update[i+1]
+		}
+	}
+	if expr == "" {
+		return nil, nil
+	}
+	re, err := regexp.Compile(`^(?:` + expr + `)`)
+	if err != nil {
+		return nil, fmt.Errorf("%s: bad --version-regex: %w", p.Name, err)
+	}
+	return func(tag string) (string, bool) {
+		m := re.FindStringSubmatch(tag)
+		if m == nil {
+			return "", false
+		}
+		var groups []string
+		for _, g := range m[1:] {
+			if g != "" {
+				groups = append(groups, g)
+			}
+		}
+		return strings.Join(groups, "."), len(groups) > 0
+	}, nil
+}
+
 // ExtraArgs are the nix-update flags the package declares. --version=* is dropped, since
 // nixup always pins the version it just reviewed; --version=unstable only sets allowPre.
 func (p Package) ExtraArgs() (args []string, allowPre bool) {
