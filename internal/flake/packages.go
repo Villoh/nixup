@@ -81,6 +81,17 @@ func (p Package) Upstream() string {
 	return ""
 }
 
+// UsesReleases reports whether the package's update script asks nix-update to follow
+// GitHub releases instead of tags (--use-github-releases).
+func (p Package) UsesReleases() bool {
+	for _, a := range p.Update {
+		if a == "--use-github-releases" {
+			return true
+		}
+	}
+	return false
+}
+
 // ExtraArgs are the nix-update flags the package declares. --version=* is dropped, since
 // nixup always pins the version it just reviewed; --version=unstable only sets allowPre.
 func (p Package) ExtraArgs() (args []string, allowPre bool) {

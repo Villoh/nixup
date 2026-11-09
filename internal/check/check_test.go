@@ -295,3 +295,44 @@ func TestExitCode(t *testing.T) {
 		}
 	}
 }
+
+// The case that broke: a repo whose tags include unrelated series (v97.000, v111111) next to
+// its real versions. Tags would say 111111; the published releases say 5.000.
+func TestPackageFollowsReleasesWhenTheUpdateScriptDoes(t *testing.T) {
+	e := testutil.New(t)
+	e.Tags("g/sans", "v4.007", "v5.000", "v97.000", "v123.011", "v111111")
+	e.Releases("g/sans",
+		testutil.Release{Tag: "v5.000", Body: "now"},
+		testutil.Release{Tag: "v4.007", Body: "before"},
+	)
+	byTags := flake.Package{Name: "sans", Version: "5.000", Homepage: "https://github.com/g/sans", Update: []string{"nix-update"}}
+	byReleases := byTags
+	byReleases.Update = []string{"nix-update", "--use-github-releases"}
+
+	if row := checker(e).Package(byTags, false); row.Status != check.Outdated || row.Latest != "111111" {
+		t.Errorf("without the flag nixup reads tags, as nix-update does: %+v", row)
+	}
+	if row := checker(e).Package(byReleases, false); row.Status != check.OK {
+		t.Errorf("with --use-github-releases the junk tags must be ignored: %+v", row)
+	}
+}
+
+func TestPackageReleasesDetectsARealUpdate(t *testing.T) {
+	e := testutil.New(t)
+	e.Tags("g/sans", "v4.007", "v5.000", "v111111")
+	e.Releases("g/sans", testutil.Release{Tag: "v5.000"}, testutil.Release{Tag: "v4.007"})
+	e.Compare("g/sans", "v4.007", "v5.000", 3, "feat: x")
+	p := flake.Package{Name: "sans", Version: "4.007", Homepage: "https://github.com/g/sans", Update: []string{"nix-update", "--use-github-releases"}}
+	row := checker(e).Package(p, true)
+	if row.Status != check.Outdated || row.Latest != "5.000" || row.Review == nil || row.Review.Commits != 3 {
+		t.Errorf("%+v", row)
+	}
+}
+
+func TestPackageReleasesLookupFailure(t *testing.T) {
+	e := testutil.New(t) // no releases route: 404
+	p := flake.Package{Name: "x", Version: "1.0.0", Homepage: "https://github.com/o/none", Update: []string{"nix-update", "--use-github-releases"}}
+	if row := checker(e).Package(p, false); row.Status != check.Error {
+		t.Errorf("%+v", row)
+	}
+}

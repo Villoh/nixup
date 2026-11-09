@@ -227,3 +227,31 @@ func TestReviewKeepsReleasesWhenCompareFails(t *testing.T) {
 		t.Error("release notes are still useful when the compare call fails")
 	}
 }
+
+func TestLatestRelease(t *testing.T) {
+	e := testutil.New(t)
+	e.Releases("o/r",
+		testutil.Release{Tag: "v4.007", Body: "old"},
+		testutil.Release{Tag: "v5.000", Body: "current"},
+		testutil.Release{Tag: "v5.001-rc.1", Body: "rc", Prerelease: true},
+		testutil.Release{Tag: "v6.000", Body: "unpublished", Draft: true},
+	)
+	got, err := e.GH.LatestRelease("o/r", false)
+	if err != nil || got != "v5.000" {
+		t.Errorf("got %q, %v: drafts and prereleases must not count", got, err)
+	}
+	if got, _ := e.GH.LatestRelease("o/r", true); got != "v5.001-rc.1" {
+		t.Errorf("with prereleases allowed, got %q", got)
+	}
+}
+
+func TestLatestReleaseErrors(t *testing.T) {
+	e := testutil.New(t)
+	if _, err := e.GH.LatestRelease("o/none", false); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Errorf("an unknown repo is an error: %v", err)
+	}
+	e.Releases("o/empty")
+	if _, err := e.GH.LatestRelease("o/empty", false); err == nil {
+		t.Error("no releases is an error, not an empty version")
+	}
+}

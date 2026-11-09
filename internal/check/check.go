@@ -171,7 +171,14 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 		return row
 	}
 	_, allowPre := p.ExtraArgs()
-	top, err := c.GH.LatestTag(id, "", allowPre || ver.IsPre(p.Version))
+	pre := allowPre || ver.IsPre(p.Version)
+	var top string
+	var err error
+	if p.UsesReleases() { // mirror nix-update: only published releases count, not every tag
+		top, err = c.GH.LatestRelease(id, pre)
+	} else {
+		top, err = c.GH.LatestTag(id, "", pre)
+	}
 	if err != nil {
 		return errRow("packages", p.Name, err)
 	}

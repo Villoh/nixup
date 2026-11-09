@@ -171,6 +171,8 @@ func TestPkgPassesPackageArgsAndNeverTheirVersion(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"flectar":{"version":"0.1.0-alpha.6","urls":[],"homepage":"https://github.com/flectar/mail","update":["nix-update","--version=unstable","--use-github-releases"]}}`})
 	f.e.Tags("flectar/mail", "v0.1.0-alpha.6", "v0.1.0-alpha.7")
+	// --use-github-releases makes nixup read releases (as nix-update will), not tags.
+	f.e.Releases("flectar/mail", testutil.Release{Tag: "v0.1.0-alpha.6"}, testutil.Release{Tag: "v0.1.0-alpha.7"})
 	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true}); code != exit.OK {
 		t.Fatalf("code %d\n%s", code, f.out)
 	}

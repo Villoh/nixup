@@ -388,3 +388,15 @@ func TestResolveErrors(t *testing.T) {
 		t.Errorf("with nothing configured, the error must say how to configure it: %v", err)
 	}
 }
+
+func TestUsesReleases(t *testing.T) {
+	yes := flake.Package{Update: []string{"nix-update", "--use-github-releases"}}
+	no := flake.Package{Update: []string{"nix-update", "--version=unstable"}}
+	if !yes.UsesReleases() || no.UsesReleases() || (flake.Package{}).UsesReleases() {
+		t.Error("UsesReleases must look for --use-github-releases only")
+	}
+	// It is also forwarded to nix-update, which needs it to resolve the same version.
+	if args, _ := yes.ExtraArgs(); !reflect.DeepEqual(args, []string{"--use-github-releases"}) {
+		t.Errorf("args = %v", args)
+	}
+}

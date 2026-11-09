@@ -118,6 +118,29 @@ func (c *Client) LatestTag(repo, prefix string, allowPre bool) (string, error) {
 	return best, nil
 }
 
+// LatestRelease is the highest version among the repo's published GitHub releases. Unlike
+// LatestTag it ignores tags that were never released, which matters for repos that also
+// push unrelated tag series (v97.000, v111111) next to their real versions.
+func (c *Client) LatestRelease(repo string, allowPre bool) (string, error) {
+	var rels []releaseResp
+	if err := c.Get(fmt.Sprintf("repos/%s/releases?per_page=100", repo), &rels); err != nil {
+		return "", err
+	}
+	best := ""
+	for _, r := range rels {
+		if r.Draft || ((r.Prerelease || ver.IsPre(r.Tag)) && !allowPre) {
+			continue
+		}
+		if best == "" || ver.Newer(r.Tag, best) {
+			best = r.Tag
+		}
+	}
+	if best == "" {
+		return "", fmt.Errorf("no matching release in %s", repo)
+	}
+	return best, nil
+}
+
 // TagFor finds the upstream tag that carries a version ("1.1.12" -> "v1.1.12").
 func (c *Client) TagFor(repo, version string) string {
 	tags, _ := c.Tags(repo)
