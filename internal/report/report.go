@@ -4,6 +4,7 @@ package report
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/gh"
@@ -26,8 +27,23 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+func versionText(r check.Row) string {
+	if r.Latest == "" {
+		return r.Current
+	}
+	return r.Current + " -> " + r.Latest
+}
+
 // Text prints rows grouped by section. Up-to-date rows are only counted unless all is set.
+// Name and version columns are as wide as the longest shown value, the same in every section.
 func Text(t *ui.Term, rows []check.Row, all, review bool) {
+	nameW, verW := 0, 0
+	for _, r := range rows {
+		if r.Status != check.OK || all {
+			nameW = max(nameW, utf8.RuneCountInString(r.Name))
+			verW = max(verW, utf8.RuneCountInString(versionText(r)))
+		}
+	}
 	for _, sec := range check.Sections {
 		var group []check.Row
 		for _, r := range rows {
@@ -45,12 +61,9 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 				hidden++
 				continue
 			}
-			version := r.Current
-			if r.Latest != "" {
-				version += " -> " + r.Latest
-			}
 			mark := t.Paint(fmt.Sprintf("%-6s", marks[r.Status]), colors[r.Status])
-			t.Printf("  %s %-26s %-30s %s\n", mark, r.Name, version, r.Note)
+			line := fmt.Sprintf("  %s %-*s   %-*s   %s", mark, nameW, r.Name, verW, versionText(r), r.Note)
+			t.Println(strings.TrimRight(line, " "))
 			if r.Warn != "" {
 				t.Println("         " + t.Paint("⚠ "+r.Warn, 33))
 			}

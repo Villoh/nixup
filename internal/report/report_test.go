@@ -65,6 +65,42 @@ func TestTextAllAndReview(t *testing.T) {
 	}
 }
 
+func TestTextAlignsColumnsForLongNames(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	report.Text(term, []check.Row{
+		{Section: "inputs", Name: "noctalia-community-plugins-extra", Current: "aaa1111 (3d)", Latest: "bbb2222", Status: check.Outdated, Note: "nixup lock noctalia-community-plugins-extra"},
+		{Section: "inputs", Name: "hm", Current: "v1", Latest: "v2", Status: check.Outdated, Note: "nixup lock hm"},
+		{Section: "flatpak", Name: "com.cherry_ai.CherryStudio", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "flatpak update"},
+		{Section: "flatpak", Name: "ok-but-hidden-and-much-longer-than-the-rest", Current: "1", Status: check.OK},
+	}, false, false)
+	// The note column starts at the same position on every row, in every section;
+	// hidden rows do not widen it.
+	col := -1
+	for _, line := range strings.Split(out.String(), "\n") {
+		i := strings.Index(line, "nixup lock")
+		if i < 0 {
+			i = strings.Index(line, "flatpak update")
+		}
+		if i < 0 {
+			continue
+		}
+		if col == -1 {
+			col = i
+		}
+		if i != col {
+			t.Errorf("note column at %d, want %d:\n%s", i, col, out)
+		}
+	}
+	if want := len("  UPDATE ") + len("noctalia-community-plugins-extra") + 3 + len("aaa1111 (3d) -> bbb2222") + 3; col != want {
+		t.Errorf("note column at %d, want %d (hidden rows must not count):\n%s", col, want, out)
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasSuffix(line, " ") {
+			t.Errorf("trailing spaces in %q", line)
+		}
+	}
+}
+
 func TestTextOmitsEmptySections(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{{Section: "inputs", Name: "x", Status: check.OK}}, false, false)
