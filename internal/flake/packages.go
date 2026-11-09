@@ -3,6 +3,7 @@ package flake
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -18,13 +19,15 @@ type Package struct {
 	Version  string   `json:"version"`
 	URLs     []string `json:"urls"`
 	Homepage string   `json:"homepage"`
-	Update   []string `json:"update"` // passthru.updateScript command line, if any
+	Update   []string `json:"update"`   // passthru.updateScript command line, if any
+	Position string   `json:"position"` // meta.position: "<store path>/<file>:<line>"
 }
 
 const packagesQuery = `ps: builtins.mapAttrs (n: p: {
   version = p.version or "";
   urls = p.src.urls or [];
   homepage = p.meta.homepage or "";
+  position = p.meta.position or "";
   update = if p ? passthru && p.passthru ? updateScript
     then map toString (if builtins.isList p.passthru.updateScript then p.passthru.updateScript else p.passthru.updateScript.command or [])
     else [];
@@ -71,6 +74,25 @@ func Select(pkgs []Package, names []string) ([]Package, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// Path is what nix-update edits for this package, relative to the flake: the directory of
+// the file that defines it (meta.position, the same thing nix-update uses), or that file
+// alone when it sits at the top of the flake, so a restore never touches the whole
+// repository. "" when the file is not part of this flake.
+func (p Package) Path(repo string) string {
+	file := p.Position
+	if i := strings.LastIndex(file, ":"); i >= 0 {
+		file = file[:i] // drop the line number
+	}
+	_, rel, ok := strings.Cut(file, "-source/") // flake sources are copied to /nix/store/<hash>-source
+	if !ok || rel == "" || strings.HasPrefix(rel, "..") || !exists(filepath.Join(repo, rel)) {
+		return ""
+	}
+	if dir := filepath.Dir(rel); dir != "." {
+		return dir
+	}
+	return rel
 }
 
 // Upstream is "owner/repo" taken from the source URL or the homepage, or "".

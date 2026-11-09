@@ -73,14 +73,14 @@ Como la copia incluye los archivos sin commitear y sin versionar, el build prueb
 
 ## pkg, paso a paso
 
-Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado:
+Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado. `<dir del paquete>` es el directorio del archivo que define el paquete, leído de su `meta.position` igual que hace `nix-update` (`packages/prebuilt/kopuz` para un paquete en `packages/prebuilt/kopuz/package.nix`); si el paquete se define en un archivo en la raíz del flake, como `flake.nix`, es solo ese archivo, nunca el repositorio entero. Si el archivo no es parte de este flake, el paquete se rechaza antes de ejecutar nada.
 
 1. Hace la misma comprobación que `nixup check` para ese paquete, con la revisión.
 2. Si está desactualizado, imprime la revisión y pregunta, salvo con `-y`.
-3. Si `git diff --quiet -- packages/<name>` detecta cambios, rechaza este paquete con código de salida 1 y sigue.
+3. Si `git diff --quiet -- <dir del paquete>` detecta cambios, rechaza este paquete con código de salida 1 y sigue.
 4. Ejecuta `nix-update --flake <name> --version=<versión revisada>` más los argumentos extra del script de actualización. Si `nix-update` no está en el `PATH`, usa `nix run nixpkgs#nix-update --`.
 5. Ejecuta `nix build --no-link .#<name>`, salvo con `--no-build`.
-6. Si falla el paso 4 o el 5, ejecuta `git checkout -- packages/<name>`. Si todo va bien, imprime `git diff -- packages/<name>`.
+6. Si falla el paso 4 o el 5, ejecuta `git checkout -- <dir del paquete>`. Si todo va bien, imprime `git diff -- <dir del paquete>`.
 
 Aquí `nix-update` edita tu repositorio directamente, no una copia. El `git checkout` del paso 6 es lo que deja los archivos como estaban.
 
@@ -94,8 +94,8 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git ls-remote https://github.com/<repo> <ref>` | inputs de rama |
 | `git ls-files -z --cached --others --exclude-standard` | lock, copia temporal |
 | `git diff --quiet -- <path>` | lock, pkg |
-| `git checkout -- packages/<name>` | pkg, tras un fallo |
-| `git diff -- packages/<name>` | pkg, tras un éxito |
+| `git checkout -- <dir del paquete>` | pkg, tras un fallo |
+| `git diff -- <dir del paquete>` | pkg, tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, pkg |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
 | `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | lock |
@@ -119,7 +119,7 @@ Las peticiones HTTP propias de nixup solo van a `api.github.com`. `git`, `nix` y
 Se escribe:
 
 - Con `lock`: tu `flake.lock`, tras un sí o con `-y`. Una copia temporal, que se borra al terminar.
-- Con `pkg`: los archivos que cambia `nix-update`, normalmente en `packages/<name>`. Se restauran si falla la actualización o el build.
+- Con `pkg`: los archivos que cambia `nix-update`, normalmente en `<dir del paquete>`. Se restauran si falla la actualización o el build.
 - Con `--report <archivo>`: Markdown añadido al final de ese archivo.
 - Los builds acaban en el Nix store, como cualquier build.
 

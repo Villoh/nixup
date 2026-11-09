@@ -73,14 +73,14 @@ Because the copy includes uncommitted and untracked files, the build tests your 
 
 ## pkg, step by step
 
-For each package, in alphabetical order, or in the order you named them:
+For each package, in alphabetical order, or in the order you named them. `<pkg dir>` is the directory of the file that defines the package, read from its `meta.position` like `nix-update` does (`packages/prebuilt/kopuz` for a package in `packages/prebuilt/kopuz/package.nix`); for a package defined in a file at the top of the flake, such as `flake.nix`, it is that file alone, never the whole repository. If the file is not part of this flake, the package is refused before anything runs.
 
 1. Run the same check as `nixup check` for that package, with the review.
 2. If it is outdated, print the review and ask, unless `-y`.
-3. If `git diff --quiet -- packages/<name>` reports changes, refuse this package with exit code 1 and go on.
+3. If `git diff --quiet -- <pkg dir>` reports changes, refuse this package with exit code 1 and go on.
 4. Run `nix-update --flake <name> --version=<reviewed version>` plus the extra arguments from the update script. If `nix-update` is not on `PATH`, use `nix run nixpkgs#nix-update --`.
 5. Run `nix build --no-link .#<name>`, unless `--no-build`.
-6. On failure in step 4 or 5, run `git checkout -- packages/<name>`. On success, print `git diff -- packages/<name>`.
+6. On failure in step 4 or 5, run `git checkout -- <pkg dir>`. On success, print `git diff -- <pkg dir>`.
 
 `nix-update` edits your repository directly here, not a copy. The `git checkout` in step 6 is what puts the files back.
 
@@ -94,8 +94,8 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `git ls-remote https://github.com/<repo> <ref>` | branch inputs |
 | `git ls-files -z --cached --others --exclude-standard` | lock, scratch copy |
 | `git diff --quiet -- <path>` | lock, pkg |
-| `git checkout -- packages/<name>` | pkg, after a failure |
-| `git diff -- packages/<name>` | pkg, after a success |
+| `git checkout -- <pkg dir>` | pkg, after a failure |
+| `git diff -- <pkg dir>` | pkg, after a success |
 | `nix eval --json .#packages.<system> --apply ...` | packages, pkg |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
 | `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | lock |
@@ -119,7 +119,7 @@ nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-upd
 Written:
 
 - By `lock`: your `flake.lock`, after a yes or `-y`. A temporary scratch copy, deleted at the end.
-- By `pkg`: the files `nix-update` changes, usually under `packages/<name>`. They are restored if the update or build fails.
+- By `pkg`: the files `nix-update` changes, usually under `<pkg dir>`. They are restored if the update or build fails.
 - By `--report <file>`: Markdown appended to that file.
 - Builds land in the Nix store, as with any build.
 

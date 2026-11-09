@@ -149,10 +149,10 @@ For each outdated package nixup:
 
 1. Prints the current and new version, the major-jump warning if any, and the upstream review.
 2. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
-3. Refuses this package if `packages/<name>` has uncommitted changes, and moves on.
+3. Refuses this package if `<pkg dir>` has uncommitted changes, and moves on.
 4. Runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`.
 5. Unless `--no-build`, runs `nix build --no-link .#<name>`.
-6. If step 4 or 5 fails, restores `packages/<name>` with `git checkout`. Otherwise prints `git diff -- packages/<name>`.
+6. If step 4 or 5 fails, restores `<pkg dir>` with `git checkout`. Otherwise prints `git diff -- <pkg dir>`.
 
 Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and everything is current, `pkg` prints nothing.
 

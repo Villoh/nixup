@@ -218,8 +218,10 @@ func TestLockRepeatedHostFlags(t *testing.T) {
 
 func TestPkgFlagsAfterNames(t *testing.T) {
 	f := newFixture(t, nil)
+	os.MkdirAll(filepath.Join(f.repo, "packages/padpoll"), 0o755)
+	os.WriteFile(filepath.Join(f.repo, "packages/padpoll/package.nix"), []byte("{}"), 0o644)
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
 	// The bug this guards: `pkg padpoll --no-build -y` once read "--no-build" as a package name.
 	if code := f.run("pkg", "padpoll", "--no-build", "-y", "-C", f.repo); code != exit.OK {

@@ -18,7 +18,7 @@ lang: es
 
 - La sección `packages` lee la salida `packages.<system>` del propio flake, para el sistema en el que se ejecuta nixup. Un `fetchurl` dentro de un módulo, un `rev` fijado en un overlay o un paquete definido solo para otro sistema son invisibles. Mételo en la salida `packages` si quieres que se compruebe.
 - Un paquete necesita `passthru.updateScript` para que se compruebe. Si no lo tiene, nixup lo marca como `info` con `no passthru.updateScript`.
-- `nixup pkg` da por hecho que los archivos de cada paquete están en `packages/<name>`. La comprobación de cambios sin commitear, la restauración y el diff que imprime usan esa ruta.
+- `nixup pkg` protege y restaura el directorio del archivo que define cada paquete, sacado de su `meta.position`. Un paquete sin `meta.position`, o definido fuera de este flake, se rechaza.
 - Los inputs transitivos no se comprueban. `lock` los actualiza junto con todo lo demás y solo dice cuántos se han movido.
 
 ## lock solo hace el build de hosts NixOS

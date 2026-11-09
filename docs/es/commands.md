@@ -149,10 +149,10 @@ Para cada paquete desactualizado, nixup:
 
 1. Imprime la versión actual y la nueva, el aviso de salto mayor si lo hay y la revisión de upstream.
 2. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
-3. Si `packages/<name>` tiene cambios sin commitear, rechaza este paquete y sigue con el siguiente.
+3. Si `<dir del paquete>` tiene cambios sin commitear, rechaza este paquete y sigue con el siguiente.
 4. Ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete.
 5. Salvo con `--no-build`, ejecuta `nix build --no-link .#<name>`.
-6. Si falla el paso 4 o el 5, restaura `packages/<name>` con `git checkout`. Si no, imprime `git diff -- packages/<name>`.
+6. Si falla el paso 4 o el 5, restaura `<dir del paquete>` con `git checkout`. Si no, imprime `git diff -- <dir del paquete>`.
 
 Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y todo está al día, `pkg` no imprime nada.
 

@@ -24,6 +24,9 @@ type fixture struct {
 
 func newFixture(t *testing.T, answers string, files map[string]string) *fixture {
 	t.Helper()
+	for _, name := range []string{"padpoll", "flectar", "a", "b", "bad", "good"} {
+		files["packages/"+name+"/package.nix"] = "{}" // where meta.position points
+	}
 	e := testutil.New(t)
 	term, out, errb := testutil.Term(answers)
 	return &fixture{
@@ -36,7 +39,7 @@ func (f *fixture) called(prefix string) bool { return f.e.Run.Count(prefix) > 0 
 
 // ---- Pkg ------------------------------------------------------------------------------
 
-const padpollJSON = `{"padpoll":{"version":"1.0.0","urls":["https://github.com/PabloStarOk/padpoll/releases/download/v1.0.0/x"],"homepage":"","update":["nix-update"]}}`
+const padpollJSON = `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/PabloStarOk/padpoll/releases/download/v1.0.0/x"],"homepage":"","update":["nix-update"]}}`
 
 // pkgFixture scripts a padpoll 1.0.0 whose upstream is at 1.1.0.
 func pkgFixture(t *testing.T, answers string, extra ...run.Rule) *fixture {
@@ -169,7 +172,7 @@ func TestPkgRefusesDirtyPackageDir(t *testing.T) {
 func TestPkgPassesPackageArgsAndNeverTheirVersion(t *testing.T) {
 	f := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"flectar":{"version":"0.1.0-alpha.6","urls":[],"homepage":"https://github.com/flectar/mail","update":["nix-update","--version=unstable","--use-github-releases"]}}`})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"flectar":{"position":"/nix/store/x-source/packages/flectar/package.nix:1","version":"0.1.0-alpha.6","urls":[],"homepage":"https://github.com/flectar/mail","update":["nix-update","--version=unstable","--use-github-releases"]}}`})
 	f.e.Tags("flectar/mail", "v0.1.0-alpha.6", "v0.1.0-alpha.7")
 	// --use-github-releases makes nixup read releases (as nix-update will), not tags.
 	f.e.Releases("flectar/mail", testutil.Release{Tag: "v0.1.0-alpha.6"}, testutil.Release{Tag: "v0.1.0-alpha.7"})
@@ -200,8 +203,8 @@ func TestPkgOnlyTheRequestedPackage(t *testing.T) {
 	f := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{
-	 "a":{"version":"1.0.0","urls":["https://github.com/o/a/x"],"homepage":"","update":["nix-update"]},
-	 "b":{"version":"1.0.0","urls":["https://github.com/o/b/x"],"homepage":"","update":["nix-update"]}}`})
+	 "a":{"position":"/nix/store/x-source/packages/a/package.nix:1","version":"1.0.0","urls":["https://github.com/o/a/x"],"homepage":"","update":["nix-update"]},
+	 "b":{"position":"/nix/store/x-source/packages/b/package.nix:1","version":"1.0.0","urls":["https://github.com/o/b/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/a", "v1.0.0", "v1.0.1")
 	f.e.Tags("o/b", "v1.0.0", "v1.0.1")
 	f.u.Pkg(update.PkgOpts{Repo: f.repo, Names: []string{"b"}, Yes: true, NoBuild: true})
@@ -255,8 +258,8 @@ func TestPkgWorstCodeWins(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix-update --flake bad", Fail: errors.New("exit 1")})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{
-	 "bad":{"version":"1.0.0","urls":["https://github.com/o/bad/x"],"homepage":"","update":["nix-update"]},
-	 "good":{"version":"1.0.0","urls":["https://github.com/o/good/x"],"homepage":"","update":["nix-update"]}}`})
+	 "bad":{"position":"/nix/store/x-source/packages/bad/package.nix:1","version":"1.0.0","urls":["https://github.com/o/bad/x"],"homepage":"","update":["nix-update"]},
+	 "good":{"position":"/nix/store/x-source/packages/good/package.nix:1","version":"1.0.0","urls":["https://github.com/o/good/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/bad", "v1.0.0", "v1.0.1")
 	f.e.Tags("o/good", "v1.0.0", "v1.0.1")
 	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true})
@@ -479,6 +482,43 @@ func TestPkgReportDoesNotClaimABuildThatDidNotHappen(t *testing.T) {
 		b, _ := os.ReadFile(report)
 		if !strings.Contains(string(b), c.want) || strings.Contains(string(b), c.notWant) {
 			t.Errorf("NoBuild=%v: report %q must contain %q and not %q", c.noBuild, b, c.want, c.notWant)
+		}
+	}
+}
+
+func TestPkgWorksWhereThePackageIsDefined(t *testing.T) {
+	// A package defined outside packages/<name> (here packages/prebuilt/kopuz for
+	// kopuz-bin): the dirty check, the restore and the diff all use that directory.
+	f := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}", "packages/prebuilt/kopuz/package.nix": "{}"})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"kopuz-bin":{"position":"/nix/store/abc-source/packages/prebuilt/kopuz/package.nix:83","version":"1.0.0","urls":["https://github.com/o/kopuz/x"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	f.e.Run.On(run.Rule{Prefix: "nix build", Fail: errors.New("exit 1")})
+	f.e.Tags("o/kopuz", "v1.0.0", "v1.1.0")
+	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true})
+	for _, want := range []string{"git diff --quiet -- packages/prebuilt/kopuz", "git checkout -- packages/prebuilt/kopuz"} {
+		if !f.called(want) {
+			t.Errorf("did not run %q: %v", want, f.e.Run.Calls())
+		}
+	}
+	if f.called("git checkout -- packages/kopuz-bin") {
+		t.Error("the guessed packages/<name> path must not be used")
+	}
+}
+
+func TestPkgRefusesAPackageItCannotLocate(t *testing.T) {
+	for name, pos := range map[string]string{
+		"no meta.position":         "",
+		"defined in another flake": "/nix/store/abc-source/pkgs/elsewhere/package.nix:3",
+		"outside any flake source": "/etc/nixos/thing.nix:1",
+	} {
+		f := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+		f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"x":{"position":"` + pos + `","version":"1.0.0","urls":["https://github.com/o/x/y"],"homepage":"","update":["nix-update"]}}`})
+		f.e.Tags("o/x", "v1.0.0", "v1.1.0")
+		if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true}); code != exit.Error || !strings.Contains(f.out.String(), "cannot tell which file") {
+			t.Errorf("%s: code %d out %s", name, code, f.out)
+		}
+		if f.called("nix-update") || f.called("git checkout") || f.called("git diff") {
+			t.Errorf("%s: nothing may run: %v", name, f.e.Run.Calls())
 		}
 	}
 }

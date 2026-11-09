@@ -2,6 +2,7 @@ package update
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Villoh/nixup/internal/check"
@@ -72,7 +73,12 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		return exit.OK
 	}
 
-	dir := "packages/" + p.Name
+	dir := p.Path(o.Repo)
+	if dir == "" {
+		t.Println(t.Paint("cannot tell which file in this flake defines "+p.Name+" (meta.position "+
+			strconv.Quote(p.Position)+"): not updating it.", 31))
+		return exit.Error
+	}
 	if flake.Dirty(u.R, o.Repo, dir) {
 		t.Println(t.Paint(dir+" has uncommitted changes: commit or stash them first.", 33))
 		return exit.Pending

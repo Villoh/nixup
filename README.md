@@ -59,7 +59,7 @@ It works on the flake you are in; anywhere else it reads `NIXUP_FLAKE`, `NH_OS_F
 
 - `check` only reads. It writes nothing to your repository.
 - `lock` runs `nix flake update` and the host builds in a copy of your working tree. Your `flake.lock` changes only after the build passes and you answer yes.
-- `pkg` runs `nix-update` pinned to the version you just reviewed, then builds the package. If either step fails, `packages/<name>` goes back to its committed state.
+- `pkg` runs `nix-update` pinned to the version you just reviewed, then builds the package. If either step fails, the package's directory goes back to its committed state.
 - Both refuse to touch files that have uncommitted changes.
 - Without a terminal every question is answered no, so unattended runs must pass `-y`.
 - nixup never commits and never activates a generation. Testing and switching stay with you.

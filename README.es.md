@@ -59,7 +59,7 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 
 - `check` solo lee. No escribe nada en tu repositorio.
 - `lock` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
-- `pkg` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, `packages/<name>` vuelve a su estado del último commit.
+- `pkg` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, el directorio del paquete vuelve a su estado del último commit.
 - Ninguno de los dos toca archivos con cambios sin commitear.
 - Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 - nixup nunca hace commit ni activa una generación. Probar y hacer el switch sigue siendo cosa tuya.

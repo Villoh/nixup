@@ -148,6 +148,9 @@ func TestPackages(t *testing.T) {
 	if f.Calls()[0].Dir != "/repo" {
 		t.Error("must evaluate from the repo")
 	}
+	if apply := f.Calls()[0].Args[len(f.Calls()[0].Args)-1]; !strings.Contains(apply, "position = p.meta.position") {
+		t.Errorf("pkg needs meta.position to know which directory to guard and restore: %s", apply)
+	}
 }
 
 func TestPackagesNoOutputIsNotAnError(t *testing.T) {
@@ -503,5 +506,26 @@ func TestTagVersion(t *testing.T) {
 	}
 	if _, err := (flake.Package{Name: "x", Update: []string{"nix-update", "--version-regex", "("}}).TagVersion(); err == nil {
 		t.Error("a broken regex is an error")
+	}
+}
+
+func TestPackagePath(t *testing.T) {
+	repo := testutil.Tree(t, map[string]string{"flake.nix": "{}", "default.nix": "{}",
+		"packages/prebuilt/kopuz/package.nix": "{}", "packages/meiro/package.nix": "{}"})
+	// A file that exists next to the repository, not in it: never a path to restore.
+	os.WriteFile(filepath.Join(filepath.Dir(repo), "escape.nix"), []byte("{}"), 0o644)
+	for pos, want := range map[string]string{
+		"/nix/store/abc-source/packages/prebuilt/kopuz/package.nix:83": "packages/prebuilt/kopuz",
+		"/nix/store/abc-source/packages/meiro/package.nix:7":           "packages/meiro",
+		"/nix/store/abc-source/flake.nix:40":                           "flake.nix", // top level: the file, never the whole repo
+		"/nix/store/abc-source/default.nix:2":                          "default.nix",
+		"/nix/store/abc-source/pkgs/missing/package.nix:1":             "", // not in this flake
+		"/nix/store/abc-source/../escape.nix:1":                        "",
+		"/etc/nixos/configuration.nix:1":                               "",
+		"":                                                             "",
+	} {
+		if got := (flake.Package{Position: pos}).Path(repo); got != want {
+			t.Errorf("Path(%q) = %q, want %q", pos, got, want)
+		}
 	}
 }
