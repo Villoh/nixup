@@ -6,7 +6,7 @@ lang: es
 
 # Desarrollo
 
-[English](../development.md) | Español
+[English](../development.md) | **Español**
 
 ## Estructura
 

@@ -6,7 +6,7 @@ lang: en
 
 # Development
 
-English | [Español](es/development.md)
+**English** | [Español](es/development.md)
 
 ## Layout
 

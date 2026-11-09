@@ -6,7 +6,7 @@ lang: es
 
 # Seguridad
 
-[English](../safety.md) | Español
+[English](../safety.md) | **Español**
 
 nixup está hecho para que una actualización fallida o que no quieres deje tu repositorio como estaba, y para que nada llegue al sistema en marcha sin pasar por ti. Aquí tienes lo que se cumple y lo que no.
 

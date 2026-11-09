@@ -1,4 +1,4 @@
-[English](README.md) | Español
+[English](README.md) | **Español**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">

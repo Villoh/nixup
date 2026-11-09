@@ -6,7 +6,7 @@ lang: en
 
 # Getting started
 
-English | [Español](es/getting-started.md)
+**English** | [Español](es/getting-started.md)
 
 ## Requirements
 

@@ -6,7 +6,7 @@ lang: en
 
 # Safety
 
-English | [Español](es/safety.md)
+**English** | [Español](es/safety.md)
 
 nixup is built so that a failed or unwanted update leaves your repository as it was, and so that nothing reaches the running system without you. This page lists what holds and what does not.
 

@@ -6,7 +6,7 @@ lang: es
 
 # Configuración
 
-[English](../configuration.md) | Español
+[English](../configuration.md) | **Español**
 
 nixup no tiene archivo de configuración. Se maneja con un flag, unas pocas variables de entorno y el `passthru.updateScript` de tus paquetes.
 

@@ -6,7 +6,7 @@ lang: en
 
 # Configuration
 
-English | [Español](es/configuration.md)
+**English** | [Español](es/configuration.md)
 
 nixup has no configuration file. It takes a flag, a few environment variables, and the `passthru.updateScript` of your packages.
 

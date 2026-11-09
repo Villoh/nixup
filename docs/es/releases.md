@@ -6,7 +6,7 @@ lang: es
 
 # Releases
 
-[English](../releases.md) | Español
+[English](../releases.md) | **Español**
 
 Las releases se hacen con un workflow manual de GitHub Actions. No cambies la versión ni crees un tag a mano.
 

@@ -6,7 +6,7 @@ lang: es
 
 # Primeros pasos
 
-[English](../getting-started.md) | Español
+[English](../getting-started.md) | **Español**
 
 ## Requisitos
 

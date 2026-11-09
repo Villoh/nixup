@@ -6,7 +6,7 @@ lang: en
 
 # Commands
 
-English | [Español](es/commands.md)
+**English** | [Español](es/commands.md)
 
 ## Synopsis
 

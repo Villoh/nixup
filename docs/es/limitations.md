@@ -6,7 +6,7 @@ lang: es
 
 # Limitaciones
 
-[English](../limitations.md) | Español
+[English](../limitations.md) | **Español**
 
 ## Solo upstreams de GitHub
 

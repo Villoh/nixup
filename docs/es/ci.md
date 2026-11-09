@@ -6,7 +6,7 @@ lang: es
 
 # CI
 
-[English](../ci.md) | Español
+[English](../ci.md) | **Español**
 
 nixup no trae un workflow para tu configuración. Aquí tienes cómo montarlo con los flags que existen para ello: `--markdown`, `--json`, `--report` y `-y`.
 

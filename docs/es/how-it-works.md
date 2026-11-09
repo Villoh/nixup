@@ -6,7 +6,7 @@ lang: es
 
 # Cómo funciona
 
-[English](../how-it-works.md) | Español
+[English](../how-it-works.md) | **Español**
 
 ## Las secciones de check
 

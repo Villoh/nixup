@@ -6,7 +6,7 @@ lang: en
 
 # nixup documentation
 
-English | [Español](es/index.md)
+**English** | [Español](es/index.md)
 
 nixup is a command-line tool for people who manage NixOS with a flake. It answers two questions: what is out of date, and what changed upstream since the version you run. Then it updates `flake.lock` and your own packages, but only after a build in a safe place and a yes from you.
 
