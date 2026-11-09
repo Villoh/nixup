@@ -297,8 +297,19 @@ func TestEnvironmentFlakeNotice(t *testing.T) {
 	f.deps.Env = env(f.repo)
 	f.e.Run.Missing = map[string]bool{"flatpak": true, "nix": true}
 	f.run("check", "--only", "inputs")
-	if !strings.Contains(f.errb.String(), notice(f)) || !strings.Contains(f.errb.String(), "not the flake in "+other) || !strings.Contains(f.errb.String(), "-C .") {
-		t.Errorf("inside another flake: %q", f.errb)
+	if got := strings.TrimSpace(f.errb.String()); got != "nixup: using $NH_OS_FLAKE, not the flake here (-C . to use this one)" {
+		t.Errorf("inside another flake: %q", got)
+	}
+
+	// Paths under the home directory are shortened.
+	f = newFixture(t, nil)
+	t.Setenv("HOME", filepath.Dir(f.repo))
+	t.Chdir(t.TempDir())
+	f.deps.Env = env(f.repo)
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	f.run("pkg")
+	if want := "using ~/" + filepath.Base(f.repo) + " ($NH_OS_FLAKE)"; !strings.Contains(f.errb.String(), want) {
+		t.Errorf("want %q in %q", want, f.errb)
 	}
 
 	// Inside the chosen flake itself: nothing to point out.

@@ -4,7 +4,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -146,21 +145,21 @@ func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string,
 		return nil, "", d.fail(err), false
 	}
 	if strings.HasPrefix(source, "$") { // the user did not point here in this command
-		if here, ok := otherFlake(repo); ok {
-			d.T.Errorln(fmt.Sprintf("nixup: using %s (%s), not the flake in %s; pass -C . for that one", repo, source, here))
+		if otherFlake(repo) {
+			d.T.Errorln("nixup: using " + source + ", not the flake here (-C . to use this one)")
 		} else if fs.Name() == "lock" || fs.Name() == "pkg" {
-			d.T.Errorln("nixup: using", repo, "("+source+")") // about to write there
+			d.T.Errorln("nixup: using", tilde(repo), "("+source+")") // about to write there
 		}
 	}
 	return pos, repo, exit.OK, true
 }
 
-// otherFlake reports the flake around the current directory when it is not repo: the
-// case where an environment variable silently wins over the directory you are in.
-func otherFlake(repo string) (string, bool) {
+// otherFlake reports whether the current directory is inside a flake other than repo:
+// the case where an environment variable silently wins over the directory you are in.
+func otherFlake(repo string) bool {
 	here, err := flake.FindRepo(".")
 	if err != nil {
-		return "", false
+		return false
 	}
 	real := func(p string) string {
 		if r, err := filepath.EvalSymlinks(p); err == nil {
@@ -168,5 +167,14 @@ func otherFlake(repo string) (string, bool) {
 		}
 		return p
 	}
-	return here, real(here) != real(repo)
+	return real(here) != real(repo)
+}
+
+// tilde shortens a path under the home directory to ~/...
+func tilde(p string) string {
+	home, err := os.UserHomeDir()
+	if rel, ok := strings.CutPrefix(p, home+string(filepath.Separator)); err == nil && ok {
+		return "~/" + rel
+	}
+	return p
 }

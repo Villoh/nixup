@@ -57,8 +57,8 @@ nixup: $NH_FLAKE=/tmp: no flake.nix + flake.lock there
 When the flake comes from a variable, nixup says so on stderr (so `--json` output stays clean) only where it matters: before `lock` and `pkg` write to it, and when you are inside a different flake, which the variable overrides. `check`, `list` and `search` run from anywhere else stay quiet.
 
 ```text
-nixup: using /home/alice/nixos-config ($NH_FLAKE)
-nixup: using /home/alice/nixos-config ($NH_FLAKE), not the flake in /home/alice/src/tool; pass -C . for that one
+nixup: using ~/nixos-config ($NH_FLAKE)
+nixup: using $NH_FLAKE, not the flake here (-C . to use this one)
 ```
 
 ## Color

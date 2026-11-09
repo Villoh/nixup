@@ -57,8 +57,8 @@ nixup: $NH_FLAKE=/tmp: no flake.nix + flake.lock there
 Cuando el flake sale de una variable, nixup lo indica por stderr (así la salida de `--json` sigue limpia) solo donde importa: antes de que `lock` y `pkg` escriban en él, y cuando estás dentro de otro flake, que la variable deja de lado. `check`, `list` y `search` lanzados desde cualquier otro sitio no dicen nada.
 
 ```text
-nixup: using /home/alice/nixos-config ($NH_FLAKE)
-nixup: using /home/alice/nixos-config ($NH_FLAKE), not the flake in /home/alice/src/tool; pass -C . for that one
+nixup: using ~/nixos-config ($NH_FLAKE)
+nixup: using $NH_FLAKE, not the flake here (-C . to use this one)
 ```
 
 ## Color
