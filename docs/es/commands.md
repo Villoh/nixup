@@ -14,6 +14,8 @@ lang: es
 nixup [check] [flags]
 nixup lock [input...] [flags]
 nixup pkg [package...] [flags]
+nixup list [flags]
+nixup search <name> [flags]
 nixup version
 nixup help
 ```
@@ -162,6 +164,55 @@ Códigos de salida. Con varios paquetes, gana el código más alto:
 | 1 | El directorio de algún paquete tenía cambios sin commitear. |
 | 2 | Ha fallado una comprobación, un nombre no existe, o ha fallado `nix-update` o el build. |
 
+## list
+
+Lista todo lo que vigila nixup, con la versión que tienes ahora. Lee `flake.lock`, evalúa tus paquetes y pregunta a `nix profile` y a `flatpak` qué hay instalado. No sale nada a la red, así que es rápido; `check --all` da la misma lista con las versiones de upstream.
+
+```bash
+nixup list
+nixup list --json
+```
+
+| Flag | Descripción |
+|---|---|
+| `-C <dir>` | Directorio del flake. |
+| `--json` | Un array JSON de fuentes, cada una con `source`, `items` (`name`, `version`, `note`) y, si ha fallado, `error`. |
+
+Los inputs muestran el tag al que están fijados, o el commit bloqueado y su antigüedad; la nota dice de dónde vienen (`github:owner/repo/ref`). Los paquetes muestran su upstream de GitHub. Sale con 0, o con 2 si ha fallado alguna fuente.
+
+## search
+
+Busca un nombre en todos los sitios de los que puede venir un paquete, y marca con un `●` verde lo que está en el sistema en marcha.
+
+```bash
+nixup search ripgrep
+nixup search obsidian --limit 20
+nixup search hex --json
+```
+
+| Fuente | Dónde busca |
+|---|---|
+| `nixpkgs <rev>` | La revisión de nixpkgs que fija tu `flake.lock`, así que las versiones son las que instalarías hoy. Necesita un input llamado `nixpkgs`. |
+| `packages (yours)` | La salida `packages.<system>` de tu propio flake. |
+| `input <name>` | La salida `packages.<system>` de cada input. |
+| `flatpak` | Todos los remotos de Flatpak que tengas configurados, normalmente Flathub. |
+
+La búsqueda compara con los nombres de los paquetes (nombres de atributo, IDs y nombres de Flatpak), no con las descripciones, sin distinguir mayúsculas. Primero salen las coincidencias exactas, luego los nombres que empiezan así y luego el resto. Puede tener letras, dígitos y `. _ + -`.
+
+| Flag | Descripción |
+|---|---|
+| `-C <dir>` | Directorio del flake. |
+| `--limit <n>` | Resultados por fuente (10 por defecto). Se indica cuántos se han quedado fuera. |
+| `--json` | El mismo formato que `list --json`, más `more` (resultados que no se muestran) e `in_system`. |
+
+`●` significa que en `/run/current-system` hay una ruta del store con el mismo nombre y versión. En una máquina sin él (CI, un contenedor) no se marca nada.
+
+| Código | Significado |
+|---|---|
+| 0 | Ha encontrado algo. |
+| 1 | No ha encontrado nada. |
+| 2 | La búsqueda no es un nombre de paquete, o no se ha podido evaluar el flake. |
+
 ## version y help
 
 ```bash
@@ -173,7 +224,7 @@ nixup help         # también: nixup --help, nixup -h
 
 ## Errores en la línea de comandos
 
-Un comando desconocido imprime el uso por stderr y sale con 2. Un flag desconocido imprime los flags del comando y sale con 2. Si no has escrito ningún comando, nixup además avisa de que ha supuesto `check`:
+Un comando desconocido imprime `nixup: unknown command "<nombre>"` y el uso por stderr, y sale con 2. Un flag desconocido imprime los flags del comando y sale con 2. Si no has escrito ningún comando, nixup además avisa de que ha supuesto `check`:
 
 ```text
 $ nixup --bogus

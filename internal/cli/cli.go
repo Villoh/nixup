@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Villoh/nixup/internal/check"
@@ -34,6 +35,8 @@ const usage = `nixup — update checker and safe updater for flake-based NixOS
   nixup [check]   what is outdated, read-only (inputs, packages, profile, flatpak)
   nixup lock      update flake.lock in a scratch copy, show changes, build, ask, apply
   nixup pkg       update own packages/ one by one after reviewing upstream changes
+  nixup list      everything it watches, with current versions, without network
+  nixup search    look a package name up in nixpkgs, your packages, your inputs and Flatpak
   nixup version
 
 Common flags: -C <dir> flake directory. Without it: $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE,
@@ -74,6 +77,10 @@ func Run(args []string, d Deps) int {
 		return runLock(args, d)
 	case "pkg":
 		return runPkg(args, d)
+	case "list":
+		return runList(args, d)
+	case "search":
+		return runSearch(args, d)
 	case "version":
 		d.T.Println(versionString())
 		return exit.OK
@@ -81,7 +88,7 @@ func Run(args []string, d Deps) int {
 		d.T.Println(usage)
 		return exit.OK
 	}
-	d.T.Errorln(usage)
+	d.T.Errorln(d.T.Paint("nixup: unknown command "+strconv.Quote(cmd), 31) + "\n\n" + usage)
 	return exit.Error
 }
 

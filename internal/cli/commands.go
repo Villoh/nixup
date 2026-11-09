@@ -3,9 +3,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Villoh/nixup/internal/check"
+	"github.com/Villoh/nixup/internal/exit"
+	"github.com/Villoh/nixup/internal/inventory"
 	"github.com/Villoh/nixup/internal/report"
 	"github.com/Villoh/nixup/internal/update"
 )
@@ -87,4 +90,56 @@ func runPkg(args []string, d Deps) int {
 	}
 	return d.updater().Pkg(update.PkgOpts{Repo: repo, Names: names,
 		NoBuild: *noBuild, Yes: *yes, Report: *reportFile})
+}
+
+func printGroups(d Deps, groups []inventory.Group, asJSON bool) {
+	if asJSON {
+		b, _ := json.MarshalIndent(groups, "", "  ")
+		d.T.Println(string(b))
+		return
+	}
+	report.Inventory(d.T, groups)
+}
+
+func runList(args []string, d Deps) int {
+	fs, dir := d.flags("list")
+	asJSON := fs.Bool("json", false, "machine-readable output")
+	_, repo, code, ok := d.setup(fs, dir, args)
+	if !ok {
+		return code
+	}
+	groups := inventory.List(d.R, repo)
+	printGroups(d, groups, *asJSON)
+	for _, g := range groups {
+		if g.Err != "" {
+			return exit.Error
+		}
+	}
+	return exit.OK
+}
+
+func runSearch(args []string, d Deps) int {
+	fs, dir := d.flags("search")
+	asJSON := fs.Bool("json", false, "machine-readable output")
+	limit := fs.Int("limit", 10, "results per source")
+	words, repo, code, ok := d.setup(fs, dir, args)
+	if !ok {
+		return code
+	}
+	if len(words) != 1 {
+		return d.fail(fmt.Errorf("usage: nixup search <name>"))
+	}
+	groups, err := inventory.Search(d.R, repo, words[0], max(*limit, 1))
+	if err != nil {
+		return d.fail(err)
+	}
+	if len(groups) == 0 && !*asJSON {
+		d.T.Println("Nothing called " + strconv.Quote(words[0]) + " in nixpkgs, your packages, your inputs or Flatpak.")
+		return exit.Pending
+	}
+	printGroups(d, groups, *asJSON)
+	if len(groups) == 0 {
+		return exit.Pending
+	}
+	return exit.OK
 }

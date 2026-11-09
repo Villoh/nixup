@@ -38,6 +38,13 @@ lang: en
 - The nixpkgs hint only finds a package under its own name or, for `foo-bin`, as `foo`. A package called differently in nixpkgs is missed. It also needs proof that both are the same project (repository or homepage), so a namesake is never suggested, but neither is the real thing if its metadata differs.
 - Release notes are read from the 50 most recent GitHub releases, and nixup shows at most three per update.
 
+## search
+
+- Only names are searched, not descriptions: searching descriptions means evaluating every package in nixpkgs, which takes about half a minute (`nix search` does that).
+- Only top-level attributes: `python3Packages.requests` and other package sets are not searched.
+- `●` compares names and versions with the running system's closure. A library pulled in by something else counts as in the system, and a Home Manager setup outside NixOS is not looked at.
+- `search` evaluates the flake with `--impure`, because `builtins.getFlake` on a local path needs it. It reads; it builds and writes nothing.
+
 ## Other limits
 
 - nixup does not compute hashes. `nix-update` does.

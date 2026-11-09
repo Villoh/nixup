@@ -14,6 +14,8 @@ lang: en
 nixup [check] [flags]
 nixup lock [input...] [flags]
 nixup pkg [package...] [flags]
+nixup list [flags]
+nixup search <name> [flags]
 nixup version
 nixup help
 ```
@@ -162,6 +164,55 @@ Exit codes. With several packages, the highest code wins:
 | 1 | A package directory had uncommitted changes. |
 | 2 | A check failed, a name does not exist, or `nix-update` or the build failed. |
 
+## list
+
+Lists everything nixup watches, with the version you have now. It reads `flake.lock`, evaluates your own packages and asks `nix profile` and `flatpak` what is installed. Nothing goes to the network, so it is quick; `check --all` gives the same list with upstream versions.
+
+```bash
+nixup list
+nixup list --json
+```
+
+| Flag | Description |
+|---|---|
+| `-C <dir>` | Flake directory. |
+| `--json` | A JSON array of sources, each with `source`, `items` (`name`, `version`, `note`) and, if it failed, `error`. |
+
+Inputs show the tag they are pinned to, or the locked commit and its age; the note is where they come from (`github:owner/repo/ref`). Packages show their GitHub upstream. Exit code 0, or 2 if a source failed.
+
+## search
+
+Looks a name up in every place a package can come from, and marks with a green `●` what is in the running system.
+
+```bash
+nixup search ripgrep
+nixup search obsidian --limit 20
+nixup search hex --json
+```
+
+| Source | What is searched |
+|---|---|
+| `nixpkgs <rev>` | The nixpkgs revision your `flake.lock` pins, so versions are the ones you would install today. Needs an input called `nixpkgs`. |
+| `packages (yours)` | Your flake's own `packages.<system>`. |
+| `input <name>` | The `packages.<system>` output of each input. |
+| `flatpak` | Every Flatpak remote you have configured, usually Flathub. |
+
+The query matches package names (attribute names, Flatpak IDs and names), not descriptions, without regard to case. Exact matches come first, then names that start with it, then the rest. It can contain letters, digits and `. _ + -`.
+
+| Flag | Description |
+|---|---|
+| `-C <dir>` | Flake directory. |
+| `--limit <n>` | Results shown per source (default 10). How many were left out is printed. |
+| `--json` | Same shape as `list --json`, plus `more` (results left out) and `in_system`. |
+
+`●` means a store path with the same name and version is in `/run/current-system`. On a machine without it (CI, a container) nothing is marked.
+
+| Code | Meaning |
+|---|---|
+| 0 | Something was found. |
+| 1 | Nothing was found. |
+| 2 | The query is not a package name, or the flake could not be evaluated. |
+
 ## version and help
 
 ```bash
@@ -173,7 +224,7 @@ nixup help         # also: nixup --help, nixup -h
 
 ## Errors on the command line
 
-An unknown command prints the usage on stderr and exits with 2. An unknown flag prints the flag list of the command and exits with 2. If you typed no command, nixup also says that `check` was assumed:
+An unknown command prints `nixup: unknown command "<name>"` and the usage on stderr, and exits with 2. An unknown flag prints the flag list of the command and exits with 2. If you typed no command, nixup also says that `check` was assumed:
 
 ```text
 $ nixup --bogus

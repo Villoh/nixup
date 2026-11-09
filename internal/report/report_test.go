@@ -3,9 +3,11 @@ package report_test
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/gh"
+	"github.com/Villoh/nixup/internal/inventory"
 	"github.com/Villoh/nixup/internal/report"
 	"github.com/Villoh/nixup/internal/testutil"
 )
@@ -179,5 +181,38 @@ func TestReviewWithError(t *testing.T) {
 	}
 	if got := report.ReviewMarkdown(r); !strings.Contains(got, "review unavailable") {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestInventory(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	report.Inventory(term, []inventory.Group{
+		{Source: "nixpkgs abc", More: 3, Items: []inventory.Item{
+			{Name: "ripgrep", Version: "15.2.0", Note: strings.Repeat("d", 100), InSystem: true},
+			{Name: "ripgrep-all", Version: "0.10.10"}}},
+		{Source: "flatpak", Err: "no remotes"},
+	})
+	s := out.String()
+	for _, want := range []string{"nixpkgs abc", "● ripgrep ", "… 3 more", "ERROR no remotes", strings.Repeat("d", 71) + "…"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, strings.Repeat("d", 72)) {
+		t.Errorf("long descriptions are cut:\n%s", s)
+	}
+	lines := strings.Split(s, "\n")
+	var a, b string
+	for _, l := range lines {
+		if strings.Contains(l, "15.2.0") {
+			a = l
+		}
+		if strings.Contains(l, "0.10.10") {
+			b = l
+		}
+	}
+	col := func(line, s string) int { return utf8.RuneCountInString(line[:strings.Index(line, s)]) }
+	if col(a, "15.2.0") != col(b, "0.10.10") {
+		t.Errorf("versions aligned:\n%s\n%s", a, b)
 	}
 }

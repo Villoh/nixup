@@ -53,6 +53,8 @@ nixup check --review     # además, commits y release notes de upstream
 nixup lock               # actualiza flake.lock en una copia temporal, hace el build, pregunta y escribe
 nixup lock nixpkgs       # solo ese input
 nixup pkg                # actualiza tus propios paquetes uno a uno, tras revisar cada uno
+nixup list               # todo lo que vigila, con las versiones actuales, sin red
+nixup search ripgrep     # en tu nixpkgs, tus paquetes, tus inputs y Flatpak
 ```
 
 Ejecútalo dentro del flake, pásale `-C <dir>` o deja que lea `NIXUP_FLAKE`, `NH_OS_FLAKE` o `NH_FLAKE`.

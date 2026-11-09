@@ -26,6 +26,8 @@ It does not activate anything. There is no `switch`, `boot` or `sudo` in the cod
 - `nixup check` lists what is outdated. It is the default command and it is read-only.
 - `nixup lock` updates `flake.lock` in a scratch copy, shows what moved upstream, builds every host and writes the new lock after you confirm.
 - `nixup pkg` updates the packages your flake defines, one at a time, after showing what changed upstream.
+- `nixup list` shows everything it watches with the versions you have, without touching the network.
+- `nixup search <name>` looks a package up in your locked nixpkgs, your own packages, your inputs and Flatpak.
 
 ## Pages
 

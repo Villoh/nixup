@@ -26,6 +26,8 @@ No activa nada. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demo
 - `nixup check` lista lo que está desactualizado. Es el comando por defecto y solo lee.
 - `nixup lock` actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream, hace el build de todos los hosts y escribe el nuevo lock cuando confirmas.
 - `nixup pkg` actualiza los paquetes que define tu flake, de uno en uno, después de enseñarte qué ha cambiado upstream.
+- `nixup list` enseña todo lo que vigila con las versiones que tienes, sin tocar la red.
+- `nixup search <nombre>` busca un paquete en tu nixpkgs fijado, tus paquetes, tus inputs y Flatpak.
 
 ## Páginas
 

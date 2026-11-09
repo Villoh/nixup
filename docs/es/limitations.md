@@ -38,6 +38,13 @@ lang: es
 - La pista de nixpkgs solo encuentra un paquete por su nombre o, en el caso de `foo-bin`, como `foo`. Si en nixpkgs se llama de otra forma, no lo ve. Además necesita pruebas de que es el mismo proyecto (repositorio u homepage): nunca sugiere un homónimo, pero tampoco el paquete correcto si sus metadatos no coinciden.
 - Las release notes se leen de las 50 releases más recientes de GitHub, y nixup enseña como mucho tres por actualización.
 
+## search
+
+- Solo busca en los nombres, no en las descripciones: buscar en las descripciones obliga a evaluar todos los paquetes de nixpkgs, y eso tarda cerca de medio minuto (es lo que hace `nix search`).
+- Solo atributos de primer nivel: no busca dentro de `python3Packages.requests` ni de otros conjuntos de paquetes.
+- `●` compara nombre y versión con la clausura del sistema en marcha. Una biblioteca que arrastra otro paquete cuenta como instalada, y no mira Home Manager fuera de NixOS.
+- `search` evalúa el flake con `--impure`, porque `builtins.getFlake` sobre una ruta local lo necesita. Solo lee: no construye ni escribe nada.
+
 ## Otros límites
 
 - nixup no calcula hashes. Eso lo hace `nix-update`.

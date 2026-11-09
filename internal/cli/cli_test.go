@@ -288,3 +288,46 @@ func TestBadEnvironmentFlakeIsAnError(t *testing.T) {
 		t.Error("fail before doing any work")
 	}
 }
+
+func TestUnknownCommandSaysSo(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("lis"); code != exit.Error || !strings.Contains(f.errb.String(), `unknown command "lis"`) || !strings.Contains(f.errb.String(), "nixup list") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+}
+
+func TestListCommand(t *testing.T) {
+	f := newFixture(t, map[string]string{"dms": "o/dms@v1.6.2#" + strings.Repeat("1", 40)})
+	f.e.Run.Missing = map[string]bool{"flatpak": true}
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	if code := f.run("list", "-C", f.repo); code != exit.OK || !strings.Contains(f.out.String(), "v1.6.2") {
+		t.Errorf("code %d out %q err %q", code, f.out, f.errb)
+	}
+	f.out.Reset()
+	f.run("list", "-C", f.repo, "--json")
+	var groups []map[string]any
+	if err := json.Unmarshal(f.out.Bytes(), &groups); err != nil || len(groups) == 0 || groups[0]["source"] != "inputs" {
+		t.Errorf("json: %v %q", err, f.out)
+	}
+}
+
+func TestSearchCommand(t *testing.T) {
+	f := newFixture(t, nil)
+	f.e.Run.Missing = map[string]bool{"flatpak": true}
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json --impure", Out: `{"rev":"abc","nixpkgs":{"total":1,"items":[{"name":"rg","pname":"rg","version":"1","description":"d"}]},"own":{"total":0,"items":[]},"inputs":{}}`})
+	if code := f.run("search", "rg", "-C", f.repo, "--limit", "3"); code != exit.OK || !strings.Contains(f.out.String(), "nixpkgs abc") {
+		t.Errorf("code %d out %q err %q", code, f.out, f.errb)
+	}
+	for _, args := range [][]string{{"search"}, {"search", "a", "b"}} {
+		g := newFixture(t, nil)
+		if code := g.run(append(args, "-C", g.repo)...); code != exit.Error || !strings.Contains(g.errb.String(), "usage: nixup search") {
+			t.Errorf("%v: code %d err %q", args, code, g.errb)
+		}
+	}
+	h := newFixture(t, nil)
+	h.e.Run.Missing = map[string]bool{"flatpak": true}
+	h.e.Run.On(run.Rule{Prefix: "nix eval", Out: `{"rev":"","nixpkgs":{"total":0,"items":[]},"own":{"total":0,"items":[]},"inputs":{}}`})
+	if code := h.run("search", "zz", "-C", h.repo); code != exit.Pending || !strings.Contains(h.out.String(), "Nothing called") {
+		t.Errorf("nothing found is exit 1: code %d out %q", code, h.out)
+	}
+}

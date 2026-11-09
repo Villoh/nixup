@@ -8,6 +8,7 @@ import (
 
 	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/gh"
+	"github.com/Villoh/nixup/internal/inventory"
 	"github.com/Villoh/nixup/internal/ui"
 )
 
@@ -161,4 +162,40 @@ func ReviewMarkdown(r *gh.Review) string {
 		fmt.Fprintf(&b, "\n<details><summary>%s</summary>\n\n%s\n\n</details>\n", n.Tag, firstLines(n.Body, 25))
 	}
 	return b.String()
+}
+
+// noteWidth caps descriptions in Inventory so one long line does not wrap the table.
+const noteWidth = 72
+
+// Inventory prints list and search results: one block per source, aligned columns, a
+// green ● before what is in the running system.
+func Inventory(t *ui.Term, groups []inventory.Group) {
+	nameW, verW := 0, 0
+	for _, g := range groups {
+		for _, it := range g.Items {
+			nameW = max(nameW, utf8.RuneCountInString(it.Name))
+			verW = max(verW, utf8.RuneCountInString(it.Version))
+		}
+	}
+	for _, g := range groups {
+		t.Println("\n" + t.Bold(g.Source))
+		if g.Err != "" {
+			t.Println("  " + t.Paint("ERROR "+g.Err, 31))
+		}
+		for _, it := range g.Items {
+			mark := " "
+			if it.InSystem {
+				mark = t.Paint("●", 32)
+			}
+			note := it.Note
+			if r := []rune(note); len(r) > noteWidth {
+				note = string(r[:noteWidth-1]) + "…"
+			}
+			line := fmt.Sprintf("  %s %-*s   %-*s   %s", mark, nameW, it.Name, verW, it.Version, note)
+			t.Println(strings.TrimRight(line, " "))
+		}
+		if g.More > 0 {
+			t.Printf("    … %d more (refine the search or raise --limit)\n", g.More)
+		}
+	}
 }

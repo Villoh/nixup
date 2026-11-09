@@ -104,6 +104,10 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `nix-update --flake <name> --version=<v> [args...]` | pkg |
 | `nix build --no-link .#<name>` | pkg |
 | `nix profile list --json` | profile |
+| `nix eval --json --impure --expr <getFlake of the flake>` | search |
+| `nix-store --query --requisites /run/current-system` | search (what is in the system) |
+| `flatpak list --app --columns=...` | list, search |
+| `flatpak search --columns=... <name>` | search |
 | `flatpak remote-ls --updates --columns=application` | flatpak |
 | `gh auth token` | GitHub token, if no variable is set |
 
