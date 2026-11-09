@@ -12,8 +12,7 @@ lang: en
 
 ```text
 nixup [check] [flags]
-nixup lock [input...] [flags]
-nixup pkg [package...] [flags]
+nixup update [name...] [flags]
 nixup list [flags]
 nixup search <name> [flags]
 nixup version
@@ -22,7 +21,7 @@ nixup help
 
 Without a command nixup runs `check`, so `nixup`, `nixup --review` and `nixup check --review` do the same thing.
 
-Flags can go before, between or after names: `nixup lock nixpkgs -y home-manager` updates two inputs without asking. Flags take one dash or two (`-y`, `--review`, `--source=input`).
+Flags can go before, between or after names: `nixup update nixpkgs -y home-manager` updates two inputs without asking. Flags take one dash or two (`-y`, `--review`, `--source=input`).
 
 Every command that works on a flake accepts `-C <dir>`. See [Configuration](configuration.md) for how the flake is found when `-C` is not given.
 
@@ -69,7 +68,7 @@ The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` an
     "current": "14.0.0",
     "latest": "15.2.0",
     "status": "outdated",
-    "note": "nixup pkg ripgrep",
+    "note": "nixup update ripgrep",
     "warning": "MAJOR version jump: read the changelog, expect breaking changes"
   }
 ]
@@ -85,67 +84,46 @@ Exit codes:
 | 1 | At least one entry is outdated. |
 | 2 | At least one check failed, or the command line or flake location was wrong. A failure wins over outdated entries. |
 
-## lock
+## update
 
-Updates `flake.lock` in a scratch copy, shows what moved, builds the hosts there and writes the new lock to your repository after you confirm.
+Reviews, builds and applies updates: first the flake's inputs (`flake.lock`), then the packages your flake defines in its own `packages.<system>` output.
 
 ```bash
-nixup lock
-nixup lock nixpkgs home-manager
-nixup lock -H desktop -H laptop
-nixup lock --no-build
-nixup lock -y --no-build --report report.md
+nixup update
+nixup update nixpkgs home-manager
+nixup update ripgrep --no-build
+nixup update --source input -H desktop -H laptop
+nixup update --source package -y --report report.md
 ```
 
-Names are flake inputs; without names every input is updated.
+Without names everything is updated: every input, then every package. Each name is looked up both as a direct input of `flake.lock` and as a package of the flake. Named inputs go to the input step and named packages to the package step; a step with no names of its kind is skipped, so `nixup update ripgrep` never touches `flake.lock`. Inputs always go first, so packages are built against the new lock.
+
+A name that is not an input or a package (`no input or package called <name>`), or that is both (`<name> is both an input and a package: pick one with --source input or --source package`), is an error, and nothing runs. So is a name that `--source` leaves out: `<name> is an input, not a package (drop --source package)`, or `no input called <name>` with `--source input`, where packages are not even evaluated.
 
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `-H <host>` | Host to build. Repeatable. Default: every entry in `nixosConfigurations`. |
-| `--no-build` | Update and show the changes, but do not build. |
-| `-y` | Write the new lock without asking. Needed for unattended runs. |
-| `--report <file>` | Append a Markdown report (moved inputs, reviews, build results) to this file. Created if missing. |
+| `--source <list>` | Limit the run to one step: `input` or `package` (plurals work too). Default: both. Anything else is an error. |
+| `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
+| `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. |
+| `-y` | Write the new lock and update the packages without asking. Needed for unattended runs. |
+| `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package) to this file. Created if missing. |
 
-The steps, in order:
+### Inputs
 
-1. Refuse to start if `flake.lock` has uncommitted changes.
+The input step, in order:
+
+1. Refuse to start if `flake.lock` has uncommitted changes. The package step still runs.
 2. Copy the working tree to a temporary directory and run `nix flake update --flake <copy> [input...]` there.
 3. If nothing changed, print `flake.lock is already up to date.` and stop.
 4. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
-5. Unless `--no-build`, run `nh os build <copy> -H <host>` for each host. The first failure stops the run and the repository is left as it was.
+5. Unless `--no-build`, run `nh os build <copy> -H <host>` for each host. The first failure stops the step and the repository is left as it was.
 6. Append the report, if `--report` was given.
 7. Ask `Write this flake.lock to the repo? [y/N]`, unless `-y`. Then copy the new `flake.lock` into the repository.
 
-Exit codes:
+### Packages
 
-| Code | Meaning |
-|---|---|
-| 0 | The lock was written, you answered no, or there was nothing to update. |
-| 1 | `flake.lock` has uncommitted changes. Commit or stash it, then run again. |
-| 2 | Something failed: `nix flake update`, listing hosts, a build, or writing the file. |
-
-## pkg
-
-Updates the packages your flake defines in its own `packages.<system>` output, one at a time, after showing what changed upstream.
-
-```bash
-nixup pkg
-nixup pkg ripgrep
-nixup pkg ripgrep --no-build
-nixup pkg -y --report report.md
-```
-
-Names are package attribute names; without names every package is considered. An unknown name is an error.
-
-| Flag | Description |
-|---|---|
-| `-C <dir>` | Flake directory. |
-| `--no-build` | Do not run `nix build` after `nix-update`. |
-| `-y` | Update without asking. Needed for unattended runs. |
-| `--report <file>` | Append a Markdown report per updated package to this file. Created if missing. |
-
-For each outdated package nixup:
+The package step goes through the packages one at a time. For each outdated package nixup:
 
 1. Prints the current and new version, the major-jump warning if any, and the upstream review.
 2. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
@@ -154,15 +132,15 @@ For each outdated package nixup:
 5. Unless `--no-build`, runs `nix build --no-link .#<name>`.
 6. If step 4 or 5 fails, restores `<pkg dir>` with `git checkout`. Otherwise prints `git diff -- <pkg dir>`.
 
-Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and everything is current, `pkg` prints nothing.
+Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and none is outdated, the step prints `Every package is up to date.`
 
-Exit codes. With several packages, the highest code wins:
+Exit codes. The worst code of the two steps, and of all the packages, wins:
 
 | Code | Meaning |
 |---|---|
-| 0 | Every package was updated, skipped or already current. |
-| 1 | A package directory had uncommitted changes. |
-| 2 | A check failed, a name does not exist, or `nix-update` or the build failed. |
+| 0 | Everything was updated, you answered no, or there was nothing to update. |
+| 1 | Something was refused because of uncommitted changes: `flake.lock` or a package directory. Commit or stash, then run again. |
+| 2 | Something failed: a name or `--source` was wrong, a check failed, or `nix flake update`, listing hosts, a build, `nix-update` or writing the file failed. |
 
 ## list
 

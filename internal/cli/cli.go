@@ -33,8 +33,7 @@ func versionString() string {
 const usage = `nixup — update checker and safe updater for flake-based NixOS
 
   nixup [check]   what is outdated, read-only (inputs, packages, profile, flatpak)
-  nixup lock      update flake.lock in a scratch copy, show changes, build, ask, apply
-  nixup pkg       update own packages/ one by one after reviewing upstream changes
+  nixup update    review, build and apply updates: inputs (flake.lock) and own packages
   nixup list      everything it watches, with current versions, without network
   nixup search    look a package name up in nixpkgs, your packages, your inputs and Flatpak
   nixup version
@@ -73,10 +72,8 @@ func Run(args []string, d Deps) int {
 	switch cmd {
 	case "check":
 		return runCheck(args, d)
-	case "lock":
-		return runLock(args, d)
-	case "pkg":
-		return runPkg(args, d)
+	case "update":
+		return runUpdate(args, d)
 	case "list":
 		return runList(args, d)
 	case "search":

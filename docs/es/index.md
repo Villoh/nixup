@@ -16,16 +16,15 @@ No activa nada. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demo
 
 | Sección | Qué compara | Cómo se actualiza |
 |---|---|---|
-| `inputs` | Los inputs de rama con el último commit de la rama remota; los fijados a un tag de release con el tag más nuevo | `nixup lock`, o editando `flake.nix` si es un tag fijado |
-| `packages` | Cada paquete de la salida `packages.<system>` de tu flake con su tag o release más reciente en GitHub | `nixup pkg` (ejecuta `nix-update`) |
+| `inputs` | Los inputs de rama con el último commit de la rama remota; los fijados a un tag de release con el tag más nuevo | `nixup update`, o editando `flake.nix` si es un tag fijado |
+| `packages` | Cada paquete de la salida `packages.<system>` de tu flake con su tag o release más reciente en GitHub | `nixup update` (ejecuta `nix-update`) |
 | `profile` | Entradas de `nix profile` fijadas a una revisión de nixpkgs distinta de la del input `nixpkgs` de tu flake | `nix profile upgrade` |
 | `flatpak` | Aplicaciones y runtimes con una actualización pendiente | `flatpak update` |
 
 ## Los comandos
 
 - `nixup check` lista lo que está desactualizado. Es el comando por defecto y solo lee.
-- `nixup lock` actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream, hace el build de todos los hosts y escribe el nuevo lock cuando confirmas.
-- `nixup pkg` actualiza los paquetes que define tu flake, de uno en uno, después de enseñarte qué ha cambiado upstream.
+- `nixup update` primero actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream, hace el build de todos los hosts y escribe el nuevo lock cuando confirmas. Después actualiza los paquetes que define tu flake, de uno en uno, tras enseñarte qué ha cambiado upstream. Con nombres o `--source` lo limitas a algunos inputs o paquetes.
 - `nixup list` enseña todo lo que vigila con las versiones que tienes, sin tocar la red.
 - `nixup search <nombre>` busca un paquete en tu nixpkgs fijado, tus paquetes, tus inputs y Flatpak.
 

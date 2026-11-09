@@ -62,7 +62,7 @@ Output is colored only when stdout is a terminal. Any non-empty `NO_COLOR` turns
 
 ## Questions
 
-`lock` and `pkg` ask before they write. Questions are answered only when stdin is a terminal, and only `y` (any case) counts as yes. With no terminal every question is answered no, so unattended runs must pass `-y`.
+`update` asks before it writes. Questions are answered only when stdin is a terminal, and only `y` (any case) counts as yes. With no terminal every question is answered no, so unattended runs must pass `-y`.
 
 ## GitHub token
 
@@ -76,7 +76,7 @@ Without a token the API calls are unauthenticated, and GitHub allows only 60 of 
 
 ## Package update scripts
 
-`nixup check` and `nixup pkg` only look at packages that define `passthru.updateScript`. nixup reads that command line and uses some of its arguments:
+`nixup check` and `nixup update` only look at packages that define `passthru.updateScript`. nixup reads that command line and uses some of its arguments:
 
 - `--use-github-releases`: compare against published GitHub releases instead of every tag.
 - `--version=unstable`: allow prereleases as the newest version. Any other `--version=...` argument is ignored, because nixup always passes the version you reviewed.
@@ -97,9 +97,9 @@ For example:
 | Tool | Used for | When missing |
 |---|---|---|
 | `git` | `ls-remote` for tags and heads, the scratch copy, the uncommitted-changes checks, restoring a package | Most checks fail |
-| `nix` | `nix eval` of packages and hosts, `nix flake update`, `nix build`, `nix profile list` | The `profile` section is skipped; `packages`, `lock` and `pkg` fail |
-| `nh` | `nh os build` in `nixup lock` | `lock` fails unless `--no-build` |
-| `nix-update` | `nixup pkg` | nixup runs `nix run nixpkgs#nix-update --` instead |
+| `nix` | `nix eval` of packages and hosts, `nix flake update`, `nix build`, `nix profile list` | The `profile` section is skipped; `packages` and `update` fail |
+| `nh` | `nh os build` in the input step of `nixup update` | That step fails unless `--no-build` |
+| `nix-update` | The package step of `nixup update` | nixup runs `nix run nixpkgs#nix-update --` instead |
 | `flatpak` | The `flatpak` section | The section is skipped |
 | `gh` | Only to read a token with `gh auth token` | API calls go out without a token |
 

@@ -38,7 +38,7 @@ func (u *Updater) Pkg(o PkgOpts) int {
 	if err != nil {
 		return u.fail(err)
 	}
-	code := exit.OK
+	code, outdated := exit.OK, 0
 	for _, p := range todo {
 		row := u.Check.Package(p, true)
 		switch row.Status {
@@ -46,12 +46,16 @@ func (u *Updater) Pkg(o PkgOpts) int {
 			u.T.Printf("%s %s: %s\n", u.T.Paint("ERROR", 31), p.Name, row.Note)
 			code = max(code, exit.Error)
 		case check.Outdated:
+			outdated++
 			code = max(code, u.updateOne(o, p, row))
 		default:
 			if len(o.Names) > 0 || row.Status == check.Info {
 				u.T.Printf("%s %s %s %s\n", u.T.Paint(strings.ToUpper(row.Status), 32), p.Name, row.Current, row.Note)
 			}
 		}
+	}
+	if outdated == 0 && len(o.Names) == 0 {
+		u.T.Println("Every package is up to date.")
 	}
 	return code
 }
@@ -68,16 +72,15 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		t.Printf("%s", report.ReviewText(row.Review, "  "))
 		md += report.ReviewMarkdown(row.Review)
 	}
-	if !o.Yes && !t.Confirm(fmt.Sprintf("Update %s to %s?", p.Name, row.Latest)) {
-		t.Println("Skipped.")
-		return exit.OK
-	}
-
-	dir := p.Path(o.Repo)
+	dir := p.Path(o.Repo) // known before asking, so a refusal never follows a yes
 	if dir == "" {
 		t.Println(t.Paint("cannot tell which file in this flake defines "+p.Name+" (meta.position "+
 			strconv.Quote(p.Position)+"): not updating it.", 31))
 		return exit.Error
+	}
+	if !o.Yes && !t.Confirm(fmt.Sprintf("Update %s to %s?", p.Name, row.Latest)) {
+		t.Println("Skipped.")
+		return exit.OK
 	}
 	if flake.Dirty(u.R, o.Repo, dir) {
 		t.Println(t.Paint(dir+" has uncommitted changes: commit or stash them first.", 33))

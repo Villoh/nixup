@@ -148,7 +148,7 @@ func (c *Checker) input(name string, node flake.Node, review bool) Row {
 		return Row{Section: "inputs", Name: name, Current: flake.ShortRev(rev), Status: OK}
 	}
 	row := Row{Section: "inputs", Name: name, Current: fmt.Sprintf("%s · %dd", flake.ShortRev(rev), age),
-		Latest: flake.ShortRev(head), Status: Outdated, Note: "nixup lock " + name}
+		Latest: flake.ShortRev(head), Status: Outdated, Note: "nixup update " + name}
 	if review {
 		row.Review = c.GH.Review(id, rev, head, false)
 	}
@@ -223,7 +223,7 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 	}
 	row.Latest, row.Status = latest, Outdated
 	row.Warn = ver.Bump(p.Version, latest).Warning()
-	row.Note = "nixup pkg " + p.Name
+	row.Note = "nixup update " + p.Name
 	if review {
 		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version, extract), top, true)
 	}
@@ -277,45 +277,66 @@ func (c *Checker) Profile(repo string) []Row {
 }
 
 // Flatpak lists applications and runtimes with a pending update, with the installed and
-// the new version when flatpak knows them. Runtimes have no version, only a branch.
+// the new version. A runtime has no version, so its branch is shown and its updates are
+// new builds; an app whose remote publishes no version (a .flatpakref remote) is unknown.
 func (c *Checker) Flatpak() []Row {
 	if !c.R.Has("flatpak") {
 		return nil
 	}
-	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=application,version,branch")
+	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=ref,version")
 	if err != nil {
 		return []Row{{Section: "flatpak", Name: "flatpak", Status: Error, Note: run.LastLine(errs)}}
 	}
-	installed := map[string]string{} // "app/branch" -> version, or the branch for runtimes
-	if list, _, err := c.R.Capture("", "flatpak", "list", "--columns=application,version,branch"); err == nil {
+	installed := map[string]string{} // "id/arch/branch" -> version
+	if list, _, err := c.R.Capture("", "flatpak", "list", "--columns=ref,version"); err == nil {
 		for _, f := range fields(list) {
-			installed[f[0]+"/"+f[2]] = cmp.Or(f[1], f[2])
+			_, id, arch, branch := parseRef(f[0])
+			installed[id+"/"+arch+"/"+branch] = f[1]
 		}
 	}
 	var rows []Row
 	seen := map[string]bool{}
 	for _, f := range fields(out) {
-		key := f[0] + "/" + f[2]
-		if seen[key] {
+		ref, latest := f[0], f[1]
+		kind, id, arch, branch := parseRef(ref)
+		if id == "" || seen[ref] {
 			continue
 		}
-		seen[key] = true
-		latest := f[1]
-		if latest == "" || latest == installed[key] {
-			latest = "new build" // same version rebuilt: flatpak still offers it
+		seen[ref] = true
+		current := installed[id+"/"+arch+"/"+branch]
+		switch {
+		case kind == "runtime":
+			current, latest = cmp.Or(current, branch), "new build"
+		case latest == "":
+			latest = "unknown"
+		case latest == current:
+			latest = "new build"
 		}
-		rows = append(rows, Row{Section: "flatpak", Name: f[0], Current: installed[key], Latest: latest,
+		rows = append(rows, Row{Section: "flatpak", Name: id, Current: current, Latest: latest,
 			Status: Outdated, Note: "flatpak update"})
 	}
 	return rows
 }
 
-// fields splits flatpak's tab-separated columns into exactly three trimmed fields per
-// line, skipping empty lines.
+// parseRef splits a flatpak ref: "app/org.example.App/x86_64/stable" (remote-ls) or
+// "org.example.App/x86_64/stable" (flatpak list, which leaves the kind out).
+func parseRef(ref string) (kind, id, arch, branch string) {
+	p := strings.Split(ref, "/")
+	switch len(p) {
+	case 4:
+		return p[0], p[1], p[2], p[3]
+	case 3:
+		return "", p[0], p[1], p[2]
+	}
+	return "", "", "", ""
+}
+
+// fields splits flatpak's tab-separated columns into two trimmed fields per line,
+// skipping empty lines.
 func fields(out string) [][]string {
 	var rows [][]string
 	for _, line := range strings.Split(out, "\n") {
-		f := append(strings.Split(line, "\t"), "", "", "")[:3]
+		f := append(strings.Split(line, "\t"), "", "")[:2]
 		for i := range f {
 			f[i] = strings.TrimSpace(f[i])
 		}

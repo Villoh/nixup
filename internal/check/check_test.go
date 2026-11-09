@@ -74,7 +74,7 @@ func TestInputsBranch(t *testing.T) {
 	rows := byName(checker(e).Inputs(repo, true))
 
 	np := rows["nixpkgs"]
-	if np.Status != check.Outdated || np.Latest != "bbb2222" || np.Note != "nixup lock nixpkgs" {
+	if np.Status != check.Outdated || np.Latest != "bbb2222" || np.Note != "nixup update nixpkgs" {
 		t.Errorf("nixpkgs: %+v", np)
 	}
 	if np.Review == nil || np.Review.Commits != 12 {
@@ -142,7 +142,7 @@ func TestPackages(t *testing.T) {
 		t.Fatalf("rows: %+v", rows)
 	}
 	p := rows["padpoll"]
-	if p.Status != check.Outdated || p.Latest != "1.1.0" || p.Note != "nixup pkg padpoll" || p.Warn != "" {
+	if p.Status != check.Outdated || p.Latest != "1.1.0" || p.Note != "nixup update padpoll" || p.Warn != "" {
 		t.Errorf("padpoll: %+v", p)
 	}
 	if p.Review == nil || p.Review.Commits != 5 {
@@ -238,20 +238,35 @@ func TestProfileUnavailable(t *testing.T) {
 
 func TestFlatpak(t *testing.T) {
 	e := testutil.New(t)
-	e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "org.gnome.Platform\t\t50\n\norg.gnome.Platform\t\t50\n co.hyprlab.Hylki \t1.42.0\tstable\nio.x.Same\t2.0\tstable\n"})
-	e.Run.On(run.Rule{Prefix: "flatpak list --columns=application,version,branch", Out: "org.gnome.Platform\t\t50\nco.hyprlab.Hylki\t1.41.1\tstable\nio.x.Same\t2.0\tstable\n"})
+	e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates --columns=ref,version", Out: "runtime/org.gnome.Platform/x86_64/50\t\n\n" +
+		"runtime/org.gnome.Platform/x86_64/50\t\n" + // listed twice: shown once
+		" app/co.hyprlab.Hylki/x86_64/stable \t\n" + // remote publishes no version
+		"app/io.x.New/x86_64/stable\t1.42.0\n" +
+		"app/io.x.Same/x86_64/stable\t2.0\n" +
+		"app/io.x.Two/x86_64/beta\t3.1\n"})
+	e.Run.On(run.Rule{Prefix: "flatpak list --columns=ref,version", Out: "org.gnome.Platform/x86_64/50\t\n" +
+		"co.hyprlab.Hylki/x86_64/stable\t1.41.1\nio.x.New/x86_64/stable\t1.41.1\nio.x.Same/x86_64/stable\t2.0\n" +
+		"io.x.Two/x86_64/stable\t3.0\nio.x.Two/x86_64/beta\t3.1-rc\n"})
 	rows := checker(e).Flatpak()
-	if len(rows) != 3 || rows[0].Name != "org.gnome.Platform" || rows[1].Name != "co.hyprlab.Hylki" {
-		t.Fatalf("duplicates collapse, blanks and spaces are dropped: %+v", rows)
+	got := map[string][2]string{}
+	var names []string
+	for _, r := range rows {
+		names = append(names, r.Name)
+		got[r.Name] = [2]string{r.Current, r.Latest}
 	}
-	if r := rows[0]; r.Current != "50" || r.Latest != "new build" {
-		t.Errorf("a runtime shows its branch, and an update without a version is a new build: %+v", r)
+	if strings.Join(names, ",") != "org.gnome.Platform,co.hyprlab.Hylki,io.x.New,io.x.Same,io.x.Two" {
+		t.Fatalf("one row per ref, in order, blanks and spaces dropped: %v", names)
 	}
-	if r := rows[1]; r.Current != "1.41.1" || r.Latest != "1.42.0" {
-		t.Errorf("an app shows both versions: %+v", r)
-	}
-	if r := rows[2]; r.Latest != "new build" {
-		t.Errorf("same version offered again is a new build: %+v", r)
+	for name, want := range map[string][2]string{
+		"org.gnome.Platform": {"50", "new build"},   // a runtime: its branch, rebuilt
+		"co.hyprlab.Hylki":   {"1.41.1", "unknown"}, // the remote does not say
+		"io.x.New":           {"1.41.1", "1.42.0"},  // both versions known
+		"io.x.Same":          {"2.0", "new build"},  // same version offered again
+		"io.x.Two":           {"3.1-rc", "3.1"},     // the installed version of that branch
+	} {
+		if got[name] != want {
+			t.Errorf("%s: got %v, want %v", name, got[name], want)
+		}
 	}
 
 	e.Run.Missing["flatpak"] = true
@@ -268,7 +283,7 @@ func TestFlatpak(t *testing.T) {
 
 func TestAllRunsOnlyRequestedSections(t *testing.T) {
 	e := testutil.New(t)
-	e.Run.On(run.Rule{Prefix: "flatpak remote-ls", Out: "org.gnome.Platform\n"})
+	e.Run.On(run.Rule{Prefix: "flatpak remote-ls", Out: "runtime/org.gnome.Platform/x86_64/50\t\n"})
 	rows := checker(e).All("/repo", []string{"flatpak"}, false)
 	if len(rows) != 1 || rows[0].Section != "flatpak" {
 		t.Errorf("rows: %+v", rows)

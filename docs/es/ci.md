@@ -14,7 +14,7 @@ nixup no trae un workflow para tu configuración. Aquí tienes cómo montarlo co
 
 - `check --markdown` imprime en Markdown las entradas desactualizadas o con error. Añade `--review` para tener commits y release notes.
 - `check --json` imprime todas las entradas en JSON, para tus propios scripts.
-- `lock --report <archivo>` y `pkg --report <archivo>` añaden a un archivo Markdown lo que han cambiado, la revisión de upstream y el resultado del build. Los dos comandos pueden compartir archivo.
+- `update --report <archivo>` añade a un archivo Markdown lo que ha cambiado, la revisión de upstream y el resultado del build. Varias ejecuciones pueden compartir archivo.
 - `-y` contesta que sí. Un job de CI no tiene terminal, así que sin `-y` todas las preguntas se responden que no y no se escribe nada.
 
 `check` sale con 1 cuando hay algo desactualizado. En un paso de CI eso cuenta como fallo, así que acepta el 1 de forma explícita y deja que el 2 tumbe el job:
@@ -58,8 +58,8 @@ jobs:
       - name: update flake.lock and packages
         run: |
           touch "$RUNNER_TEMP/report.md"
-          nix run "$NIXUP" -- lock -y --no-build --report "$RUNNER_TEMP/report.md"
-          nix run "$NIXUP" -- pkg -y --report "$RUNNER_TEMP/report.md"
+          nix run "$NIXUP" -- update --source input -y --no-build --report "$RUNNER_TEMP/report.md"
+          nix run "$NIXUP" -- update --source package -y --report "$RUNNER_TEMP/report.md"
 
       - uses: peter-evans/create-pull-request@v7
         with:
@@ -72,19 +72,20 @@ jobs:
 Detalles de este workflow:
 
 - `--source input,package` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
-- El runner no tiene `nix-update`, así que `pkg` lo ejecuta con `nix run nixpkgs#nix-update`.
-- `pkg -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, `pkg` sale con 2 y el job para antes de la pull request.
+- Los dos pasos van en comandos separados para que solo el de inputs se salte el build.
+- El runner no tiene `nix-update`, así que `update` lo ejecuta con `nix run nixpkgs#nix-update`.
+- `update --source package -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, nixup sale con 2 y el job para antes de la pull request.
 - Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.2.0`.
 - El commit y la pull request los hace `create-pull-request`. nixup nunca hace commit.
 
 ## Builds del sistema completo
 
-El workflow pasa `--no-build` a `lock`, así que el nuevo lock se escribe sin construir ningún host. Un sistema NixOS completo suele necesitar más disco y más tiempo de los que da un runner alojado por GitHub, y `lock` construye todos los hosts de `nixosConfigurations` salvo que pases `-H`.
+El workflow pasa `--no-build` al paso de inputs, así que el nuevo lock se escribe sin construir ningún host. Un sistema NixOS completo suele necesitar más disco y más tiempo de los que da un runner alojado por GitHub, y `update` construye todos los hosts de `nixosConfigurations` salvo que pases `-H`.
 
 Tienes tres opciones:
 
-- Dejar `--no-build` en CI y ejecutar `nixup lock` (que sí hace el build) o `nh os build` en tu máquina antes de mergear la pull request.
-- Construir un solo host con `lock -y -H <host> --report ...`. Entonces el runner necesita `nh` en el `PATH` y espacio suficiente para ese host.
+- Dejar `--no-build` en CI y ejecutar `nixup update --source input` (que sí hace el build) o `nh os build` en tu máquina antes de mergear la pull request.
+- Construir un solo host con `update --source input -y -H <host> --report ...`. Entonces el runner necesita `nh` en el `PATH` y espacio suficiente para ese host.
 - Usar un runner propio (self-hosted) donde quepa el build.
 
 Elijas lo que elijas, nixup nunca activa el resultado. Prueba la configuración mergeada con `nh os test` en la propia máquina.

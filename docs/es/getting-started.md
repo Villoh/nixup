@@ -12,8 +12,8 @@ lang: es
 
 - Una configuración de NixOS en un flake, dentro de un repositorio git, con `flake.nix` y `flake.lock` commiteados.
 - `git` y `nix` en el `PATH`.
-- `nh` si quieres que `nixup lock` haga el build de tus hosts. Con `--no-build` no hace falta.
-- `nix-update` para `nixup pkg`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
+- `nh` si quieres que `nixup update` haga el build de tus hosts. Con `--no-build` no hace falta.
+- `nix-update` para actualizar tus propios paquetes con `nixup update`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
 - `flatpak` es opcional. Sin él, la sección `flatpak` se salta.
 - Acceso de red a github.com y api.github.com.
 
@@ -80,10 +80,10 @@ No hace falta estar dentro del flake. `nixup -C ~/nixos-config` funciona desde c
 
 ```text
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
 input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
@@ -111,18 +111,19 @@ Después de la tabla, para cada actualización, añade el repositorio de origen,
 ## Aplica las actualizaciones
 
 ```bash
-nixup lock                 # todos los inputs
-nixup lock home-manager    # un solo input
-nixup pkg ripgrep          # uno de tus paquetes
+nixup update                  # todos los inputs y después todos tus paquetes
+nixup update --source input   # solo los inputs
+nixup update home-manager     # un solo input
+nixup update ripgrep          # uno de tus paquetes
 ```
 
-`lock` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. `pkg` pregunta antes de cada paquete. Ninguno hace commit ni activa nada. Cuando `lock` termina, te dice los siguientes pasos:
+Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. No hace commit ni activa nada. Cuando ha escrito `flake.lock`, te dice los siguientes pasos:
 
 ```text
 flake.lock updated (not committed, nothing activated).
 Next: git diff flake.lock && nix flake check && nh os test . -H <host>
 ```
 
-Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`. Cambia el tag en `flake.nix` a mano y después ejecuta `nixup lock lanzaboote`.
+Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`. Cambia el tag en `flake.nix` a mano y después ejecuta `nixup update lanzaboote`.
 
 Siguiente: [Comandos](commands.md) para ver todos los flags, o [Cómo funciona](how-it-works.md) para saber qué pasa por debajo.

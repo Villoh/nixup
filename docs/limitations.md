@@ -18,18 +18,18 @@ lang: en
 
 - The `packages` section reads the flake's own `packages.<system>` output, for the system nixup runs on. A `fetchurl` inside a module, a pinned `rev` in an overlay, or a package defined only for another system is invisible. Move it into the `packages` output to have it checked.
 - A package needs `passthru.updateScript` to be checked. Without it nixup reports `info` with `no passthru.updateScript`.
-- `nixup pkg` guards and restores the directory of the file that defines each package, from its `meta.position`. A package without `meta.position`, or defined outside this flake, is refused.
-- Transitive inputs are not checked. `lock` updates them with everything else and only reports how many moved.
+- `nixup update` guards and restores the directory of the file that defines each package, from its `meta.position`. A package without `meta.position`, or defined outside this flake, is refused.
+- Transitive inputs are not checked. `update` updates them with everything else and only reports how many moved.
 
-## lock builds NixOS hosts only
+## update builds NixOS hosts only
 
-`lock` builds each entry in `nixosConfigurations` with `nh os build`. Home Manager, nix-darwin and other outputs are not built. On a flake without `nixosConfigurations`, run `lock --no-build`; otherwise listing the hosts fails with exit code 2.
+The input step of `update` builds each entry in `nixosConfigurations` with `nh os build`. Home Manager, nix-darwin and other outputs are not built. On a flake without `nixosConfigurations`, run `update --source input --no-build` (and `update --source package` for the packages, which are still built); otherwise listing the hosts fails with exit code 2.
 
 ## Some sections only report
 
 - `flatpak`: nixup lists pending updates. Run `flatpak update` yourself.
 - `profile`: nixup compares the nixpkgs revision of `nix profile` entries with your flake's input named `nixpkgs`. Run `nix profile upgrade` yourself.
-- Pinned tag inputs: `nix flake update` does not move a tag, so `lock` does not either. Edit the tag in `flake.nix`.
+- Pinned tag inputs: `nix flake update` does not move a tag, so `update` does not either. Edit the tag in `flake.nix`.
 
 ## Version heuristics
 

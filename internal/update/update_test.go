@@ -220,8 +220,8 @@ func TestPkgNothingToDo(t *testing.T) {
 	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true}); code != exit.OK {
 		t.Errorf("code %d", code)
 	}
-	if f.called("nix-update") || f.out.Len() != 0 {
-		t.Errorf("everything is current, so be quiet: %q %v", f.out, f.e.Run.Calls())
+	if f.called("nix-update") || f.out.String() != "Every package is up to date.\n" {
+		t.Errorf("everything is current: one line, nothing run: %q %v", f.out, f.e.Run.Calls())
 	}
 	// Asking for a package by name reports its state instead of staying silent.
 	f.u.Pkg(update.PkgOpts{Repo: f.repo, Names: []string{"padpoll"}, Yes: true})
@@ -520,5 +520,125 @@ func TestPkgRefusesAPackageItCannotLocate(t *testing.T) {
 		if f.called("nix-update") || f.called("git checkout") || f.called("git diff") {
 			t.Errorf("%s: nothing may run: %v", name, f.e.Run.Calls())
 		}
+	}
+}
+
+// updateFixture: a flake with inputs nixpkgs and both, and packages padpoll and both.
+func updateFixture(t *testing.T) *fixture {
+	f := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": testutil.LockJSON(map[string]string{
+		"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("a", 40), "both": "o/both@#" + strings.Repeat("b", 40)})})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{
+	 "padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]},
+	 "both":{"position":"/nix/store/x-source/packages/b/package.nix:1","version":"1.0.0","urls":["https://github.com/o/b/x"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
+	f.e.Tags("o/b", "v1.0.0")
+	return f
+}
+
+func flakeUpdateArgs(f *fixture) []string {
+	for _, c := range f.e.Run.Calls() {
+		if strings.HasPrefix(c.String(), "nix flake update") {
+			return c.Args[4:]
+		}
+	}
+	return nil
+}
+
+func TestUpdateEverythingInputsFirst(t *testing.T) {
+	f := updateFixture(t)
+	f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true})
+	var order []string
+	for _, c := range f.e.Run.Calls() {
+		if strings.HasPrefix(c.String(), "nix flake update") || strings.HasPrefix(c.String(), "nix-update") {
+			order = append(order, c.Name)
+		}
+	}
+	if strings.Join(order, ",") != "nix,nix-update" || len(flakeUpdateArgs(f)) != 0 {
+		t.Errorf("no names: every input (one nix flake update), then the packages: %v / %v", order, f.e.Run.Calls())
+	}
+}
+
+func TestUpdateSplitsNames(t *testing.T) {
+	f := updateFixture(t)
+	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"nixpkgs", "padpoll"}, Yes: true, NoBuild: true})
+	if got := flakeUpdateArgs(f); strings.Join(got, " ") != "nixpkgs" {
+		t.Errorf("inputs go to nix flake update: %v", got)
+	}
+	if !f.called("nix-update --flake padpoll") {
+		t.Errorf("packages go to nix-update: %v", f.e.Run.Calls())
+	}
+
+	g := updateFixture(t)
+	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"padpoll"}, Yes: true, NoBuild: true})
+	if g.called("nix flake update") || !g.called("nix-update --flake padpoll") {
+		t.Errorf("only packages named: flake.lock is not touched: %v", g.e.Run.Calls())
+	}
+}
+
+func TestUpdateNameErrors(t *testing.T) {
+	f := updateFixture(t)
+	if code := f.u.Update(update.Opts{Repo: f.repo, Names: []string{"both"}}); code != exit.Error ||
+		!strings.Contains(f.errb.String(), "both an input and a package: pick one with --source") {
+		t.Errorf("ambiguous: code %d err %q", code, f.errb)
+	}
+	g := updateFixture(t)
+	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"both"}, Sources: []string{"package"}, Yes: true, NoBuild: true})
+	if g.called("nix flake update") || !g.called("nix eval --json .#packages.") || g.errb.Len() != 0 {
+		t.Errorf("--source settles it: %q %v", g.errb, g.e.Run.Calls())
+	}
+	h := updateFixture(t)
+	if code := h.u.Update(update.Opts{Repo: h.repo, Names: []string{"padpoll"}, Sources: []string{"input"}}); code != exit.Error ||
+		!strings.Contains(h.errb.String(), "no input called padpoll") {
+		t.Errorf("a package name with --source input: code %d err %q", code, h.errb)
+	}
+	if h.called("nix flake update") || h.called("nix-update") {
+		t.Errorf("a bad name stops everything before it starts: %v", h.e.Run.Calls())
+	}
+}
+
+func TestUpdateSourcesAndWorstCode(t *testing.T) {
+	f := updateFixture(t)
+	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Yes: true, NoBuild: true})
+	if f.called("nix-update") || !f.called("nix flake update") {
+		t.Errorf("--source input: no packages: %v", f.e.Run.Calls())
+	}
+	g := updateFixture(t)
+	g.e.Run.On(run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
+	g.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("dirty")}}, g.e.Run.Rules...)
+	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true}); code != exit.Error {
+		t.Errorf("a dirty lock (1) and a failed package (2): the worst wins, got %d", code)
+	}
+	if !g.called("nix-update") {
+		t.Errorf("a refused flake.lock does not stop the packages: %v", g.e.Run.Calls())
+	}
+	h := updateFixture(t)
+	h.e.Run.Rules = append([]run.Rule{{Prefix: "nix flake update", Fail: errors.New("exit 1")}}, h.e.Run.Rules...)
+	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true, NoBuild: true}); code != exit.Error || !h.called("nix-update --flake padpoll") {
+		t.Errorf("a failed lock (2) is not hidden by packages that went fine: code %d", code)
+	}
+}
+
+func TestUpdateNameErrorsWithSource(t *testing.T) {
+	f := updateFixture(t)
+	if code := f.u.Update(update.Opts{Repo: f.repo, Names: []string{"nixpkgs"}, Sources: []string{"package"}}); code != exit.Error ||
+		!strings.Contains(f.errb.String(), "nixpkgs is an input, not a package (drop --source package)") {
+		t.Errorf("an input with --source package says so: code %d err %q", code, f.errb)
+	}
+	g := updateFixture(t)
+	if code := g.u.Update(update.Opts{Repo: g.repo, Names: []string{"padpoll"}, Sources: []string{"input"}}); code != exit.Error ||
+		!strings.Contains(g.errb.String(), "no input called padpoll") || g.called("nix eval") {
+		t.Errorf("with --source input packages are not evaluated: code %d err %q %v", code, g.errb, g.e.Run.Calls())
+	}
+}
+
+func TestPkgAsksOnlyAboutPackagesItCanUpdate(t *testing.T) {
+	f := newFixture(t, "y\n", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"x":{"position":"/elsewhere/x.nix:1","version":"1.0.0","urls":["https://github.com/o/x/y"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Tags("o/x", "v1.0.0", "v1.1.0")
+	f.u.Pkg(update.PkgOpts{Repo: f.repo})
+	if strings.Contains(f.out.String(), "[y/N]") {
+		t.Errorf("a package that would be refused is refused before the question:\n%s", f.out)
 	}
 }

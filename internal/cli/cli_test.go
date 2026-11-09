@@ -38,7 +38,7 @@ func TestVersionAndHelp(t *testing.T) {
 		t.Errorf("code %d out %q", code, f.out)
 	}
 	f.out.Reset()
-	if code := f.run("help"); code != exit.OK || !strings.Contains(f.out.String(), "nixup lock") {
+	if code := f.run("help"); code != exit.OK || !strings.Contains(f.out.String(), "nixup update") {
 		t.Errorf("code %d out %q", code, f.out)
 	}
 }
@@ -62,7 +62,7 @@ func TestVersionAndHelpFlags(t *testing.T) {
 	}
 	for _, flag := range []string{"-h", "--help"} {
 		f := newFixture(t, nil)
-		if code := f.run(flag); code != exit.OK || !strings.Contains(f.out.String(), "nixup lock") {
+		if code := f.run(flag); code != exit.OK || !strings.Contains(f.out.String(), "nixup update") {
 			t.Errorf("%s: code %d out %q", flag, code, f.out)
 		}
 	}
@@ -105,7 +105,7 @@ func TestUnknownCommand(t *testing.T) {
 	if code := f.run("frobnicate"); code != exit.Error {
 		t.Errorf("code %d", code)
 	}
-	if !strings.Contains(f.errb.String(), "nixup lock") || f.out.Len() != 0 {
+	if !strings.Contains(f.errb.String(), "nixup update") || f.out.Len() != 0 {
 		t.Errorf("usage goes to stderr: out=%q err=%q", f.out, f.errb)
 	}
 }
@@ -186,12 +186,13 @@ func TestCheckUnknownSection(t *testing.T) {
 	}
 }
 
-func TestLockParsesFlagsAfterInputs(t *testing.T) {
-	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+func TestUpdateParsesFlagsAfterInputs(t *testing.T) {
+	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa", "home-manager": "nix-community/home-manager@#ccc"})
 	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
-	// `nixup lock nixpkgs home-manager --no-build -C repo`: Go's flag package alone stops at "nixpkgs".
-	f.run("lock", "nixpkgs", "home-manager", "--no-build", "-C", f.repo)
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	// `nixup update nixpkgs home-manager --no-build -C repo`: Go's flag package alone stops at "nixpkgs".
+	f.run("update", "nixpkgs", "home-manager", "--no-build", "-C", f.repo)
 	for _, c := range f.e.Run.Calls() {
 		if strings.HasPrefix(c.String(), "nix flake update") {
 			if !strings.HasSuffix(c.String(), "nixpkgs home-manager") {
@@ -203,20 +204,20 @@ func TestLockParsesFlagsAfterInputs(t *testing.T) {
 	t.Errorf("nix flake update did not run: %v", f.e.Run.Calls())
 }
 
-func TestLockRepeatedHostFlags(t *testing.T) {
+func TestUpdateRepeatedHostFlags(t *testing.T) {
 	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
 	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
 		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"nixpkgs": "NixOS/nixpkgs@#bbb"})), 0o644)
 	}})
-	f.run("lock", "-C", f.repo, "-H", "desktop", "-H", "zenbook")
+	f.run("update", "--source", "input", "-C", f.repo, "-H", "desktop", "-H", "zenbook")
 	if f.e.Run.Count("nh os build") != 2 || f.e.Run.Count("nix eval --json") != 0 {
 		t.Errorf("calls: %v", f.e.Run.Calls())
 	}
 }
 
-func TestPkgFlagsAfterNames(t *testing.T) {
+func TestUpdateFlagsAfterPackageNames(t *testing.T) {
 	f := newFixture(t, nil)
 	os.MkdirAll(filepath.Join(f.repo, "packages/padpoll"), 0o755)
 	os.WriteFile(filepath.Join(f.repo, "packages/padpoll/package.nix"), []byte("{}"), 0o644)
@@ -224,7 +225,7 @@ func TestPkgFlagsAfterNames(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
 	// The bug this guards: `pkg padpoll --no-build -y` once read "--no-build" as a package name.
-	if code := f.run("pkg", "padpoll", "--no-build", "-y", "-C", f.repo); code != exit.OK {
+	if code := f.run("update", "padpoll", "--no-build", "-y", "-C", f.repo); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	if f.e.Run.Count("nix-update --flake padpoll --version=1.1.0") != 1 || f.e.Run.Count("nix build") != 0 {
@@ -232,10 +233,10 @@ func TestPkgFlagsAfterNames(t *testing.T) {
 	}
 }
 
-func TestPkgUnknownName(t *testing.T) {
+func TestUpdateUnknownName(t *testing.T) {
 	f := newFixture(t, nil)
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	if code := f.run("pkg", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no such package: nope") {
+	if code := f.run("update", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no input or package called nope") {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 }
@@ -286,7 +287,7 @@ func TestTheFlakeYouAreInWinsQuietly(t *testing.T) {
 
 	t.Chdir(t.TempDir()) // outside any flake: the configured one, also quietly, even before writing
 	configured.out.Reset()
-	configured.run("pkg")
+	configured.run("update", "--source", "package")
 	if configured.errb.Len() != 0 {
 		t.Errorf("no notice: %q", configured.errb)
 	}
@@ -297,7 +298,7 @@ func TestTheFlakeYouAreInWinsQuietly(t *testing.T) {
 		}
 	}
 	if len(dirs) != 2 || dirs[0] != here || dirs[1] != configured.repo {
-		t.Errorf("list evaluated the flake it was in, pkg the configured one: %v", dirs)
+		t.Errorf("list evaluated the flake it was in, update the configured one: %v", dirs)
 	}
 }
 
@@ -370,5 +371,21 @@ func TestSearchCommand(t *testing.T) {
 	h.e.Run.On(run.Rule{Prefix: "nix eval", Out: `{"rev":"","nixpkgs":{"total":0,"items":[]},"own":{"total":0,"items":[]},"inputs":{}}`})
 	if code := h.run("search", "zz", "-C", h.repo); code != exit.Pending || !strings.Contains(h.out.String(), "Nothing called") {
 		t.Errorf("nothing found is exit 1: code %d out %q", code, h.out)
+	}
+}
+
+func TestOldUpdateCommandsAreGone(t *testing.T) {
+	for _, cmd := range []string{"lock", "pkg"} {
+		f := newFixture(t, nil)
+		if code := f.run(cmd, "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), `unknown command "`+cmd+`"`) {
+			t.Errorf("%s: code %d err %q", cmd, code, f.errb)
+		}
+	}
+}
+
+func TestUpdateRejectsOtherSources(t *testing.T) {
+	f := newFixture(t, nil)
+	if code := f.run("update", "--source", "flatpak", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), `unknown source "flatpak" (one of: input, package)`) {
+		t.Errorf("code %d err %q", code, f.errb)
 	}
 }

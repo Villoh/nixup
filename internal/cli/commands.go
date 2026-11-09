@@ -85,31 +85,23 @@ type hostList []string
 func (h *hostList) String() string     { return strings.Join(*h, ",") }
 func (h *hostList) Set(v string) error { *h = append(*h, v); return nil }
 
-func runLock(args []string, d Deps) int {
-	fs, dir := d.flags("lock")
+func runUpdate(args []string, d Deps) int {
+	fs, dir := d.flags("update")
+	source := fs.String("source", "", "comma list of: input, package (default: both)")
 	var hosts hostList
-	fs.Var(&hosts, "H", "host to build (repeatable; default: all nixosConfigurations)")
-	noBuild := fs.Bool("no-build", false, "only update and show the changes")
-	yes := fs.Bool("y", false, "apply without asking (CI)")
-	reportFile := fs.String("report", "", "append a Markdown report to this file")
-	inputs, repo, code, ok := d.setup(fs, dir, args)
-	if !ok {
-		return code
-	}
-	return d.updater().Lock(update.LockOpts{Repo: repo, Inputs: inputs, Hosts: hosts,
-		NoBuild: *noBuild, Yes: *yes, Report: *reportFile})
-}
-
-func runPkg(args []string, d Deps) int {
-	fs, dir := d.flags("pkg")
-	noBuild := fs.Bool("no-build", false, "do not build the package after updating")
+	fs.Var(&hosts, "H", "host to build for inputs (repeatable; default: all nixosConfigurations)")
+	noBuild := fs.Bool("no-build", false, "do not build: only update and show the changes")
 	yes := fs.Bool("y", false, "apply without asking (CI)")
 	reportFile := fs.String("report", "", "append a Markdown report to this file")
 	names, repo, code, ok := d.setup(fs, dir, args)
 	if !ok {
 		return code
 	}
-	return d.updater().Pkg(update.PkgOpts{Repo: repo, Names: names,
+	sources, err := parseSources(*source, []string{"input", "package"})
+	if err != nil {
+		return d.fail(err)
+	}
+	return d.updater().Update(update.Opts{Repo: repo, Names: names, Sources: sources, Hosts: hosts,
 		NoBuild: *noBuild, Yes: *yes, Report: *reportFile})
 }
 

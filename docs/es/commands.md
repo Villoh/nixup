@@ -12,8 +12,7 @@ lang: es
 
 ```text
 nixup [check] [flags]
-nixup lock [input...] [flags]
-nixup pkg [package...] [flags]
+nixup update [name...] [flags]
 nixup list [flags]
 nixup search <name> [flags]
 nixup version
@@ -22,7 +21,7 @@ nixup help
 
 Sin comando, nixup ejecuta `check`, así que `nixup`, `nixup --review` y `nixup check --review` hacen lo mismo.
 
-Los flags pueden ir antes, entre o después de los nombres: `nixup lock nixpkgs -y home-manager` actualiza dos inputs sin preguntar. Los flags admiten uno o dos guiones (`-y`, `--review`, `--source=input`).
+Los flags pueden ir antes, entre o después de los nombres: `nixup update nixpkgs -y home-manager` actualiza dos inputs sin preguntar. Los flags admiten uno o dos guiones (`-y`, `--review`, `--source=input`).
 
 Todos los comandos que trabajan sobre un flake aceptan `-C <dir>`. En [Configuración](configuration.md) se explica cómo se encuentra el flake si no pasas `-C`.
 
@@ -69,7 +68,7 @@ La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS`
     "current": "14.0.0",
     "latest": "15.2.0",
     "status": "outdated",
-    "note": "nixup pkg ripgrep",
+    "note": "nixup update ripgrep",
     "warning": "MAJOR version jump: read the changelog, expect breaking changes"
   }
 ]
@@ -85,67 +84,46 @@ Códigos de salida:
 | 1 | Al menos una entrada está desactualizada. |
 | 2 | Al menos una comprobación ha fallado, o la línea de comandos o la ubicación del flake estaban mal. Un fallo pesa más que las entradas desactualizadas. |
 
-## lock
+## update
 
-Actualiza `flake.lock` en una copia temporal, te enseña qué se ha movido, hace allí el build de los hosts y escribe el nuevo lock en tu repositorio cuando confirmas.
+Revisa, hace el build y aplica las actualizaciones: primero los inputs del flake (`flake.lock`) y después los paquetes que tu flake define en su propia salida `packages.<system>`.
 
 ```bash
-nixup lock
-nixup lock nixpkgs home-manager
-nixup lock -H desktop -H laptop
-nixup lock --no-build
-nixup lock -y --no-build --report report.md
+nixup update
+nixup update nixpkgs home-manager
+nixup update ripgrep --no-build
+nixup update --source input -H desktop -H laptop
+nixup update --source package -y --report report.md
 ```
 
-Los nombres son inputs del flake; sin nombres se actualizan todos.
+Sin nombres se actualiza todo: todos los inputs y después todos los paquetes. Cada nombre se busca como input directo de `flake.lock` y como paquete del flake. Los inputs que nombras van al paso de inputs y los paquetes, al de paquetes; un paso sin nombres de su tipo no se ejecuta, así que `nixup update ripgrep` no toca `flake.lock`. Los inputs van siempre primero, para que el build de los paquetes se haga con el lock nuevo.
+
+Un nombre que no es ni input ni paquete (`no input or package called <name>`), o que es las dos cosas (`<name> is both an input and a package: pick one with --source input or --source package`), es un error, y no se ejecuta nada. También lo es un nombre que `--source` deja fuera: `<name> is an input, not a package (drop --source package)`, o `no input called <name>` con `--source input`, donde los paquetes ni se evalúan.
 
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `-H <host>` | Host del que hacer el build. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
-| `--no-build` | Actualiza y enseña los cambios, pero no hace el build. |
-| `-y` | Escribe el nuevo lock sin preguntar. Necesario en ejecuciones desatendidas. |
-| `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds). Si no existe, lo crea. |
+| `--source <lista>` | Limita la ejecución a un paso: `input` o `package` (también en plural). Por defecto, los dos. Cualquier otro valor es un error. |
+| `-H <host>` | Host del que hacer el build en el paso de inputs. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
+| `--no-build` | Actualiza y enseña los cambios, pero no hace el build: ni `nh os build` para los inputs ni `nix build` para los paquetes. |
+| `-y` | Escribe el nuevo lock y actualiza los paquetes sin preguntar. Necesario en ejecuciones desatendidas. |
+| `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado). Si no existe, lo crea. |
 
-Los pasos, en orden:
+### Inputs
 
-1. Si `flake.lock` tiene cambios sin commitear, no arranca.
+El paso de inputs, en orden:
+
+1. Si `flake.lock` tiene cambios sin commitear, no arranca. El paso de paquetes se ejecuta igualmente.
 2. Copia el árbol de trabajo a un directorio temporal y ejecuta allí `nix flake update --flake <copia> [input...]`.
 3. Si no ha cambiado nada, imprime `flake.lock is already up to date.` y para.
 4. Para cada input directo que se ha movido, imprime el commit antiguo y el nuevo y los commits de upstream. Los inputs que no son directos se cuentan en una línea.
-5. Salvo con `--no-build`, ejecuta `nh os build <copia> -H <host>` para cada host. El primer fallo para la ejecución y el repositorio se queda como estaba.
+5. Salvo con `--no-build`, ejecuta `nh os build <copia> -H <host>` para cada host. El primer fallo para el paso y el repositorio se queda como estaba.
 6. Si has pasado `--report`, añade el informe.
 7. Pregunta `Write this flake.lock to the repo? [y/N]`, salvo con `-y`. Después copia el nuevo `flake.lock` al repositorio.
 
-Códigos de salida:
+### Paquetes
 
-| Código | Significado |
-|---|---|
-| 0 | Se ha escrito el lock, has contestado que no o no había nada que actualizar. |
-| 1 | `flake.lock` tiene cambios sin commitear. Haz commit o stash y vuelve a ejecutarlo. |
-| 2 | Algo ha fallado: `nix flake update`, el listado de hosts, un build o la escritura del archivo. |
-
-## pkg
-
-Actualiza los paquetes que tu flake define en su propia salida `packages.<system>`, de uno en uno, después de enseñarte qué ha cambiado upstream.
-
-```bash
-nixup pkg
-nixup pkg ripgrep
-nixup pkg ripgrep --no-build
-nixup pkg -y --report report.md
-```
-
-Los nombres son nombres de atributo de los paquetes; sin nombres se miran todos. Un nombre que no existe es un error.
-
-| Flag | Descripción |
-|---|---|
-| `-C <dir>` | Directorio del flake. |
-| `--no-build` | No ejecuta `nix build` después de `nix-update`. |
-| `-y` | Actualiza sin preguntar. Necesario en ejecuciones desatendidas. |
-| `--report <archivo>` | Añade al final de este archivo un informe en Markdown por cada paquete actualizado. Si no existe, lo crea. |
-
-Para cada paquete desactualizado, nixup:
+El paso de paquetes los recorre de uno en uno. Para cada paquete desactualizado, nixup:
 
 1. Imprime la versión actual y la nueva, el aviso de salto mayor si lo hay y la revisión de upstream.
 2. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
@@ -154,15 +132,15 @@ Para cada paquete desactualizado, nixup:
 5. Salvo con `--no-build`, ejecuta `nix build --no-link .#<name>`.
 6. Si falla el paso 4 o el 5, restaura `<dir del paquete>` con `git checkout`. Si no, imprime `git diff -- <dir del paquete>`.
 
-Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y todo está al día, `pkg` no imprime nada.
+Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y ninguno está desactualizado, el paso imprime `Every package is up to date.`
 
-Códigos de salida. Con varios paquetes, gana el código más alto:
+Códigos de salida. Gana el peor código de los dos pasos y de todos los paquetes:
 
 | Código | Significado |
 |---|---|
-| 0 | Todos los paquetes se han actualizado, saltado o ya estaban al día. |
-| 1 | El directorio de algún paquete tenía cambios sin commitear. |
-| 2 | Ha fallado una comprobación, un nombre no existe, o ha fallado `nix-update` o el build. |
+| 0 | Se ha actualizado todo, has contestado que no o no había nada que actualizar. |
+| 1 | Se ha rechazado algo por cambios sin commitear: `flake.lock` o el directorio de un paquete. Haz commit o stash y vuelve a ejecutarlo. |
+| 2 | Algo ha fallado: un nombre o `--source` estaban mal, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update` o la escritura del archivo. |
 
 ## list
 

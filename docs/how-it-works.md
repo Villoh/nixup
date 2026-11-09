@@ -24,7 +24,7 @@ nixup reads `flake.lock` and looks at the direct inputs of your flake whose orig
 nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each package's `version`, `src.urls`, `meta.homepage` and `passthru.updateScript`.
 
 - The upstream repository is the first `github.com/<owner>/<repo>` found in the source URLs, then in the homepage. Without one, the package is reported as `info` with `no GitHub upstream: check by hand`.
-- Without `passthru.updateScript` the package is reported as `info` with `no passthru.updateScript`, because `nixup pkg` could not update it.
+- Without `passthru.updateScript` the package is reported as `info` with `no passthru.updateScript`, because `nixup update` could not update it.
 - If the update script passes `--use-github-releases`, nixup compares against published GitHub releases, ignoring drafts. Otherwise it compares against tags. The aim is to pick the same version `nix-update` would.
 - If the update script passes `--version-regex`, nixup reads versions the same way: only tags the regex matches from their start count, and the version is its non-empty groups joined with `.`. That is how a repository with several tag series (`desktop-v0.6.1` next to `desktop-minimal-v0.6.1`) is followed. Without it, only tags that start with a digit or `v` plus a digit count.
 - Prereleases count only when the update script passes `--version=unstable` or the current version is already a prerelease.
@@ -38,7 +38,7 @@ If `nix` is installed, nixup reads `nix profile list --json`. For each entry who
 
 ### flatpak
 
-If `flatpak` is installed, nixup runs `flatpak remote-ls --updates` and lists each application or runtime once, with the installed version (from `flatpak list`) and the new one. Runtimes have no version, so their branch is shown; an update that keeps the same version shows as `new build`. It only reports; `flatpak update` is up to you.
+If `flatpak` is installed, nixup runs `flatpak remote-ls --updates` and lists each application or runtime once, with the installed version (from `flatpak list`) and the new one. Runtimes have no version, so their branch is shown as the current one. `LATEST` is the new version; it says `new build` when the same version is rebuilt, and for every runtime update, since a runtime has only a branch. It says `unknown` when the app's remote does not publish versions, as with a remote added from a `.flatpakref` file (for example `hylki-origin`). It only reports; `flatpak update` is up to you.
 
 ## Versions
 
@@ -48,30 +48,34 @@ A jump gets a warning when the first number changes (`1.x` to `2.x`), or when th
 
 ## The upstream review
 
-With `check --review`, and always in `lock` and `pkg`, nixup builds a review for each pending update:
+With `check --review`, and always in `nixup update`, nixup builds a review for each pending update:
 
 - `source`: the GitHub repository.
 - `changes`: the number of commits between the two versions, from the GitHub compare API, and a compare link.
 - Up to eight commit subjects, newest first.
 - For packages, and for pinned inputs in `check --review`, the release notes published between the two versions. Drafts are skipped. Prereleases are skipped and counted. The terminal shows the first lines of up to three releases; the compare link has the rest.
 
-Branch inputs, and every input in `lock`, get commits only, without release notes. If the GitHub API fails, the review says `review unavailable` with the reason, and the update can still go ahead.
+Branch inputs, and every input in `nixup update`, get commits only, without release notes. If the GitHub API fails, the review says `review unavailable` with the reason, and the update can still go ahead.
 
-## lock, step by step
+## update, step by step
+
+`nixup update` runs the input step first and the package step after it, so packages are built against the new lock. With names, each step gets only the names of its kind and a step with none is skipped; with `--source`, only that step runs. The package step runs even when the input step was refused, failed or you answered no, and then packages are built against the lock you already had. The exit code is the higher of the two.
+
+### The input step
 
 1. If `git diff --quiet -- flake.lock` reports changes, stop with exit code 1.
 2. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
 3. Run `nix flake update --flake <copy>`, with the input names you gave.
 4. Compare the old and new lock. For each direct input whose commit moved, print the upstream commits. Count the other nodes that moved.
 5. Unless `--no-build`, take the hosts from `-H`, or list them with `nix eval <copy>#nixosConfigurations --apply builtins.attrNames`.
-6. Unless `--no-build`, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the run with exit code 2 and your `flake.lock` stays as it was.
+6. Unless `--no-build`, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the input step with exit code 2 and your `flake.lock` stays as it was.
 7. Append the Markdown report if `--report` was given. This happens before the question, so the report is written even if you answer no.
 8. Ask, unless `-y`. On yes, write the new `flake.lock` into your repository.
 9. Delete the scratch copy.
 
 Because the copy includes uncommitted and untracked files, the build tests your working tree as it is now, not the last commit.
 
-## pkg, step by step
+### The package step
 
 For each package, in alphabetical order, or in the order you named them. `<pkg dir>` is the directory of the file that defines the package, read from its `meta.position` like `nix-update` does (`packages/prebuilt/kopuz` for a package in `packages/prebuilt/kopuz/package.nix`); for a package defined in a file at the top of the flake, such as `flake.nix`, it is that file alone, never the whole repository. If the file is not part of this flake, the package is refused before anything runs.
 
@@ -92,24 +96,24 @@ This is the complete list. Everything goes through one package (`internal/run`),
 |---|---|
 | `git ls-remote --tags --refs https://github.com/<repo>` | inputs, packages, reviews |
 | `git ls-remote https://github.com/<repo> <ref>` | branch inputs |
-| `git ls-files -z --cached --others --exclude-standard` | lock, scratch copy |
-| `git diff --quiet -- <path>` | lock, pkg |
-| `git checkout -- <pkg dir>` | pkg, after a failure |
-| `git diff -- <pkg dir>` | pkg, after a success |
-| `nix eval --json .#packages.<system> --apply ...` | packages, pkg |
+| `git ls-files -z --cached --others --exclude-standard` | update (inputs), scratch copy |
+| `git diff --quiet -- <path>` | update (inputs and packages) |
+| `git checkout -- <pkg dir>` | update (packages), after a failure |
+| `git diff -- <pkg dir>` | update (packages), after a success |
+| `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | lock |
-| `nix flake update --flake <copy> [input...]` | lock |
-| `nh os build <copy> -H <host> -o <copy>/result` | lock |
-| `nix-update --flake <name> --version=<v> [args...]` | pkg |
-| `nix build --no-link .#<name>` | pkg |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) |
+| `nix flake update --flake <copy> [input...]` | update (inputs) |
+| `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
+| `nix-update --flake <name> --version=<v> [args...]` | update (packages) |
+| `nix build --no-link .#<name>` | update (packages) |
 | `nix profile list --json` | profile |
 | `nix eval --json --impure --expr <getFlake of the flake>` | search |
 | `nix-store --query --requisites /run/current-system` | search (what is in the system) |
 | `flatpak list --app --columns=...` | list, search |
 | `flatpak search --columns=... <name>` | search |
-| `flatpak remote-ls --updates --columns=application,version,branch` | flatpak |
-| `flatpak list --columns=application,version,branch` | flatpak (installed versions) |
+| `flatpak remote-ls --updates --columns=ref,version` | flatpak |
+| `flatpak list --columns=ref,version` | flatpak (installed versions) |
 | `gh auth token` | GitHub token, if no variable is set |
 
 nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-update` reach the network on their own.
@@ -118,8 +122,8 @@ nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-upd
 
 Written:
 
-- By `lock`: your `flake.lock`, after a yes or `-y`. A temporary scratch copy, deleted at the end.
-- By `pkg`: the files `nix-update` changes, usually under `<pkg dir>`. They are restored if the update or build fails.
+- By the input step of `update`: your `flake.lock`, after a yes or `-y`. A temporary scratch copy, deleted at the end.
+- By the package step of `update`: the files `nix-update` changes, usually under `<pkg dir>`. They are restored if the update or build fails.
 - By `--report <file>`: Markdown appended to that file.
 - Builds land in the Nix store, as with any build.
 

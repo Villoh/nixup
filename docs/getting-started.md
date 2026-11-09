@@ -12,8 +12,8 @@ lang: en
 
 - A NixOS configuration in a flake, inside a git repository, with `flake.nix` and `flake.lock` committed.
 - `git` and `nix` on `PATH`.
-- `nh` if you want `nixup lock` to build your hosts. With `--no-build` it is not needed.
-- `nix-update` for `nixup pkg`. Without it, nixup runs `nix run nixpkgs#nix-update --` instead.
+- `nh` if you want `nixup update` to build your hosts. With `--no-build` it is not needed.
+- `nix-update` for updating your own packages with `nixup update`. Without it, nixup runs `nix run nixpkgs#nix-update --` instead.
 - `flatpak` is optional. Without it the `flatpak` section is skipped.
 - Network access to github.com and api.github.com.
 
@@ -80,10 +80,10 @@ You do not have to be inside the flake. `nixup -C ~/nixos-config` works from any
 
 ```text
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
 input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
@@ -111,18 +111,19 @@ After the table, for every update, this adds the source repository, the number o
 ## Apply updates
 
 ```bash
-nixup lock                 # all inputs
-nixup lock home-manager    # one input
-nixup pkg ripgrep          # one of your own packages
+nixup update                  # all inputs, then all your own packages
+nixup update --source input   # only the inputs
+nixup update home-manager     # one input
+nixup update ripgrep          # one of your own packages
 ```
 
-`lock` shows the upstream commits for every input that moved, builds each host from a scratch copy and asks before it writes `flake.lock`. `pkg` asks before each package. Neither commits nor activates anything. When `lock` finishes it prints the next steps:
+For the inputs, `update` shows the upstream commits for every input that moved, builds each host from a scratch copy and asks before it writes `flake.lock`. Then it asks before each of your own packages. It neither commits nor activates anything. When `flake.lock` has been written it prints the next steps:
 
 ```text
 flake.lock updated (not committed, nothing activated).
 Next: git diff flake.lock && nix flake check && nh os test . -H <host>
 ```
 
-Pinned tags (`lanzaboote` above) are not moved by `nix flake update`. Change the tag in `flake.nix` yourself, then run `nixup lock lanzaboote`.
+Pinned tags (`lanzaboote` above) are not moved by `nix flake update`. Change the tag in `flake.nix` yourself, then run `nixup update lanzaboote`.
 
 Next: [Commands](commands.md) for every flag, or [How it works](how-it-works.md) for what happens underneath.

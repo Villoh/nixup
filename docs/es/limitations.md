@@ -18,18 +18,18 @@ lang: es
 
 - La sección `packages` lee la salida `packages.<system>` del propio flake, para el sistema en el que se ejecuta nixup. Un `fetchurl` dentro de un módulo, un `rev` fijado en un overlay o un paquete definido solo para otro sistema son invisibles. Mételo en la salida `packages` si quieres que se compruebe.
 - Un paquete necesita `passthru.updateScript` para que se compruebe. Si no lo tiene, nixup lo marca como `info` con `no passthru.updateScript`.
-- `nixup pkg` protege y restaura el directorio del archivo que define cada paquete, sacado de su `meta.position`. Un paquete sin `meta.position`, o definido fuera de este flake, se rechaza.
-- Los inputs transitivos no se comprueban. `lock` los actualiza junto con todo lo demás y solo dice cuántos se han movido.
+- `nixup update` protege y restaura el directorio del archivo que define cada paquete, sacado de su `meta.position`. Un paquete sin `meta.position`, o definido fuera de este flake, se rechaza.
+- Los inputs transitivos no se comprueban. `update` los actualiza junto con todo lo demás y solo dice cuántos se han movido.
 
-## lock solo hace el build de hosts NixOS
+## update solo hace el build de hosts NixOS
 
-`lock` hace el build de cada entrada de `nixosConfigurations` con `nh os build`. Home Manager, nix-darwin y otras salidas no se construyen. En un flake sin `nixosConfigurations`, usa `lock --no-build`; si no, el listado de hosts falla con código de salida 2.
+El paso de inputs de `update` hace el build de cada entrada de `nixosConfigurations` con `nh os build`. Home Manager, nix-darwin y otras salidas no se construyen. En un flake sin `nixosConfigurations`, usa `update --source input --no-build` (y `update --source package` para los paquetes, que sí se construyen); si no, el listado de hosts falla con código de salida 2.
 
 ## Algunas secciones solo informan
 
 - `flatpak`: nixup lista las actualizaciones pendientes. El `flatpak update` lo ejecutas tú.
 - `profile`: nixup compara la revisión de nixpkgs de las entradas de `nix profile` con el input de tu flake llamado `nixpkgs`. El `nix profile upgrade` lo ejecutas tú.
-- Inputs fijados a un tag: `nix flake update` no mueve un tag, así que `lock` tampoco. Cambia el tag en `flake.nix`.
+- Inputs fijados a un tag: `nix flake update` no mueve un tag, así que `update` tampoco. Cambia el tag en `flake.nix`.
 
 ## Heurísticas de versiones
 

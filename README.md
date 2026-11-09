@@ -12,10 +12,10 @@ nixup checks a flake-based NixOS configuration for updates and applies them only
 ```text
 $ nixup check --source input,package
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
 input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
@@ -46,9 +46,10 @@ Or add it to your flake and put `inputs.nixup.packages.${system}.default` in `en
 ```bash
 nixup                    # same as `nixup check`: what is outdated, read-only
 nixup check --review     # plus upstream commits and release notes
-nixup lock               # update flake.lock in a scratch copy, build, ask, write
-nixup lock nixpkgs       # only that input
-nixup pkg                # update your own packages one by one, after reviewing each
+nixup update             # inputs: update flake.lock in a scratch copy, build, ask, write;
+                         # then your own packages one by one, after reviewing each
+nixup update nixpkgs     # only that input
+nixup update ripgrep     # only that package
 nixup list               # everything it watches, with current versions, offline
 nixup search ripgrep     # in your nixpkgs, your packages, your inputs and Flatpak
 ```
@@ -58,9 +59,9 @@ It works on the flake you are in; anywhere else it reads `NIXUP_FLAKE`, `NH_OS_F
 ## How it stays safe
 
 - `check` only reads. It writes nothing to your repository.
-- `lock` runs `nix flake update` and the host builds in a copy of your working tree. Your `flake.lock` changes only after the build passes and you answer yes.
-- `pkg` runs `nix-update` pinned to the version you just reviewed, then builds the package. If either step fails, the package's directory goes back to its committed state.
-- Both refuse to touch files that have uncommitted changes.
+- `update` runs `nix flake update` and the host builds in a copy of your working tree. Your `flake.lock` changes only after the build passes and you answer yes.
+- For your own packages, `update` runs `nix-update` pinned to the version you just reviewed, then builds the package. If either step fails, the package's directory goes back to its committed state.
+- `update` refuses to touch files that have uncommitted changes.
 - Without a terminal every question is answered no, so unattended runs must pass `-y`.
 - nixup never commits and never activates a generation. Testing and switching stay with you.
 

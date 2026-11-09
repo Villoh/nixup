@@ -12,10 +12,10 @@ nixup busca actualizaciones para una configuración de NixOS basada en flakes y 
 ```text
 $ nixup check --source input,package
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup lock home-manager
+input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
 input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup lock nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup pkg ripgrep
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
+package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
@@ -46,9 +46,10 @@ O añádelo a tu flake y mete `inputs.nixup.packages.${system}.default` en `envi
 ```bash
 nixup                    # igual que `nixup check`: qué está desactualizado, solo lectura
 nixup check --review     # además, commits y release notes de upstream
-nixup lock               # actualiza flake.lock en una copia temporal, hace el build, pregunta y escribe
-nixup lock nixpkgs       # solo ese input
-nixup pkg                # actualiza tus propios paquetes uno a uno, tras revisar cada uno
+nixup update             # inputs: actualiza flake.lock en una copia temporal, hace el build, pregunta y escribe;
+                         # después tus propios paquetes uno a uno, tras revisar cada uno
+nixup update nixpkgs     # solo ese input
+nixup update ripgrep     # solo ese paquete
 nixup list               # todo lo que vigila, con las versiones actuales, sin red
 nixup search ripgrep     # en tu nixpkgs, tus paquetes, tus inputs y Flatpak
 ```
@@ -58,9 +59,9 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 ## Por qué es seguro
 
 - `check` solo lee. No escribe nada en tu repositorio.
-- `lock` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
-- `pkg` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, el directorio del paquete vuelve a su estado del último commit.
-- Ninguno de los dos toca archivos con cambios sin commitear.
+- `update` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
+- Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, el directorio del paquete vuelve a su estado del último commit.
+- `update` no toca archivos con cambios sin commitear.
 - Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 - nixup nunca hace commit ni activa una generación. Probar y hacer el switch sigue siendo cosa tuya.
 

@@ -62,7 +62,7 @@ La salida solo lleva color cuando stdout es una terminal. Cualquier valor no vac
 
 ## Preguntas
 
-`lock` y `pkg` preguntan antes de escribir. Las preguntas solo se contestan si stdin es una terminal, y solo `y` (en mayúscula o minúscula) cuenta como sí. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
+`update` pregunta antes de escribir. Las preguntas solo se contestan si stdin es una terminal, y solo `y` (en mayúscula o minúscula) cuenta como sí. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 
 ## Token de GitHub
 
@@ -76,7 +76,7 @@ Sin token, las llamadas a la API van sin autenticar y GitHub solo permite 60 por
 
 ## Scripts de actualización de los paquetes
 
-`nixup check` y `nixup pkg` solo tienen en cuenta los paquetes que definen `passthru.updateScript`. nixup lee esa línea de comandos y usa algunos de sus argumentos:
+`nixup check` y `nixup update` solo tienen en cuenta los paquetes que definen `passthru.updateScript`. nixup lee esa línea de comandos y usa algunos de sus argumentos:
 
 - `--use-github-releases`: compara con las releases publicadas en GitHub en vez de con todos los tags.
 - `--version=unstable`: permite que la versión más nueva sea una prerelease. Cualquier otro `--version=...` se ignora, porque nixup siempre pasa la versión que has revisado.
@@ -97,9 +97,9 @@ Por ejemplo:
 | Herramienta | Para qué se usa | Si falta |
 |---|---|---|
 | `git` | `ls-remote` para tags y ramas, la copia temporal, comprobar cambios sin commitear, restaurar un paquete | Fallan casi todas las comprobaciones |
-| `nix` | `nix eval` de paquetes y hosts, `nix flake update`, `nix build`, `nix profile list` | La sección `profile` se salta; `packages`, `lock` y `pkg` fallan |
-| `nh` | `nh os build` en `nixup lock` | `lock` falla salvo con `--no-build` |
-| `nix-update` | `nixup pkg` | nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar |
+| `nix` | `nix eval` de paquetes y hosts, `nix flake update`, `nix build`, `nix profile list` | La sección `profile` se salta; `packages` y `update` fallan |
+| `nh` | `nh os build` en el paso de inputs de `nixup update` | Ese paso falla salvo con `--no-build` |
+| `nix-update` | El paso de paquetes de `nixup update` | nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar |
 | `flatpak` | La sección `flatpak` | La sección se salta |
 | `gh` | Solo para leer un token con `gh auth token` | Las llamadas a la API van sin token |
 
