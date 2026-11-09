@@ -9,54 +9,50 @@ A short reference for anyone making a README, a slide, a badge or CLI text for n
 - Pronounced "nix up" (/nɪks ʌp/), like "fix up".
 - "nix" is the ecosystem it works in; "up" is what it does: bring things up to date.
 
-## Concept: the held update
+## Concept: the lambda that goes up
 
-The mark is an upward chevron (an update) stopped below a short bar (a gate). The
-update is ready, but it waits until you have looked at it and said yes. That is the
-whole product: nixup shows what changed upstream, builds in a scratch copy and asks
-before it writes anything.
+The mark is a lambda (λ) drawn so that its lower half is an upward arrow (Λ). The tail
+and the arrow are separate pieces with a small gap between them: read as a whole it is
+the Nix lambda, read in parts it is "Nix" and "up". That is the name.
 
-The bar is also a terminal cursor, square-ended like a block cursor, waiting for your
-input at a `[y/N]` prompt. It is amber because amber is the colour nixup uses for
-"look at this": major version jumps and pending questions.
+Geometry, on a 64-unit grid (the SVGs are generated from these numbers):
 
-Why not the other motifs: an arrow alone says "update" but not "careful"; a layered
-copy needs too much detail to survive 16 px; a bare prompt (`>_`) says "terminal tool"
-and nothing about this one. The held chevron carries both "update" and "review first"
-in two shapes.
+- Both legs of the arrow and the tail run at 60° from the horizontal.
+- Every end is cut horizontally; every corner is sharp. No round caps, no strokes: the
+  shapes are closed polygons.
+- Stroke width 9 units (measured horizontally), gap 3 units.
+- The tail is half the height of the arrow (12 and 24 units). Its right edge is in line
+  with the arrow's right outer edge, so the lambda reads as one letter.
+- The gap between tail and arrow runs parallel to the arrow's upper-left edge.
 
-The shape is original and has nothing to do with the NixOS snowflake. The only nod to
-the Nix ecosystem is the blue. Do not add snowflakes, lambdas or hexagons to it.
+The lambda is drawn from scratch. It is not the NixOS snowflake nor any part of it, and
+it must not be combined with it: the NixOS logo is a registered trademark and its guide
+forbids altering or recombining its lambdas.
 
 ## Colour
 
-One primary, one accent, GitHub-compatible neutrals. Contrast ratios are WCAG 2.x.
+One primary, GitHub-compatible neutrals, no accent colour. Contrast ratios are WCAG 2.x.
 
 | Name | Hex | Role | Contrast |
 |---|---|---|---|
-| Gate blue | `#4A6FC4` | Primary. Logo tile; "up" in the light wordmark; links and highlights on light backgrounds | 4.81:1 on `#FFFFFF` (AA text). 3.93:1 on `#0D1117` (graphics and large text only) |
-| Gate blue, light | `#7EA1E8` | Primary on dark backgrounds: "up" in the dark wordmark, links, highlights | 7.34:1 on `#0D1117` (AA, nearly AAA) |
-| Review amber | `#E3A62F` | Accent. The gate bar; warnings and prompts on dark backgrounds | 8.80:1 on `#0D1117`. 2.15:1 on white: **never use it for text on light** |
-| Review amber, dark | `#9A6700` | Accent as text on light backgrounds | 4.87:1 on `#FFFFFF` (AA) |
-| Ink | `#1F2328` | Text on light | 15.80:1 on `#FFFFFF` |
+| Blue | `#4A6FC4` | Primary. Logo tile; the tail on light backgrounds; "up" in the light wordmark; links | 4.81:1 on `#FFFFFF` (AA text). 3.93:1 on `#0D1117` (graphics and large text only) |
+| Blue, light | `#7EA1E8` | Primary on dark backgrounds: the tail, "up" in the dark wordmark, links | 7.34:1 on `#0D1117` (AA, nearly AAA) |
+| Ink | `#1F2328` | Text on light; the arrow on light backgrounds and on the tile | 15.80:1 on `#FFFFFF` |
 | Ink muted | `#59636E` | Secondary text on light (taglines, captions) | 6.11:1 on `#FFFFFF` |
-| Snow | `#E6EDF3` | Text on dark | 16.02:1 on `#0D1117` |
+| Snow | `#E6EDF3` | Text on dark; the arrow on dark backgrounds | 16.02:1 on `#0D1117` |
 | Snow muted | `#9198A1` | Secondary text on dark | 6.50:1 on `#0D1117` |
 | Night | `#0D1117` | Dark background (same as GitHub dark) | n/a |
 | Paper | `#FFFFFF` | Light background | n/a |
 
-Inside the mark: the white chevron on Gate blue is 4.81:1. The amber bar on blue is only
-2.24:1, so the mark never relies on that pair alone; the shape stays readable in one
-colour (see `logo-mono.svg`).
-
-The blue tile is 4.81:1 against white and 3.93:1 against Night, which is why the same
-colour logo works on both GitHub themes without a variant.
+Inside the tile: the white tail on Blue is 4.81:1 and the Ink arrow on Blue is 3.28:1,
+both above the 3:1 WCAG minimum for graphics. The mark also reads in one colour, because
+the gap carries the shape (see `logo-mono.svg`).
 
 ## Typography
 
 | Use | Family | Weight | Notes |
 |---|---|---|---|
-| Wordmark | Inter | Bold 700 | Outlined in the SVGs, letter-spacing -2.5 %. "nix" in Ink or Snow, "up" in Gate blue or Gate blue light |
+| Wordmark | Inter | Bold 700 | Outlined in the SVGs, letter-spacing -2.5 %. "nix" in Ink or Snow, "up" in Blue or Blue light |
 | Taglines, headings, prose | Inter | Regular 400 / SemiBold 600 | |
 | Commands, CLI output, file names | Fira Code | Regular 400 to Medium 500 | Used for the steps line in `social.svg` |
 
@@ -69,34 +65,38 @@ Google Sans Flex is not used in brand assets.
 
 ## Logo usage
 
-**Parts.** The mark (`logo.svg`) and the lockup: mark + wordmark + tagline (the headers).
-The wordmark is never used without the mark, except in running text where it is just
-the name.
+**Parts.** The mark comes in two versions, with and without the tile, and the lockup is
+mark + wordmark + tagline (the headers). The wordmark is never used without the mark,
+except in running text where it is just the name.
 
-**Clear space.** Around the mark: at least 1/4 of the mark width (16 units on its 64-unit
-grid). In the lockup, the gap between mark and wordmark is 0.3 × the mark height.
+**Clear space.** Around the mark: at least 1/4 of its width. In the lockup, the gap
+between mark and wordmark is about 0.3 × the mark height.
 
 **Minimum size.** Mark: 16 px (favicon); prefer 24 px or more in UI. Lockup: 160 px wide;
 below that, use the mark alone.
 
-**Colour versions.**
-- `logo.svg`: full colour. Works on white, Night, and mid-grey backgrounds.
-- `logo-mono.svg`: one colour, `fill="currentColor"`, chevron and bar cut out of the tile.
-  Inline it (or use it where the host sets `color`) for favicons, badges and docs. Loaded
-  through `<img>` it renders black, which is invisible on dark backgrounds: there, use
-  `logo.svg`.
+**Versions.**
+- `logo.svg`: on the Blue tile (white tail, Ink arrow). App icon, avatar, favicon,
+  social image. Works on light and dark backgrounds.
+- `mark-light.svg` / `mark-dark.svg`: without the tile, for light (Blue tail, Ink arrow)
+  and dark (Blue light tail, Snow arrow) backgrounds. Used in the headers. Pair them with
+  `<picture>` and `prefers-color-scheme`.
+- `logo-mono.svg`: one colour, `fill="currentColor"`, no tile. Inline it (or use it where
+  the host sets `color`) for badges, docs and print. Loaded through `<img>` it renders
+  black, which is invisible on dark backgrounds.
 
 **Do**
 - Use the files as they are; scale them proportionally.
-- Use `header-light.svg` / `header-dark.svg` together through `<picture>` and
-  `prefers-color-scheme`.
-- Keep the gate bar above the chevron, with the gap.
+- Keep the gap between the tail and the arrow.
+- Use the tile version where the mark stands alone; the bare version next to the wordmark.
 
 **Don't**
-- Remove the gate bar or close the gap; the mark then becomes a generic "up" arrow.
-- Swap the colours (amber tile, blue bar), add gradients, shadows, outlines or glows.
-- Rotate the chevron, add a shaft to it, or animate it "launching".
-- Put the colour logo on a mid-blue or amber background where the tile disappears.
+- Close the gap or give the two pieces round ends; it then becomes a plain λ or a
+  rounded doodle.
+- Recolour the pieces (the arrow is always Ink or Snow, the tail always Blue or white),
+  add gradients, shadows, outlines or glows.
+- Rotate, mirror or stretch the mark, or lengthen the tail.
+- Put the tile on a mid-blue background where it disappears.
 - Rewrite the wordmark in another font, capitalise it, or colour all of it blue.
 - Combine the mark with the NixOS snowflake or present nixup as an official NixOS project.
 
@@ -137,8 +137,10 @@ nixup reads like a careful colleague reporting what they found. Rules:
 
 | File | What | Size (approx.) |
 |---|---|---|
-| `logo.svg` | Mark, full colour, transparent background, 64-unit viewBox | 0.4 KB |
-| `logo-mono.svg` | Mark, one colour (`currentColor`), single path | 0.5 KB |
+| `logo.svg` | Mark on the Blue tile, 64-unit viewBox | 0.4 KB |
+| `mark-light.svg` | Mark without tile, for light backgrounds | 0.3 KB |
+| `mark-dark.svg` | Mark without tile, for dark backgrounds | 0.3 KB |
+| `logo-mono.svg` | Mark without tile, one colour (`currentColor`), single path | 0.3 KB |
 | `header-light.svg` | README banner for light themes, 1280×320, transparent background | 14 KB |
 | `header-dark.svg` | README banner for dark themes, 1280×320, transparent background | 14 KB |
 | `social.svg` | Source of the social preview, 1280×640, Night background | 21 KB |
