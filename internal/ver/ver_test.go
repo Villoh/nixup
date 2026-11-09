@@ -107,7 +107,10 @@ func TestBump(t *testing.T) {
 		{"0.21.0", "0.21.1", Patch, false},
 		{"1.1.0", "1.2.0", Minor, false},
 		{"1.1.12", "1.1.13", Patch, false},
-		{"1.01", "1.02", Minor, false}, // two components: 1.01 is [1 1]
+		{"1.01", "1.02", Minor, false},                // two components: 1.01 is [1 1]
+		{"20261106.1", "20261108.1", Calendar, false}, // date-based: not a major jump
+		{"2026.10.14", "2026.11.2", Calendar, false},
+		{"999.0", "1000.0", Calendar, false}, // crossing into date-like numbers is not semver either
 	}
 	for _, c := range cases {
 		got := Bump(c.from, c.to)

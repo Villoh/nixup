@@ -104,6 +104,7 @@ func HasPrefix(tag, prefix string) bool {
 type Kind string
 
 const (
+	Calendar  Kind = "calendar" // date-based versions (20261106.1, 2026.10.14): no semantic meaning
 	Major     Kind = "major"
 	ZeroMinor Kind = "0.x-minor"
 	Minor     Kind = "minor"
@@ -120,6 +121,8 @@ func Bump(from, to string) Kind {
 		return 0
 	}
 	switch {
+	case at(a, 0) >= 1000 || at(b, 0) >= 1000: // a year or a date, not a major version
+		return Calendar
 	case at(a, 0) != at(b, 0):
 		return Major
 	case at(a, 0) == 0 && at(a, 1) != at(b, 1):

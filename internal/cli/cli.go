@@ -36,7 +36,8 @@ const usage = `nixup — update checker and safe updater for flake-based NixOS
   nixup pkg       update own packages/ one by one after reviewing upstream changes
   nixup version
 
-Common flags: -C <dir> flake directory (default: search upwards from cwd)
+Common flags: -C <dir> flake directory. Without it: $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE,
+              then a search upwards from the current directory.
 Run 'nixup <command> -h' for the flags of each command.`
 
 // Deps are the things commands act through; tests replace them.

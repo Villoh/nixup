@@ -43,6 +43,16 @@ func TestVersionAndHelp(t *testing.T) {
 	}
 }
 
+func TestHelpMentionsHowTheFlakeIsFound(t *testing.T) {
+	f := newFixture(t, nil)
+	f.run("help")
+	for _, want := range []string{"NIXUP_FLAKE", "NH_OS_FLAKE", "NH_FLAKE", "upwards"} {
+		if !strings.Contains(f.out.String(), want) {
+			t.Errorf("help must mention %s: %q", want, f.out)
+		}
+	}
+}
+
 func TestVersionAndHelpFlags(t *testing.T) {
 	for _, flag := range []string{"-version", "--version", "-v"} {
 		f := newFixture(t, nil)

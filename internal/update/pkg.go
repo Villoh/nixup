@@ -98,7 +98,11 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 	diff, _, _ := u.R.Capture(o.Repo, "git", "diff", "--", dir)
 	t.Println(diff)
 	t.Println(t.Paint(p.Name+" updated (not committed).", 32))
-	u.appendReport(o.Report, md+"\nBuild: ok.\n")
+	built := "Build: ok."
+	if o.NoBuild {
+		built = "Build: skipped (--no-build)."
+	}
+	u.appendReport(o.Report, md+"\n"+built+"\n")
 	return exit.OK
 }
 

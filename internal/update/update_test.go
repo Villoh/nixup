@@ -466,3 +466,19 @@ func TestLockCopiesUncommittedWorkIntoTheBuild(t *testing.T) {
 		t.Errorf("the build must see the working tree, got %q", sawFile)
 	}
 }
+
+func TestPkgReportDoesNotClaimABuildThatDidNotHappen(t *testing.T) {
+	for _, c := range []struct {
+		noBuild bool
+		want    string
+		notWant string
+	}{{false, "Build: ok.", "skipped"}, {true, "Build: skipped (--no-build).", "Build: ok."}} {
+		f := pkgFixture(t, "")
+		report := filepath.Join(t.TempDir(), "r.md")
+		f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: c.noBuild, Report: report})
+		b, _ := os.ReadFile(report)
+		if !strings.Contains(string(b), c.want) || strings.Contains(string(b), c.notWant) {
+			t.Errorf("NoBuild=%v: report %q must contain %q and not %q", c.noBuild, b, c.want, c.notWant)
+		}
+	}
+}
