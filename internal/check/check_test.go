@@ -336,3 +336,57 @@ func TestPackageReleasesLookupFailure(t *testing.T) {
 		t.Errorf("%+v", row)
 	}
 }
+
+func TestPackagesPointsAtNixpkgs(t *testing.T) {
+	e := testutil.New(t)
+	e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{
+		"caught-up": {"version":"2.0.0","urls":["https://github.com/o/caught/archive/v2.0.0.tar.gz"],"homepage":"","update":["nix-update"]},
+		"ahead":     {"version":"3.12.0","urls":[],"homepage":"https://ahead.example","update":[]},
+		"hex-bin":   {"version":"3.3.0","urls":["https://github.com/anomalyco/hex/x"],"homepage":"","update":[]},
+		"tool-bin":  {"version":"1.0.0","urls":["https://github.com/o/tool/x"],"homepage":"","update":[]}}`})
+	e.Run.On(run.Rule{Prefix: "nix eval --json --inputs-from . nixpkgs#", Out: `{
+		"caught-up": {"version":"2.1.0","urls":[],"homepage":"https://github.com/o/caught"},
+		"ahead":     {"version":"3.8.0","urls":[],"homepage":"https://ahead.example"},
+		"hex":       {"version":"9.0.0","urls":["https://github.com/sitkevij/hex/x"],"homepage":""},
+		"tool":      {"version":"1.0.0","urls":["https://github.com/o/tool/y"],"homepage":""}}`})
+	e.Tags("o/caught", "v2.0.0") // up to date upstream: the row would be "ok" and hidden
+	repo := repoWithLock(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("e", 40)})
+
+	rows := byName(checker(e).Packages(repo, false))
+	if r := rows["caught-up"]; !strings.Contains(r.Hint, "nixpkgs has caught-up 2.1.0") || r.Status != check.Info {
+		t.Errorf("nixpkgs is newer: hint, shown as info: %+v", r)
+	}
+	if r := rows["tool-bin"]; !strings.Contains(r.Hint, "pkgs.tool could replace") {
+		t.Errorf("same version, found under the name without -bin: %+v", r)
+	}
+	if r := rows["ahead"]; r.Hint != "" {
+		t.Errorf("ours is newer: no hint: %+v", r)
+	}
+	if r := rows["hex-bin"]; r.Hint != "" {
+		t.Errorf("a namesake from another repository is not the same program: %+v", r)
+	}
+	if code := check.ExitCode([]check.Row{rows["caught-up"]}); code != 0 {
+		t.Errorf("a hint never changes the exit code: %d", code)
+	}
+}
+
+func TestPackagesSkipsNixpkgsLookupWithoutTheInput(t *testing.T) {
+	e := testutil.New(t)
+	e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"x":{"version":"1","urls":[],"homepage":"https://x.example","update":[]}}`})
+	repo := repoWithLock(t, map[string]string{"other": "o/other@#" + strings.Repeat("a", 40)})
+	checker(e).Packages(repo, false)
+	if n := e.Run.Count("nix eval --json --inputs-from"); n != 0 {
+		t.Errorf("without a nixpkgs input nix would use the global registry: %d lookups", n)
+	}
+}
+
+func TestPackagesNixpkgsLookupFailureKeepsTheRows(t *testing.T) {
+	e := testutil.New(t)
+	e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"x":{"version":"1","urls":[],"homepage":"","update":[]}}`})
+	e.Run.On(run.Rule{Prefix: "nix eval --json --inputs-from", Fail: errors.New("x"), Err: "error: boom\n"})
+	repo := repoWithLock(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("e", 40)})
+	rows := checker(e).Packages(repo, false)
+	if len(rows) != 1 || rows[0].Status != check.Info || rows[0].Hint != "" {
+		t.Errorf("%+v", rows)
+	}
+}

@@ -3,7 +3,9 @@ package flake
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Villoh/nixup/internal/gh"
@@ -106,4 +108,86 @@ func (p Package) ExtraArgs() (args []string, allowPre bool) {
 		}
 	}
 	return
+}
+
+// nixpkgsQuery evaluates, in the flake's nixpkgs, the attributes it is given. Missing
+// attributes and the ones that fail to evaluate (aliases of removed packages throw) are
+// left out.
+const nixpkgsQuery = `p: builtins.listToAttrs (builtins.filter (x: x.value != null) (map (a: {
+  name = a;
+  value = let
+    v = if p ? ${a} then {
+      version = toString (p.${a}.version or "");
+      urls = map toString (p.${a}.src.urls or []);
+      homepage = toString (p.${a}.meta.homepage or "");
+    } else null;
+    r = builtins.tryEval (builtins.deepSeq v v);
+  in if r.success then r.value else null;
+}) [ %s ]))`
+
+var attrName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_'-]*$`)
+
+// nixpkgsNames are the attributes a package may have in nixpkgs: its own name and, for
+// "foo-bin", also "foo" (the usual name of the build from source).
+func nixpkgsNames(name string) []string {
+	if base, ok := strings.CutSuffix(name, "-bin"); ok && base != "" {
+		return []string{name, base}
+	}
+	return []string{name}
+}
+
+// InNixpkgs looks each package up by name in the nixpkgs revision locked by the flake
+// (`--inputs-from`) and returns, per package name, what exists there, in lookup order.
+// Only call it when the flake has an input called nixpkgs: otherwise nix falls back to
+// the global registry and answers about a nixpkgs the flake does not use.
+func InNixpkgs(r run.Runner, repo string, pkgs []Package) (map[string][]Package, error) {
+	var quoted []string
+	seen := map[string]bool{}
+	for _, p := range pkgs {
+		for _, n := range nixpkgsNames(p.Name) {
+			if attrName.MatchString(n) && !seen[n] {
+				seen[n] = true
+				quoted = append(quoted, strconv.Quote(n))
+			}
+		}
+	}
+	if len(quoted) == 0 {
+		return nil, nil
+	}
+	out, errs, err := r.Capture(repo, "nix", "eval", "--json", "--inputs-from", ".",
+		"nixpkgs#legacyPackages."+System(), "--apply", fmt.Sprintf(nixpkgsQuery, strings.Join(quoted, " ")))
+	if err != nil {
+		return nil, fmt.Errorf("looking packages up in nixpkgs: %s", run.LastLine(errs))
+	}
+	m := map[string]Package{}
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		return nil, fmt.Errorf("looking packages up in nixpkgs: %w", err)
+	}
+	found := map[string][]Package{}
+	for _, p := range pkgs {
+		for _, n := range nixpkgsNames(p.Name) {
+			if q, ok := m[n]; ok {
+				q.Name = n
+				found[p.Name] = append(found[p.Name], q)
+			}
+		}
+	}
+	return found, nil
+}
+
+// SameProject reports whether two packages are positively the same software: they share a
+// GitHub repository (from the sources or the homepage) or the same homepage. Without
+// evidence the answer is no, so a namesake never passes for the real thing.
+func SameProject(a, b Package) bool {
+	if ra, rb := a.Upstream(), b.Upstream(); ra != "" && strings.EqualFold(ra, rb) {
+		return true
+	}
+	ha, hb := site(a.Homepage), site(b.Homepage)
+	return ha != "" && ha == hb
+}
+
+func site(u string) string {
+	u = strings.ToLower(strings.TrimSpace(u))
+	u = strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
+	return strings.TrimSuffix(strings.TrimPrefix(u, "www."), "/")
 }

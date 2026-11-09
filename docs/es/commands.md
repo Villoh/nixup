@@ -73,7 +73,7 @@ La salida de texto marca cada entrada como `UPDATE`, `ok`, `info` o `ERROR`. En 
 ]
 ```
 
-`latest`, `note`, `warning` y `review` no aparecen si están vacíos. Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
+`latest`, `note`, `warning`, `hint` y `review` no aparecen si están vacíos. `hint` indica que el nixpkgs del flake ya tiene el paquete (ver [Cómo funciona](how-it-works.md#packages)). Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
 
 Códigos de salida:
 

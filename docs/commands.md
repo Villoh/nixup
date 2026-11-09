@@ -73,7 +73,7 @@ The text output marks each entry `UPDATE`, `ok`, `info` or `ERROR`. In JSON the 
 ]
 ```
 
-`latest`, `note`, `warning` and `review` are left out when empty. With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
+`latest`, `note`, `warning`, `hint` and `review` are left out when empty. `hint` says that the flake's nixpkgs already has the package (see [How it works](how-it-works.md#packages)). With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
 
 Exit codes:
 

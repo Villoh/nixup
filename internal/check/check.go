@@ -37,6 +37,7 @@ type Row struct {
 	Status  string     `json:"status"`
 	Note    string     `json:"note,omitempty"`
 	Warn    string     `json:"warning,omitempty"`
+	Hint    string     `json:"hint,omitempty"`
 	Review  *gh.Review `json:"review,omitempty"`
 }
 
@@ -155,7 +156,33 @@ func (c *Checker) Packages(repo string, review bool) []Row {
 	if err != nil {
 		return []Row{errRow("packages", "packages", err)}
 	}
-	return par.Map(len(pkgs), workers, func(i int) Row { return c.Package(pkgs[i], review) })
+	rows := par.Map(len(pkgs), workers, func(i int) Row { return c.Package(pkgs[i], review) })
+	var found map[string][]flake.Package
+	if lock, err := flake.ReadLock(filepath.Join(repo, "flake.lock")); err == nil {
+		if _, ok := lock.Input("nixpkgs"); ok {
+			found, _ = flake.InNixpkgs(c.R, repo, pkgs) // ponytail: a failed lookup only loses the hint
+		}
+	}
+	for i, p := range pkgs {
+		rows[i] = nixpkgsHint(rows[i], p, found[p.Name])
+	}
+	return rows
+}
+
+// nixpkgsHint points out a package that the flake's own nixpkgs already has, as the same
+// project, at the same or a newer version: the custom package can probably go.
+func nixpkgsHint(row Row, p flake.Package, candidates []flake.Package) Row {
+	for _, q := range candidates {
+		if q.Version == "" || !flake.SameProject(p, q) || ver.Newer(p.Version, q.Version) {
+			continue
+		}
+		row.Hint = fmt.Sprintf("nixpkgs has %s %s: pkgs.%s could replace this package", q.Name, q.Version, q.Name)
+		if row.Status == OK {
+			row.Status = Info // shown without --all, without changing the exit code
+		}
+		break
+	}
+	return row
 }
 
 // Package compares one package with the newest upstream release.

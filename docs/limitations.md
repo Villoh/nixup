@@ -35,6 +35,7 @@ lang: en
 
 - A `ref` that starts with a digit, `v` plus a digit, or a `word/` prefix followed by those (`v1.2`, `1.2`, `dms/1.2`) is treated as a release tag. Everything else is a branch.
 - Date-based versions such as `20240101.1` get no major-jump warning: a first number of 1000 or more is read as a year or a date, so a real major version that high would be missed too.
+- The nixpkgs hint only finds a package under its own name or, for `foo-bin`, as `foo`. A package called differently in nixpkgs is missed. It also needs proof that both are the same project (repository or homepage), so a namesake is never suggested, but neither is the real thing if its metadata differs.
 - Release notes are read from the 50 most recent GitHub releases, and nixup shows at most three per update.
 
 ## Other limits

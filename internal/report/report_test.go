@@ -101,6 +101,18 @@ func TestTextAlignsColumnsForLongNames(t *testing.T) {
 	}
 }
 
+func TestHintIsShown(t *testing.T) {
+	row := check.Row{Section: "packages", Name: "x", Current: "1", Latest: "2", Status: check.Outdated, Hint: "nixpkgs has x 2: pkgs.x could replace this package"}
+	term, out, _ := testutil.Term("")
+	report.Text(term, []check.Row{row}, false, false)
+	if !strings.Contains(out.String(), "→ nixpkgs has x 2") {
+		t.Errorf("text: %q", out)
+	}
+	if md := report.Markdown([]check.Row{row}); !strings.Contains(md, "> → nixpkgs has x 2") {
+		t.Errorf("markdown: %q", md)
+	}
+}
+
 func TestTextOmitsEmptySections(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{{Section: "inputs", Name: "x", Status: check.OK}}, false, false)

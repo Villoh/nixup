@@ -400,3 +400,63 @@ func TestUsesReleases(t *testing.T) {
 		t.Errorf("args = %v", args)
 	}
 }
+
+func TestInNixpkgs(t *testing.T) {
+	f := &run.Fake{}
+	f.On(run.Rule{Prefix: "nix eval --json --inputs-from . nixpkgs#legacyPackages.", Out: `{
+		"wealthfolio": {"version":"3.8.0","urls":[],"homepage":"https://wealthfolio.app/"},
+		"handy": {"version":"0.9.6","urls":["https://github.com/cjpais/Handy/archive/v0.9.6.tar.gz"],"homepage":"https://handy.computer"}}`})
+	pkgs := []flake.Package{{Name: "wealthfolio"}, {Name: "handy-bin"}, {Name: "bad name"}, {Name: "nothere"}}
+	found, err := flake.InNixpkgs(f, "/repo", pkgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := found["wealthfolio"]; len(w) != 1 || w[0].Name != "wealthfolio" || w[0].Version != "3.8.0" {
+		t.Errorf("wealthfolio: %+v", w)
+	}
+	if h := found["handy-bin"]; len(h) != 1 || h[0].Name != "handy" || h[0].Upstream() != "cjpais/Handy" {
+		t.Errorf("foo-bin is also looked up as foo: %+v", h)
+	}
+	if _, ok := found["nothere"]; ok {
+		t.Errorf("absent package: %+v", found)
+	}
+	calls := f.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("one evaluation for all packages: %v", calls)
+	}
+	apply := calls[0].Args[len(calls[0].Args)-1]
+	for _, want := range []string{`"wealthfolio"`, `"handy-bin"`, `"handy"`, `"nothere"`} {
+		if !strings.Contains(apply, want) {
+			t.Errorf("%s not looked up: %s", want, apply)
+		}
+	}
+	if strings.Contains(apply, "bad name") {
+		t.Errorf("names that are not attribute names are skipped: %s", apply)
+	}
+
+	f2 := &run.Fake{}
+	f2.On(run.Rule{Prefix: "nix eval", Fail: errors.New("x"), Err: "error: no nixpkgs\n"})
+	if _, err := flake.InNixpkgs(f2, "/repo", pkgs); err == nil || !strings.Contains(err.Error(), "no nixpkgs") {
+		t.Errorf("eval failure: %v", err)
+	}
+}
+
+func TestSameProject(t *testing.T) {
+	gh := func(repo string) flake.Package {
+		return flake.Package{URLs: []string{"https://github.com/" + repo + "/archive/v1.tar.gz"}}
+	}
+	for _, c := range []struct {
+		a, b flake.Package
+		want bool
+	}{
+		{gh("cjpais/Handy"), gh("cjpais/handy"), true},   // same repo, any case
+		{gh("anomalyco/hex"), gh("sitkevij/hex"), false}, // a namesake
+		{flake.Package{Homepage: "https://wealthfolio.app"}, flake.Package{Homepage: "http://www.wealthfolio.app/"}, true},
+		{flake.Package{Homepage: "https://a.org"}, flake.Package{Homepage: "https://b.org"}, false},
+		{flake.Package{}, flake.Package{}, false}, // no evidence is not a match
+	} {
+		if got := flake.SameProject(c.a, c.b); got != c.want {
+			t.Errorf("SameProject(%+v, %+v) = %v", c.a, c.b, got)
+		}
+	}
+}

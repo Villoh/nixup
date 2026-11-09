@@ -35,6 +35,7 @@ lang: es
 
 - Un `ref` que empieza por un dígito, por `v` más un dígito, o por un prefijo `palabra/` seguido de eso (`v1.2`, `1.2`, `dms/1.2`) se trata como tag de release. Todo lo demás es una rama.
 - Las versiones basadas en fechas, como `20240101.1`, no reciben aviso de salto mayor: un primer número de 1000 o más se interpreta como año o fecha, así que una versión mayor real tan alta tampoco se avisaría.
+- La pista de nixpkgs solo encuentra un paquete por su nombre o, en el caso de `foo-bin`, como `foo`. Si en nixpkgs se llama de otra forma, no lo ve. Además necesita pruebas de que es el mismo proyecto (repositorio u homepage): nunca sugiere un homónimo, pero tampoco el paquete correcto si sus metadatos no coinciden.
 - Las release notes se leen de las 50 releases más recientes de GitHub, y nixup enseña como mucho tres por actualización.
 
 ## Otros límites

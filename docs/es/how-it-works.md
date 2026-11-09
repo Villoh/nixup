@@ -27,6 +27,7 @@ nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee 
 - Sin `passthru.updateScript`, el paquete sale como `info` con `no passthru.updateScript`, porque `nixup pkg` no podría actualizarlo.
 - Si el script de actualización pasa `--use-github-releases`, nixup compara con las releases publicadas en GitHub, sin contar los borradores. Si no, compara con los tags. La idea es elegir la misma versión que elegiría `nix-update`.
 - Las prereleases solo cuentan si el script de actualización pasa `--version=unstable` o si la versión actual ya es una prerelease.
+- Si el flake tiene un input llamado `nixpkgs`, nixup busca también cada paquete en ese nixpkgs fijado, por su nombre y, en el caso de `foo-bin`, como `foo`. Si nixpkgs tiene el mismo proyecto (mismo repositorio de GitHub o misma homepage) con la misma versión o una más nueva, la fila lleva una línea de pista, `→ nixpkgs has foo 1.2.0: pkgs.foo could replace this package`, y una fila al día sale como `info` en vez de ocultarse. La pista nunca cambia el código de salida.
 
 Un flake sin salida `packages` no tiene nada en esta sección.
 
@@ -95,6 +96,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git checkout -- packages/<name>` | pkg, tras un fallo |
 | `git diff -- packages/<name>` | pkg, tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, pkg |
+| `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
 | `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | lock |
 | `nix flake update --flake <copy> [input...]` | lock |
 | `nh os build <copy> -H <host> -o <copy>/result` | lock |

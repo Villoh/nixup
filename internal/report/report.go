@@ -67,6 +67,9 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 			if r.Warn != "" {
 				t.Println("         " + t.Paint("⚠ "+r.Warn, 33))
 			}
+			if r.Hint != "" {
+				t.Println("         " + t.Paint("→ "+r.Hint, 36))
+			}
 			if review && r.Review != nil {
 				t.Printf("%s", ReviewText(r.Review, "         "))
 			}
@@ -96,6 +99,9 @@ func Markdown(rows []check.Row) string {
 		}
 		if r.Warn != "" {
 			fmt.Fprintf(&b, "> ⚠ %s\n\n", r.Warn)
+		}
+		if r.Hint != "" {
+			fmt.Fprintf(&b, "> → %s\n\n", r.Hint)
 		}
 		if r.Review != nil {
 			b.WriteString(ReviewMarkdown(r.Review) + "\n")
