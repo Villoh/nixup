@@ -68,13 +68,16 @@ Ejecútalo dentro del flake, pásale `-C <dir>` o deja que lea `NIXUP_FLAKE`, `N
 
 ## Documentación
 
-- [Primeros pasos](docs/es/getting-started.md): requisitos, formas de instalarlo, primera ejecución
-- [Comandos](docs/es/commands.md): todos los flags y códigos de salida
-- [Configuración](docs/es/configuration.md): qué flake usa, variables de entorno, token de GitHub
-- [Cómo funciona](docs/es/how-it-works.md): qué comprueba cada sección y qué se escribe
-- [Seguridad](docs/es/safety.md): las garantías y hasta dónde llegan
-- [CI](docs/es/ci.md): comprobaciones programadas y pull requests de actualización
-- [Limitaciones](docs/es/limitations.md): lo que nixup no ve
-- [Desarrollo](docs/es/development.md) y [Releases](docs/es/releases.md): para quien contribuye
+| Página | Qué cubre |
+|---|---|
+| [Primeros pasos](docs/es/getting-started.md) | Requisitos, formas de instalarlo, primera ejecución |
+| [Comandos](docs/es/commands.md) | Todos los flags y códigos de salida |
+| [Configuración](docs/es/configuration.md) | Qué flake usa, variables de entorno, token de GitHub |
+| [Cómo funciona](docs/es/how-it-works.md) | Qué comprueba cada sección y qué se escribe |
+| [Seguridad](docs/es/safety.md) | Las garantías y hasta dónde llegan |
+| [CI](docs/es/ci.md) | Comprobaciones programadas y pull requests de actualización |
+| [Limitaciones](docs/es/limitations.md) | Lo que nixup no ve |
+| [Desarrollo](docs/es/development.md) | Estructura del código y tests, para quien contribuye |
+| [Releases](docs/es/releases.md) | Cómo se publica una versión, para mantenedores |
 
 Licencia MIT, ver [LICENSE](LICENSE).

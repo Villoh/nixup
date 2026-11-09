@@ -68,13 +68,16 @@ Run it inside the flake, pass `-C <dir>`, or let it read `NIXUP_FLAKE`, `NH_OS_F
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): requirements, install options, first run
-- [Commands](docs/commands.md): every flag and exit code
-- [Configuration](docs/configuration.md): which flake, environment variables, GitHub token
-- [How it works](docs/how-it-works.md): what each section checks and what gets written
-- [Safety](docs/safety.md): the guarantees and where they end
-- [CI](docs/ci.md): scheduled checks and update pull requests
-- [Limitations](docs/limitations.md): what nixup does not see
-- [Development](docs/development.md) and [Releases](docs/releases.md): for contributors
+| Page | What it covers |
+|---|---|
+| [Getting started](docs/getting-started.md) | Requirements, install options, first run |
+| [Commands](docs/commands.md) | Every flag and exit code |
+| [Configuration](docs/configuration.md) | Which flake, environment variables, GitHub token |
+| [How it works](docs/how-it-works.md) | What each section checks and what gets written |
+| [Safety](docs/safety.md) | The guarantees and where they end |
+| [CI](docs/ci.md) | Scheduled checks and update pull requests |
+| [Limitations](docs/limitations.md) | What nixup does not see |
+| [Development](docs/development.md) | Code layout and tests, for contributors |
+| [Releases](docs/releases.md) | How a release is cut, for maintainers |
 
 MIT licensed, see [LICENSE](LICENSE).

@@ -29,14 +29,16 @@ No activa nada. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demo
 
 ## Páginas
 
-- [Primeros pasos](getting-started.md): requisitos, formas de instalarlo y una primera ejecución.
-- [Comandos](commands.md): todos los comandos, flags, formatos de salida y códigos de salida.
-- [Configuración](configuration.md): cómo encuentra nixup tu flake, variables de entorno, token de GitHub, herramientas necesarias.
-- [Cómo funciona](how-it-works.md): qué comprueba cada sección, cómo se monta la revisión de upstream, qué se escribe y qué nunca.
-- [Seguridad](safety.md): las garantías y sus límites.
-- [CI](ci.md): ejecutar nixup desde un workflow programado de GitHub Actions.
-- [Limitaciones](limitations.md): lo que nixup no ve ni hace.
-- [Desarrollo](development.md): estructura del código, tests y cómo se prueba.
-- [Releases](releases.md): cómo se publica una versión.
+| Página | Qué cubre |
+|---|---|
+| [Primeros pasos](getting-started.md) | Requisitos, formas de instalarlo y una primera ejecución |
+| [Comandos](commands.md) | Todos los comandos, flags, formatos de salida y códigos de salida |
+| [Configuración](configuration.md) | Cómo encuentra nixup tu flake, variables de entorno, token de GitHub, herramientas necesarias |
+| [Cómo funciona](how-it-works.md) | Qué comprueba cada sección, cómo se monta la revisión de upstream, qué se escribe y qué nunca |
+| [Seguridad](safety.md) | Las garantías y sus límites |
+| [CI](ci.md) | Ejecutar nixup desde un workflow programado de GitHub Actions |
+| [Limitaciones](limitations.md) | Lo que nixup no ve ni hace |
+| [Desarrollo](development.md) | Estructura del código, tests y cómo se prueba |
+| [Releases](releases.md) | Cómo se publica una versión |
 
 El proyecto está en [github.com/Villoh/nixup](https://github.com/Villoh/nixup). La versión corta de todo esto está en el [README](../../README.es.md).

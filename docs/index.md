@@ -29,14 +29,16 @@ It does not activate anything. There is no `switch`, `boot` or `sudo` in the cod
 
 ## Pages
 
-- [Getting started](getting-started.md): requirements, install options and a first run.
-- [Commands](commands.md): every command, flag, output format and exit code.
-- [Configuration](configuration.md): how nixup finds your flake, environment variables, GitHub token, required tools.
-- [How it works](how-it-works.md): what each section checks, how the upstream review is built, what is written and what never is.
-- [Safety](safety.md): the guarantees and their limits.
-- [CI](ci.md): running nixup from a scheduled GitHub Actions workflow.
-- [Limitations](limitations.md): what nixup does not see or do.
-- [Development](development.md): code layout, tests and the testing approach.
-- [Releases](releases.md): how maintainers cut a release.
+| Page | What it covers |
+|---|---|
+| [Getting started](getting-started.md) | Requirements, install options and a first run |
+| [Commands](commands.md) | Every command, flag, output format and exit code |
+| [Configuration](configuration.md) | How nixup finds your flake, environment variables, GitHub token, required tools |
+| [How it works](how-it-works.md) | What each section checks, how the upstream review is built, what is written and what never is |
+| [Safety](safety.md) | The guarantees and their limits |
+| [CI](ci.md) | Running nixup from a scheduled GitHub Actions workflow |
+| [Limitations](limitations.md) | What nixup does not see or do |
+| [Development](development.md) | Code layout, tests and the testing approach |
+| [Releases](releases.md) | How maintainers cut a release |
 
 The project lives at [github.com/Villoh/nixup](https://github.com/Villoh/nixup). The short version of all this is in the [README](../README.md).
