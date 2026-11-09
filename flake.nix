@@ -11,7 +11,7 @@
         "aarch64-linux"
       ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      version = "0.1.1"; # the one place the version lives; the release workflow bumps it
+      version = "0.2.0"; # the one place the version lives; the release workflow bumps it
     in
     {
       packages = forAll (pkgs: rec {
