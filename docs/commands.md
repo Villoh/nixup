@@ -31,7 +31,7 @@ Every command that works on a flake accepts `-C <dir>`. See [Configuration](conf
 ## Output streams
 
 - Results, reviews and questions go to stdout.
-- Errors, and the `nixup: using <path> ($VAR)` line printed when the flake comes from an environment variable, go to stderr.
+- Errors, and the `nixup: using <path> ($VAR)` line (see [Configuration](configuration.md) for when it is printed), go to stderr.
 - The output of `nix flake update`, `nh os build`, `nix-update` and `nix build` is streamed to stderr.
 
 So `nixup check --json > out.json` gives clean JSON.

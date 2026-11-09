@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -252,12 +253,61 @@ func TestFlakeFromEnvironment(t *testing.T) {
 	if code := f.run("check", "--only", "inputs", "--json"); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
-	if !strings.Contains(f.errb.String(), "using "+f.repo+" ($NH_FLAKE)") {
-		t.Errorf("must say which flake it picked, on stderr: %q", f.errb)
+	if f.errb.Len() != 0 {
+		t.Errorf("a read-only command outside any flake needs no notice: %q", f.errb)
 	}
 	var rows []check.Row
 	if err := json.Unmarshal(f.out.Bytes(), &rows); err != nil {
-		t.Errorf("the notice must not pollute stdout (--json): %v", err)
+		t.Errorf("stdout is the JSON alone: %v", err)
+	}
+}
+
+func TestEnvironmentFlakeNotice(t *testing.T) {
+	env := func(repo string) func(string) string {
+		return func(k string) string {
+			if k == "NH_OS_FLAKE" {
+				return repo + "#desktop"
+			}
+			return ""
+		}
+	}
+	notice := func(f *fixture) string { return "using " + f.repo + " ($NH_OS_FLAKE)" }
+
+	// Commands that write say where, even from outside any flake.
+	f := newFixture(t, nil)
+	t.Chdir(t.TempDir())
+	f.deps.Env = env(f.repo)
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	f.run("pkg")
+	if !strings.Contains(f.errb.String(), notice(f)) {
+		t.Errorf("pkg writes: %q", f.errb)
+	}
+	f = newFixture(t, nil)
+	f.deps.Env = env(f.repo)
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("dirty")})
+	f.run("lock")
+	if !strings.Contains(f.errb.String(), notice(f)) {
+		t.Errorf("lock writes: %q", f.errb)
+	}
+
+	// Inside another flake the variable wins over the directory: always said.
+	f = newFixture(t, nil)
+	other := testutil.Tree(t, map[string]string{"flake.nix": "{}", "flake.lock": "{}", "sub/x": ""})
+	t.Chdir(filepath.Join(other, "sub"))
+	f.deps.Env = env(f.repo)
+	f.e.Run.Missing = map[string]bool{"flatpak": true, "nix": true}
+	f.run("check", "--only", "inputs")
+	if !strings.Contains(f.errb.String(), notice(f)) || !strings.Contains(f.errb.String(), "not the flake in "+other) || !strings.Contains(f.errb.String(), "-C .") {
+		t.Errorf("inside another flake: %q", f.errb)
+	}
+
+	// Inside the chosen flake itself: nothing to point out.
+	f = newFixture(t, nil)
+	t.Chdir(f.repo)
+	f.deps.Env = env(f.repo)
+	f.run("check", "--only", "inputs")
+	if strings.Contains(f.errb.String(), "using") {
+		t.Errorf("inside the same flake: %q", f.errb)
 	}
 }
 

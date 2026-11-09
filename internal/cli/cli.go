@@ -4,7 +4,9 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -143,8 +145,28 @@ func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string,
 	if err != nil {
 		return nil, "", d.fail(err), false
 	}
-	if strings.HasPrefix(source, "$") { // the user did not point here in this command: say where we are
-		d.T.Errorln("nixup: using", repo, "("+source+")")
+	if strings.HasPrefix(source, "$") { // the user did not point here in this command
+		if here, ok := otherFlake(repo); ok {
+			d.T.Errorln(fmt.Sprintf("nixup: using %s (%s), not the flake in %s; pass -C . for that one", repo, source, here))
+		} else if fs.Name() == "lock" || fs.Name() == "pkg" {
+			d.T.Errorln("nixup: using", repo, "("+source+")") // about to write there
+		}
 	}
 	return pos, repo, exit.OK, true
+}
+
+// otherFlake reports the flake around the current directory when it is not repo: the
+// case where an environment variable silently wins over the directory you are in.
+func otherFlake(repo string) (string, bool) {
+	here, err := flake.FindRepo(".")
+	if err != nil {
+		return "", false
+	}
+	real := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
+	return here, real(here) != real(repo)
 }
