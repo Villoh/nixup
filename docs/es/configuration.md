@@ -31,7 +31,7 @@ nixup trabaja sobre un flake: un directorio con `flake.nix` y `flake.lock`. Se q
 }
 ```
 
-`NH_HOME_FLAKE` y `NH_DARWIN_FLAKE` no se leen. La lectura de las variables de entorno es posterior a la release v0.1.1; esa versión solo conoce `-C` y la búsqueda hacia arriba.
+`NH_HOME_FLAKE` y `NH_DARWIN_FLAKE` no se leen.
 
 ### -C
 

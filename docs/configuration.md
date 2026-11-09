@@ -31,7 +31,7 @@ nixup works on one flake: a directory with both `flake.nix` and `flake.lock`. It
 }
 ```
 
-`NH_HOME_FLAKE` and `NH_DARWIN_FLAKE` are not read. Reading the environment variables is newer than release v0.1.1; that release only knows `-C` and the upward search.
+`NH_HOME_FLAKE` and `NH_DARWIN_FLAKE` are not read.
 
 ### -C
 

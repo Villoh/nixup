@@ -74,7 +74,7 @@ Detalles de este workflow:
 - `--only inputs,packages` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
 - El runner no tiene `nix-update`, así que `pkg` lo ejecuta con `nix run nixpkgs#nix-update`.
 - `pkg -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, `pkg` sale con 2 y el job para antes de la pull request.
-- Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.1.1`.
+- Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.2.0`.
 - El commit y la pull request los hace `create-pull-request`. nixup nunca hace commit.
 
 ## Builds del sistema completo

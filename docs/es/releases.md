@@ -15,8 +15,8 @@ Las releases se hacen con un workflow manual de GitHub Actions. No cambies la ve
 Desde la pestaña Actions, o con la CLI de GitHub:
 
 ```bash
-gh workflow run release -f version=0.2.0                  # sube la versión, hace commit, tag y publica
-gh workflow run release -f version=0.2.0 -f dry_run=true  # lo comprueba todo, no publica nada
+gh workflow run release -f version=0.3.0                  # sube la versión, hace commit, tag y publica
+gh workflow run release -f version=0.3.0 -f dry_run=true  # lo comprueba todo, no publica nada
 ```
 
 El workflow solo se ejecuta desde `main`.
@@ -54,5 +54,5 @@ Los commits `chore(release)` no aparecen. Cada entrada muestra el scope en negri
 Para ver en local las notas de la próxima release:
 
 ```bash
-nix run nixpkgs#git-cliff -- --unreleased --tag v0.2.0 --strip header
+nix run nixpkgs#git-cliff -- --unreleased --tag v0.3.0 --strip header
 ```
