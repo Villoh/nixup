@@ -8,7 +8,7 @@ lang: es
 
 [English](../safety.md) | **Español**
 
-nixup está hecho para que una actualización fallida o que no quieres deje tu repositorio como estaba, y para que nada llegue al sistema en marcha sin pasar por ti. Aquí tienes lo que se cumple y lo que no.
+nixup está hecho para que una actualización fallida o que no quieres deje tu repositorio como estaba, y para que nada llegue al sistema en marcha sin pasar por ti. Los pasos de inputs y de paquetes de `update` solo editan archivos de tu repositorio. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras un sí. Aquí tienes lo que se cumple y lo que no.
 
 ## Qué garantiza nixup
 
@@ -20,8 +20,12 @@ nixup está hecho para que una actualización fallida o que no quieres deje tu r
 - **`update` lleva cada paquete a la versión que has revisado.** Le pasa `--version=<esa versión>` a `nix-update`, así que una release publicada mientras leías no se cuela.
 - **Si falla la actualización o el build de un paquete, se deshace.** nixup ejecuta `git checkout -- <dir del paquete>` e imprime `nix-update failed; <dir del paquete> restored.` o `build FAILED; <dir del paquete> restored.`
 - **`update` rechaza un directorio de paquete modificado.** Si `<dir del paquete>` tiene cambios sin commitear, ese paquete se salta con código de salida 1, porque al deshacer se perderían esos cambios.
+- **Los pasos de Flatpak y de `nix profile` preguntan antes de instalar.** La pregunta lo dice: `Update 2 Flatpak refs now? This installs them right away. [y/N]`. Si dices que no, no se instala nada.
+- **El paso de Flatpak solo actualiza lo que te ha enseñado.** Le pasa a `flatpak update` exactamente los refs de su tabla. Antes apunta el commit desplegado de cada ref, y después imprime `flatpak update --commit=<commit anterior> <ref>` para cada uno, también tras un fallo.
+- **El paso de `nix profile` te dice cómo deshacerlo.** Después de actualizar imprime `To undo it: nix profile rollback`.
+- **Las entradas de `nix profile` fijadas nunca se tocan.** Una entrada fijada a una revisión se deja fuera de `nix profile upgrade`. nixup solo te dice cómo actualizarla a mano.
 - **Sin terminal, la respuesta es no.** Si stdin no es una terminal, todas las preguntas se responden que no. En ejecuciones desatendidas tienes que pasar `-y` a propósito.
-- **No se hace commit ni se activa nada.** Ni `git commit`, ni `switch`, ni `boot`, ni `test`, ni `sudo`. Después de actualizar, `git diff`, `nix flake check` y `nh os test` los sigues ejecutando tú.
+- **No se activa ninguna generación ni se hace commit.** Ni `git commit`, ni `switch`, ni `boot`, ni `test`, ni `sudo`. Después de actualizar, `git diff`, `nix flake check` y `nh os test` los sigues ejecutando tú.
 
 ## Dónde terminan las garantías
 
@@ -34,3 +38,6 @@ nixup está hecho para que una actualización fallida o que no quieres deje tu r
 - **La revisión depende de GitHub.** Si la API no responde o has agotado el límite, verás `review unavailable` y podrás aceptar la actualización igualmente.
 - **El aviso de cambio incompatible es una suposición a partir de los números de versión.** Una versión de parche puede romper cosas. Las versiones basadas en fechas (`20261106.1`, `2026.10.14`) se reconocen y no reciben aviso, porque sus números no indican compatibilidad.
 - **`--report` se escribe antes de la pregunta sobre `flake.lock`.** El informe describe el cambio propuesto aunque luego contestes que no.
+- **Los pasos de Flatpak y de `nix profile` cambian la máquina en el acto.** No hay copia temporal, ni comprobación de build, ni diff que revisar: lo que aceptas queda instalado al terminar el paso. Con `-y`, sin pregunta.
+- **Volver atrás depende de Flatpak y de Nix.** `flatpak update --commit` necesita que el commit anterior siga disponible en el remoto, y un ref cuyo commit no se ha podido leer no tiene línea. `nix profile rollback` vuelve a la generación anterior del perfil, que solo es la de antes de la actualización si nada ha cambiado el perfil desde entonces.
+- **Las actualizaciones de Flatpak no tienen revisión de upstream.** El paso de Flatpak solo enseña versiones, no commits ni release notes.

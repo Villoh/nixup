@@ -62,7 +62,7 @@ Output is colored only when stdout is a terminal. Any non-empty `NO_COLOR` turns
 
 ## Questions
 
-`update` asks before it writes. Questions are answered only when stdin is a terminal, and only `y` (any case) counts as yes. With no terminal every question is answered no, so unattended runs must pass `-y`.
+`update` asks before it writes or installs anything. Questions are answered only when stdin is a terminal, and only `y` (any case) counts as yes. With no terminal every question is answered no, so unattended runs must pass `-y`.
 
 ## GitHub token
 
@@ -97,10 +97,10 @@ For example:
 | Tool | Used for | When missing |
 |---|---|---|
 | `git` | `ls-remote` for tags and heads, the scratch copy, the uncommitted-changes checks, restoring a package | Most checks fail |
-| `nix` | `nix eval` of packages and hosts, `nix flake update`, `nix build`, `nix profile list` | The `profile` section is skipped; `packages` and `update` fail |
+| `nix` | `nix eval` of packages and hosts, `nix flake update`, `nix build`, `nix profile list`, `nix profile upgrade` | The `profile` section is skipped; `packages` and `update` fail |
 | `nh` | `nh os build` in the input step of `nixup update` | That step fails unless `--no-build` |
 | `nix-update` | The package step of `nixup update` | nixup runs `nix run nixpkgs#nix-update --` instead |
-| `flatpak` | The `flatpak` section | The section is skipped |
+| `flatpak` | The `flatpak` section and the Flatpak step of `nixup update` | Both are skipped |
 | `gh` | Only to read a token with `gh auth token` | API calls go out without a token |
 
 nixup does not change `PATH`. When installed from the flake it uses the `nix`, `nh` and `git` already on your system.

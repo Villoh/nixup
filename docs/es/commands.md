@@ -31,7 +31,7 @@ Todos los comandos que trabajan sobre un flake aceptan `-C <dir>`. En [Configura
 
 - Los resultados, las revisiones y las preguntas van a stdout.
 - Los errores van a stderr.
-- La salida de `nix flake update`, `nh os build`, `nix-update` y `nix build` se vuelca en directo a stderr.
+- La salida de `nix flake update`, `nh os build`, `nix-update`, `nix build`, `flatpak update` y `nix profile upgrade` se vuelca en directo a stderr.
 
 Así, `nixup check --json > out.json` te da un JSON limpio.
 
@@ -86,34 +86,42 @@ Códigos de salida:
 
 ## update
 
-Revisa, hace el build y aplica las actualizaciones: primero los inputs del flake (`flake.lock`) y después los paquetes que tu flake define en su propia salida `packages.<system>`.
+Revisa y aplica las actualizaciones en cuatro pasos, en este orden: los inputs del flake (`flake.lock`), los paquetes que tu flake define en su propia salida `packages.<system>`, Flatpak y `nix profile`.
+
+Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; los aplicas al sistema con nh. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras una pregunta cada uno, y te dicen cómo deshacerlo.
 
 ```bash
 nixup update
 nixup update nixpkgs home-manager
 nixup update ripgrep --no-build
+nixup update co.hyprlab.Hylki
 nixup update --source input -H desktop -H laptop
 nixup update --source package -y --report report.md
+nixup update --source flatpak
 ```
 
-Sin nombres se actualiza todo: todos los inputs y después todos los paquetes. Cada nombre se busca como input directo de `flake.lock` y como paquete del flake. Los inputs que nombras van al paso de inputs y los paquetes, al de paquetes; un paso sin nombres de su tipo no se ejecuta, así que `nixup update ripgrep` no toca `flake.lock`. Los inputs van siempre primero, para que el build de los paquetes se haga con el lock nuevo.
+Sin nombres se actualiza todo: todos los inputs, todos los paquetes, todas las actualizaciones de Flatpak pendientes y todas las entradas de `nix profile` que siguen una referencia móvil. Cada nombre se busca como input directo de `flake.lock`, como paquete del flake (solo si el paso de paquetes está activo), como ID de una app de Flatpak instalada y como entrada de `nix profile`. Cada nombre va al paso de su origen; un paso sin nombres de su tipo no se ejecuta, así que `nixup update ripgrep` no toca `flake.lock` y `nixup update co.hyprlab.Hylki` solo ejecuta el paso de Flatpak. Los inputs van siempre primero, para que el build de los paquetes se haga con el lock nuevo.
 
-Un nombre que no es ni input ni paquete (`no input or package called <name>`), o que es las dos cosas (`<name> is both an input and a package: pick one with --source input or --source package`), es un error, y no se ejecuta nada. También lo es un nombre que `--source` deja fuera: `<name> is an input, not a package (drop --source package)`, o `no input called <name>` con `--source input`, donde los paquetes ni se evalúan.
+Un nombre que no lleva a un único paso es un error, y no se ejecuta nada:
+
+- Si está en más de un origen activo: `<name> is both an input and a package: pick one with --source input or --source package`. Con tres orígenes o más: `<name> is an input, a package and a Flatpak app: pick one with --source input, --source package or --source flatpak`.
+- Si solo está en orígenes que `--source` deja fuera: `<name> is an input, which --source leaves out`.
+- Si no está en ninguno: `no input, package, Flatpak app or nix profile entry called <name>`. El mensaje solo nombra los orígenes activos, así que con `--source input` es `no input called <name>`, y los paquetes ni se evalúan.
 
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `--source <lista>` | Limita la ejecución a un paso: `input` o `package` (también en plural). Por defecto, los dos. Cualquier otro valor es un error. |
+| `--source <lista>` | Pasos a ejecutar, separados por comas: `input`, `package`, `flatpak`, `profile` (también en plural). Por defecto, todos. Cualquier otro valor es un error. |
 | `-H <host>` | Host del que hacer el build en el paso de inputs. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
-| `--no-build` | Actualiza y enseña los cambios, pero no hace el build: ni `nh os build` para los inputs ni `nix build` para los paquetes. |
-| `-y` | Escribe el nuevo lock y actualiza los paquetes sin preguntar. Necesario en ejecuciones desatendidas. |
-| `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado). Si no existe, lo crea. |
+| `--no-build` | Actualiza y enseña los cambios, pero no hace el build: ni `nh os build` para los inputs ni `nix build` para los paquetes. Los pasos de Flatpak y de `nix profile` no construyen nada en ningún caso. |
+| `-y` | Escribe el nuevo lock, actualiza los paquetes, instala las actualizaciones de Flatpak y actualiza las entradas de `nix profile` sin preguntar. Necesario en ejecuciones desatendidas. |
+| `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado, la tabla de Flatpak con los comandos para volver atrás, las entradas de `nix profile` actualizadas). Si no existe, lo crea. |
 
 ### Inputs
 
 El paso de inputs, en orden:
 
-1. Si `flake.lock` tiene cambios sin commitear, no arranca. El paso de paquetes se ejecuta igualmente.
+1. Si `flake.lock` tiene cambios sin commitear, no arranca. Los demás pasos se ejecutan igualmente.
 2. Copia el árbol de trabajo a un directorio temporal y ejecuta allí `nix flake update --flake <copia> [input...]`.
 3. Si no ha cambiado nada, imprime `flake.lock is already up to date.` y para.
 4. Para cada input directo que se ha movido, imprime el commit antiguo y el nuevo y los commits de upstream. Los inputs que no son directos se cuentan en una línea.
@@ -134,13 +142,39 @@ El paso de paquetes los recorre de uno en uno. Para cada paquete desactualizado,
 
 Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y ninguno está desactualizado, el paso imprime `Every package is up to date.`
 
-Códigos de salida. Gana el peor código de los dos pasos y de todos los paquetes:
+### Flatpak
+
+El paso de Flatpak solo se ejecuta si tienes `flatpak` instalado. Si no, se salta sin decir nada. En orden:
+
+1. Lista las actualizaciones pendientes con `flatpak remote-ls --updates` y las versiones instaladas con `flatpak list`, los mismos datos que usa `check`. Con nombres, se queda solo con esos IDs; una app nombrada sin actualización imprime `<id> is up to date.` Sin nombres y sin nada pendiente, imprime `Every Flatpak is up to date.` y para.
+2. Imprime una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`. `LATEST` es la versión nueva, `unknown` si el remoto no publica ninguna, o `new build` para los runtimes y las recompilaciones de la misma versión.
+3. Lee el commit desplegado de cada ref con `flatpak info --show-commit <ref>`.
+4. Pregunta una sola vez, `Update 3 Flatpak refs now? This installs them right away. [y/N]` (`Update 1 Flatpak ref now? This installs it right away.` si es uno), salvo con `-y`. Si dices que no, imprime `Skipped.`
+5. Ejecuta `flatpak update -y --noninteractive` con exactamente esos refs.
+6. Imprime `Flatpak updated.`, o `flatpak update failed; some refs may have been updated.` y sale con 2. En los dos casos imprime una línea por ref para volver atrás: `flatpak update --commit=<commit anterior> <ref>`.
+
+Los nombres son IDs de Flatpak de apps o de runtimes, como en `nixup update co.hyprlab.Hylki` o `nixup update org.gnome.Platform`, los mismos que enseña `check`. Una app instalada desde un bundle cuyo remoto está desactivado, como un bundle `.flatpak` que construye uno de tus paquetes, nunca tiene actualizaciones en Flatpak. Se actualiza a través de su paquete.
+
+### nix profile
+
+El paso de `nix profile`, en orden:
+
+1. Lee `nix profile list --json`. Con nombres, se queda solo con esas entradas.
+2. Deja fuera las entradas fijadas a una revisión (`github:NixOS/nixpkgs/<40 caracteres hex>`), porque `nix profile upgrade` no puede moverlas. Para cada una imprime `<name> is pinned to <short rev>: nix profile upgrade cannot move it. To update it, nix profile remove <name> and install it again.`
+3. Si no queda ninguna entrada que siga una referencia móvil (como `flake:nixpkgs`, o `github:owner/repo` sin revisión), para. Sin nombres, antes imprime `No nix profile entry follows a moving reference: nothing to upgrade.`
+4. Pregunta `Upgrade 2 nix profile entries (a, b) now? This installs them right away. [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.`
+5. Ejecuta `nix profile upgrade` con los nombres de esas entradas.
+6. Imprime `nix profile upgraded. To undo it: nix profile rollback`. Si falla, imprime `nix profile upgrade failed.` y sale con 2.
+
+Los nombres son los de las entradas de `nix profile`, tal y como los muestra `nix profile list`.
+
+Códigos de salida. Gana el peor código de los cuatro pasos y de todos los paquetes:
 
 | Código | Significado |
 |---|---|
 | 0 | Se ha actualizado todo, has contestado que no o no había nada que actualizar. |
 | 1 | Se ha rechazado algo por cambios sin commitear: `flake.lock` o el directorio de un paquete. Haz commit o stash y vuelve a ejecutarlo. |
-| 2 | Algo ha fallado: un nombre o `--source` estaban mal, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update` o la escritura del archivo. |
+| 2 | Algo ha fallado: un nombre o `--source` estaban mal, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update`, la escritura del archivo, `flatpak update` o `nix profile upgrade`. |
 
 ## list
 

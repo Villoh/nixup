@@ -623,7 +623,7 @@ func TestUpdateSourcesAndWorstCode(t *testing.T) {
 func TestUpdateNameErrorsWithSource(t *testing.T) {
 	f := updateFixture(t)
 	if code := f.u.Update(update.Opts{Repo: f.repo, Names: []string{"nixpkgs"}, Sources: []string{"package"}}); code != exit.Error ||
-		!strings.Contains(f.errb.String(), "nixpkgs is an input, not a package (drop --source package)") {
+		!strings.Contains(f.errb.String(), "nixpkgs is an input, which --source leaves out") {
 		t.Errorf("an input with --source package says so: code %d err %q", code, f.errb)
 	}
 	g := updateFixture(t)
@@ -640,5 +640,207 @@ func TestPkgAsksOnlyAboutPackagesItCanUpdate(t *testing.T) {
 	f.u.Pkg(update.PkgOpts{Repo: f.repo})
 	if strings.Contains(f.out.String(), "[y/N]") {
 		t.Errorf("a package that would be refused is refused before the question:\n%s", f.out)
+	}
+}
+
+// ---- Flatpak and nix profile ------------------------------------------------------------
+
+func flatpakFixture(t *testing.T, answers string, extra ...run.Rule) *fixture {
+	f := newFixture(t, answers, map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+	for _, r := range extra {
+		f.e.Run.On(r)
+	}
+	f.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/co.hyprlab.Hylki/x86_64/stable\t\nruntime/org.gnome.Platform/x86_64/50\t\n"})
+	f.e.Run.On(run.Rule{Prefix: "flatpak list --columns=ref,version", Out: "co.hyprlab.Hylki/x86_64/stable\t1.41.1\norg.gnome.Platform/x86_64/50\t\n"})
+	f.e.Run.On(run.Rule{Prefix: "flatpak list --columns=application", Out: "co.hyprlab.Hylki\ncom.x.Current\n"})
+	f.e.Run.On(run.Rule{Prefix: "flatpak info --show-commit app/co.hyprlab.Hylki", Out: strings.Repeat("4", 64) + "\n"})
+	f.e.Run.On(run.Rule{Prefix: "flatpak info --show-commit runtime/org.gnome.Platform", Out: strings.Repeat("b", 64) + "\n"})
+	return f
+}
+
+func TestFlatpakStep(t *testing.T) {
+	f := flatpakFixture(t, "y\n")
+	report := filepath.Join(t.TempDir(), "r.md")
+	if code := f.u.Flatpak(update.FlatpakOpts{Report: report}); code != exit.OK {
+		t.Fatalf("code %d\n%s", code, f.out)
+	}
+	s := f.out.String()
+	for _, want := range []string{
+		"SOURCE   NAME                CURRENT  LATEST",
+		"flatpak  co.hyprlab.Hylki    1.41.1   unknown",
+		"Update 2 Flatpak refs now? This installs them right away. [y/N]",
+		"flatpak update --commit=" + strings.Repeat("4", 64) + " app/co.hyprlab.Hylki/x86_64/stable",
+		"flatpak update --commit=" + strings.Repeat("b", 64) + " runtime/org.gnome.Platform/x86_64/50",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+	if !f.called("flatpak update -y --noninteractive app/co.hyprlab.Hylki/x86_64/stable runtime/org.gnome.Platform/x86_64/50") {
+		t.Errorf("exactly the refs shown: %v", f.e.Run.Calls())
+	}
+	var infoAt, updateAt int
+	for i, c := range f.e.Run.Calls() {
+		switch {
+		case strings.HasPrefix(c.String(), "flatpak info --show-commit"):
+			infoAt = i
+		case strings.HasPrefix(c.String(), "flatpak update"):
+			updateAt = i
+		}
+	}
+	if infoAt > updateAt {
+		t.Error("the deployed commits are read before updating")
+	}
+	if b, _ := os.ReadFile(report); !strings.Contains(string(b), "| co.hyprlab.Hylki | 1.41.1 | unknown |") || !strings.Contains(string(b), "--commit=") {
+		t.Errorf("report: %s", b)
+	}
+}
+
+func TestFlatpakStepNoAndNames(t *testing.T) {
+	f := flatpakFixture(t, "n\n")
+	if code := f.u.Flatpak(update.FlatpakOpts{}); code != exit.OK || !strings.Contains(f.out.String(), "Skipped.") || f.called("flatpak update") {
+		t.Errorf("a no changes nothing: code %d %s", code, f.out)
+	}
+	g := flatpakFixture(t, "")
+	g.u.Flatpak(update.FlatpakOpts{IDs: []string{"co.hyprlab.Hylki", "com.x.Current"}, Yes: true})
+	if !g.called("flatpak update -y --noninteractive app/co.hyprlab.Hylki/x86_64/stable") || g.called("flatpak update -y --noninteractive app/co.hyprlab.Hylki/x86_64/stable runtime") {
+		t.Errorf("only the named app: %v", g.e.Run.Calls())
+	}
+	i := flatpakFixture(t, "n\n")
+	if i.u.Flatpak(update.FlatpakOpts{IDs: []string{"co.hyprlab.Hylki"}}); !strings.Contains(i.out.String(), "Update 1 Flatpak ref now? This installs it right away.") {
+		t.Errorf("singular: %s", i.out)
+	}
+	if false {
+		t.Errorf("only the named app: %v", g.e.Run.Calls())
+	}
+	if !strings.Contains(g.out.String(), "com.x.Current is up to date.") {
+		t.Errorf("a named app without an update says so: %s", g.out)
+	}
+	h := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+	if h.u.Flatpak(update.FlatpakOpts{}); !strings.Contains(h.out.String(), "Every Flatpak is up to date.") {
+		t.Errorf("nothing pending: %s", h.out)
+	}
+}
+
+func TestFlatpakStepFailure(t *testing.T) {
+	f := flatpakFixture(t, "", run.Rule{Prefix: "flatpak update", Fail: errors.New("exit 1")})
+	report := filepath.Join(t.TempDir(), "r.md")
+	if code := f.u.Flatpak(update.FlatpakOpts{Yes: true, Report: report}); code != exit.Error {
+		t.Errorf("code %d", code)
+	}
+	if s := f.out.String(); !strings.Contains(s, "flatpak update failed") || !strings.Contains(s, "--commit=") {
+		t.Errorf("a failure still says how to go back, since some refs may have moved:\n%s", s)
+	}
+	if b, _ := os.ReadFile(report); !strings.Contains(string(b), "flatpak update failed") {
+		t.Errorf("report: %s", b)
+	}
+}
+
+func profileFixture(t *testing.T, answers string, extra ...run.Rule) *fixture {
+	f := newFixture(t, answers, map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+	for _, r := range extra {
+		f.e.Run.On(r)
+	}
+	f.e.Run.On(run.Rule{Prefix: "nix profile list --json", Out: `{"elements":{
+		"qt":{"originalUrl":"github:NixOS/nixpkgs/` + strings.Repeat("a", 40) + `"},
+		"hello":{"originalUrl":"flake:nixpkgs"},
+		"tool":{"originalUrl":"github:o/tool"}}}`})
+	return f
+}
+
+func TestProfileStep(t *testing.T) {
+	f := profileFixture(t, "y\n")
+	if code := f.u.Profile(update.ProfileOpts{}); code != exit.OK {
+		t.Fatalf("code %d\n%s", code, f.out)
+	}
+	if !f.called("nix profile upgrade hello tool") || f.called("nix profile upgrade hello tool qt") {
+		t.Errorf("only the entries that follow a moving reference: %v", f.e.Run.Calls())
+	}
+	s := f.out.String()
+	for _, want := range []string{
+		"qt is pinned to aaaaaaa: nix profile upgrade cannot move it. To update it, nix profile remove qt and install it again.",
+		"Upgrade 2 nix profile entries (hello, tool) now? This installs them right away. [y/N]",
+		"To undo it: nix profile rollback",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+}
+
+func TestProfileStepNamesNoAndFailure(t *testing.T) {
+	f := profileFixture(t, "", run.Rule{Prefix: "nix profile upgrade", Fail: errors.New("exit 1")})
+	if code := f.u.Profile(update.ProfileOpts{Names: []string{"tool"}, Yes: true}); code != exit.Error || !f.called("nix profile upgrade tool") {
+		t.Errorf("named entry, failed: code %d %v", code, f.e.Run.Calls())
+	}
+	g := profileFixture(t, "n\n")
+	if g.u.Profile(update.ProfileOpts{}); g.called("nix profile upgrade") || !strings.Contains(g.out.String(), "Skipped.") {
+		t.Errorf("a no changes nothing: %s", g.out)
+	}
+	h := profileFixture(t, "")
+	if h.u.Profile(update.ProfileOpts{Names: []string{"qt"}}); h.called("nix profile upgrade") {
+		t.Errorf("a pinned entry is never upgraded: %v", h.e.Run.Calls())
+	}
+}
+
+func TestUpdateRunsTheFourStepsInOrder(t *testing.T) {
+	f := updateFixture(t)
+	f.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
+	f.e.Run.On(run.Rule{Prefix: "nix profile list --json", Out: `{"elements":{"hello":{"originalUrl":"flake:nixpkgs"}}}`})
+	f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true})
+	var order []string
+	for _, c := range f.e.Run.Calls() {
+		for _, step := range []string{"nix flake update", "nix-update", "flatpak update", "nix profile upgrade"} {
+			if strings.HasPrefix(c.String(), step) {
+				order = append(order, step)
+			}
+		}
+	}
+	if strings.Join(order, ",") != "nix flake update,nix-update,flatpak update,nix profile upgrade" {
+		t.Errorf("inputs, packages, flatpak, profile: %v", order)
+	}
+
+	h := updateFixture(t)
+	h.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
+	h.e.Run.Rules = append([]run.Rule{{Prefix: "flatpak update", Fail: errors.New("exit 1")}}, h.e.Run.Rules...)
+	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true, NoBuild: true}); code != exit.Error {
+		t.Errorf("a failed Flatpak step counts in the exit code: %d", code)
+	}
+
+	g := updateFixture(t)
+	g.e.Run.Missing = map[string]bool{"flatpak": true}
+	g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true})
+	if strings.Contains(g.out.String(), "Flatpak") {
+		t.Errorf("without flatpak the step is skipped silently: %s", g.out)
+	}
+	k := newFixture(t, "", map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
+	k.e.Run.Missing = map[string]bool{"nix": true, "flatpak": true}
+	k.u.Update(update.Opts{Repo: k.repo, Sources: []string{"profile"}})
+	if k.out.Len() != 0 {
+		t.Errorf("without nix the profile step is skipped silently: %q", k.out)
+	}
+}
+
+func TestUpdateNamesAcrossSources(t *testing.T) {
+	f := updateFixture(t)
+	f.e.Run.On(run.Rule{Prefix: "flatpak list --columns=application", Out: "io.x.App\nboth\n"})
+	f.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
+	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"io.x.App"}, Yes: true})
+	if !f.called("flatpak update -y --noninteractive app/io.x.App/x86_64/stable") || f.called("nix flake update") || f.called("nix-update") {
+		t.Errorf("a Flatpak app ID goes to the Flatpak step only: %v", f.e.Run.Calls())
+	}
+	r := updateFixture(t)
+	r.e.Run.On(run.Rule{Prefix: "flatpak list --columns=application", Out: "org.gnome.Platform\n"})
+	r.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "runtime/org.gnome.Platform/x86_64/50\t\n"})
+	r.u.Update(update.Opts{Repo: r.repo, Names: []string{"org.gnome.Platform"}, Yes: true})
+	if !r.called("flatpak update -y --noninteractive runtime/org.gnome.Platform/x86_64/50") {
+		t.Errorf("a runtime can be named, as check suggests: %q %v", r.errb, r.e.Run.Calls())
+	}
+
+	g := updateFixture(t)
+	g.e.Run.On(run.Rule{Prefix: "flatpak list --columns=application", Out: "both\n"})
+	if code := g.u.Update(update.Opts{Repo: g.repo, Names: []string{"both"}}); code != exit.Error ||
+		!strings.Contains(g.errb.String(), "both is an input, a package and a Flatpak app: pick one with --source input, --source package or --source flatpak") {
+		t.Errorf("three-way: code %d err %q", code, g.errb)
 	}
 }

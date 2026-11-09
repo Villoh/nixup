@@ -205,14 +205,19 @@ func TestProfile(t *testing.T) {
 	e.Run.On(run.Rule{Prefix: "nix profile list --json", Out: `{"elements":{
 		"qtdeclarative":{"originalUrl":"github:NixOS/nixpkgs/` + old + `"},
 		"hello":{"originalUrl":"github:NixOS/nixpkgs/` + sys + `"},
-		"tracked":{"originalUrl":"flake:nixpkgs"}}}`})
+		"tracked":{"originalUrl":"flake:nixpkgs"},
+		"other":{"originalUrl":"github:o/tool/` + old + `"}}}`})
 	repo := repoWithLock(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#" + sys})
 
 	rows := byName(checker(e).Profile(repo))
-	if q := rows["qtdeclarative"]; q.Status != check.Outdated || q.Current != "aaaaaaa" || q.Latest != "eeeeeee" {
-		t.Errorf("pinned to an old nixpkgs: %+v", q)
+	if q := rows["qtdeclarative"]; q.Status != check.Outdated || q.Current != "aaaaaaa" || q.Latest != "eeeeeee" ||
+		q.Note != "pinned: nix profile remove, then install again" {
+		t.Errorf("pinned to an old nixpkgs, and what to do: %+v", q)
 	}
-	if rows["hello"].Status != check.OK || rows["tracked"].Status != check.OK {
+	if rows["other"].Status != check.OK || rows["other"].Current != "aaaaaaa" {
+		t.Errorf("a revision of another repository is not compared with nixpkgs: %+v", rows["other"])
+	}
+	if rows["hello"].Status != check.OK || rows["tracked"].Status != check.OK || rows["tracked"].Note != "nixup update tracked" {
 		t.Errorf("rows: %+v", rows)
 	}
 }
@@ -231,8 +236,8 @@ func TestProfileUnavailable(t *testing.T) {
 	}
 	e3 := testutil.New(t)
 	e3.Run.On(run.Rule{Prefix: "nix profile", Out: "garbage"})
-	if rows := checker(e3).Profile("/repo"); rows != nil {
-		t.Errorf("unreadable output is ignored: %+v", rows)
+	if rows := checker(e3).Profile("/repo"); len(rows) != 1 || rows[0].Status != check.Error {
+		t.Errorf("unreadable output is an error row, not silence: %+v", rows)
 	}
 }
 
@@ -256,6 +261,11 @@ func TestFlatpak(t *testing.T) {
 	}
 	if strings.Join(names, ",") != "org.gnome.Platform,co.hyprlab.Hylki,io.x.New,io.x.Same,io.x.Two" {
 		t.Fatalf("one row per ref, in order, blanks and spaces dropped: %v", names)
+	}
+	for _, r := range rows {
+		if r.Note != "nixup update "+r.Name {
+			t.Errorf("ACTION points at nixup update: %+v", r)
+		}
 	}
 	for name, want := range map[string][2]string{
 		"org.gnome.Platform": {"50", "new build"},   // a runtime: its branch, rebuilt

@@ -14,7 +14,7 @@ lang: es
 - `git` y `nix` en el `PATH`.
 - `nh` si quieres que `nixup update` haga el build de tus hosts. Con `--no-build` no hace falta.
 - `nix-update` para actualizar tus propios paquetes con `nixup update`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
-- `flatpak` es opcional. Sin él, la sección `flatpak` se salta.
+- `flatpak` es opcional. Sin él, se saltan la sección `flatpak` y el paso de Flatpak de `nixup update`.
 - Acceso de red a github.com y api.github.com.
 
 El flake trae builds para `x86_64-linux` y `aarch64-linux`. En [Configuración](configuration.md) tienes la lista completa de herramientas y para qué se usa cada una.
@@ -111,13 +111,18 @@ Después de la tabla, para cada actualización, añade el repositorio de origen,
 ## Aplica las actualizaciones
 
 ```bash
-nixup update                  # todos los inputs y después todos tus paquetes
+nixup update                  # inputs, tus paquetes, Flatpak, nix profile
 nixup update --source input   # solo los inputs
 nixup update home-manager     # un solo input
 nixup update ripgrep          # uno de tus paquetes
+nixup update co.hyprlab.Hylki # una app de Flatpak
 ```
 
-Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. No hace commit ni activa nada. Cuando ha escrito `flake.lock`, te dice los siguientes pasos:
+Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. Estos dos pasos solo editan archivos de tu repositorio, y nixup ni hace commit ni activa ninguna generación.
+
+Al final van Flatpak y `nix profile`. Cada uno enseña qué actualizaría y pregunta una vez, y la pregunta dice `This installs them right away.` Si dices que sí, instalan y después te dicen cómo volver atrás: una línea `flatpak update --commit=<commit anterior> <ref>` por cada ref de Flatpak, o `nix profile rollback`. Usa `--source input,package` para no tocar la máquina.
+
+Cuando ha escrito `flake.lock`, el paso de inputs te dice los siguientes pasos:
 
 ```text
 flake.lock updated (not committed, nothing activated).

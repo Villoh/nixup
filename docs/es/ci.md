@@ -72,6 +72,7 @@ jobs:
 Detalles de este workflow:
 
 - `--source input,package` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
+- Los dos comandos de update pasan `--source input` y `--source package` por lo mismo: sin `--source`, `update -y` ejecutaría también los pasos de Flatpak y de `nix profile`, que instalan en el runner en vez de editar el repositorio.
 - Los dos pasos van en comandos separados para que solo el de inputs se salte el build.
 - El runner no tiene `nix-update`, así que `update` lo ejecuta con `nix run nixpkgs#nix-update`.
 - `update --source package -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, nixup sale con 2 y el job para antes de la pull request.

@@ -14,7 +14,7 @@ lang: en
 - `git` and `nix` on `PATH`.
 - `nh` if you want `nixup update` to build your hosts. With `--no-build` it is not needed.
 - `nix-update` for updating your own packages with `nixup update`. Without it, nixup runs `nix run nixpkgs#nix-update --` instead.
-- `flatpak` is optional. Without it the `flatpak` section is skipped.
+- `flatpak` is optional. Without it the `flatpak` section and the Flatpak step of `nixup update` are skipped.
 - Network access to github.com and api.github.com.
 
 The flake ships builds for `x86_64-linux` and `aarch64-linux`. See [Configuration](configuration.md) for the full list of tools and what each one is used for.
@@ -111,13 +111,18 @@ After the table, for every update, this adds the source repository, the number o
 ## Apply updates
 
 ```bash
-nixup update                  # all inputs, then all your own packages
+nixup update                  # inputs, your own packages, Flatpak, nix profile
 nixup update --source input   # only the inputs
 nixup update home-manager     # one input
 nixup update ripgrep          # one of your own packages
+nixup update co.hyprlab.Hylki # one Flatpak app
 ```
 
-For the inputs, `update` shows the upstream commits for every input that moved, builds each host from a scratch copy and asks before it writes `flake.lock`. Then it asks before each of your own packages. It neither commits nor activates anything. When `flake.lock` has been written it prints the next steps:
+For the inputs, `update` shows the upstream commits for every input that moved, builds each host from a scratch copy and asks before it writes `flake.lock`. Then it asks before each of your own packages. These two steps only edit files in your repository, and nixup neither commits them nor activates a generation.
+
+Last come Flatpak and `nix profile`. Each shows what it would update and asks once, and the question says `This installs them right away.` On yes they install, then print how to go back: one `flatpak update --commit=<previous commit> <ref>` line per Flatpak ref, or `nix profile rollback`. Use `--source input,package` to leave the machine alone.
+
+When `flake.lock` has been written, the input step prints the next steps:
 
 ```text
 flake.lock updated (not committed, nothing activated).

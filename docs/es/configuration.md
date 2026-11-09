@@ -62,7 +62,7 @@ La salida solo lleva color cuando stdout es una terminal. Cualquier valor no vac
 
 ## Preguntas
 
-`update` pregunta antes de escribir. Las preguntas solo se contestan si stdin es una terminal, y solo `y` (en mayúscula o minúscula) cuenta como sí. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
+`update` pregunta antes de escribir o instalar nada. Las preguntas solo se contestan si stdin es una terminal, y solo `y` (en mayúscula o minúscula) cuenta como sí. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 
 ## Token de GitHub
 
@@ -97,10 +97,10 @@ Por ejemplo:
 | Herramienta | Para qué se usa | Si falta |
 |---|---|---|
 | `git` | `ls-remote` para tags y ramas, la copia temporal, comprobar cambios sin commitear, restaurar un paquete | Fallan casi todas las comprobaciones |
-| `nix` | `nix eval` de paquetes y hosts, `nix flake update`, `nix build`, `nix profile list` | La sección `profile` se salta; `packages` y `update` fallan |
+| `nix` | `nix eval` de paquetes y hosts, `nix flake update`, `nix build`, `nix profile list`, `nix profile upgrade` | La sección `profile` se salta; `packages` y `update` fallan |
 | `nh` | `nh os build` en el paso de inputs de `nixup update` | Ese paso falla salvo con `--no-build` |
 | `nix-update` | El paso de paquetes de `nixup update` | nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar |
-| `flatpak` | La sección `flatpak` | La sección se salta |
+| `flatpak` | La sección `flatpak` y el paso de Flatpak de `nixup update` | Se saltan las dos |
 | `gh` | Solo para leer un token con `gh auth token` | Las llamadas a la API van sin token |
 
 nixup no toca el `PATH`. Si lo instalas desde el flake, usa el `nix`, el `nh` y el `git` que ya tengas en el sistema.

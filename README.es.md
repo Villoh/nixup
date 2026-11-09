@@ -5,7 +5,7 @@
   <img alt="nixup" src="brand/header-light.svg">
 </picture>
 
-nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias, y hace el build en una copia temporal antes de escribir nada. Nunca activa el sistema: ni `switch`, ni `boot`, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
+nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias, y hace el build en una copia temporal antes de escribir nada. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte. Nunca activa una generación de NixOS: ni `switch`, ni `boot`, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
 
 ## Ejemplo
 
@@ -47,9 +47,12 @@ O añádelo a tu flake y mete `inputs.nixup.packages.${system}.default` en `envi
 nixup                    # igual que `nixup check`: qué está desactualizado, solo lectura
 nixup check --review     # además, commits y release notes de upstream
 nixup update             # inputs: actualiza flake.lock en una copia temporal, hace el build, pregunta y escribe;
-                         # después tus propios paquetes uno a uno, tras revisar cada uno
+                         # después tus propios paquetes uno a uno, tras revisar cada uno;
+                         # después Flatpak y nix profile, con una pregunta cada uno
 nixup update nixpkgs     # solo ese input
 nixup update ripgrep     # solo ese paquete
+nixup update co.hyprlab.Hylki   # solo esa app de Flatpak
+nixup update --source input,package   # solo lo que vive en el repositorio
 nixup list               # todo lo que vigila, con las versiones actuales, sin red
 nixup search ripgrep     # en tu nixpkgs, tus paquetes, tus inputs y Flatpak
 ```
@@ -62,8 +65,9 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 - `update` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
 - Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, el directorio del paquete vuelve a su estado del último commit.
 - `update` no toca archivos con cambios sin commitear.
+- Los pasos de inputs y de paquetes solo editan archivos del repositorio; los aplicas tú con nh. Los pasos de Flatpak y de `nix profile` instalan en el momento, así que su pregunta lo dice, y te indican cómo deshacerlo (`flatpak update --commit=...`, `nix profile rollback`). Una entrada de `nix profile` fijada a una revisión nunca se actualiza.
 - Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
-- nixup nunca hace commit ni activa una generación. Probar y hacer el switch sigue siendo cosa tuya.
+- nixup nunca hace commit ni activa una generación de NixOS. Probar y hacer el switch sigue siendo cosa tuya.
 
 ## Documentación
 

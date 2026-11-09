@@ -15,7 +15,7 @@ cmd/nixup/          main: wires the real terminal, process runner and GitHub cli
 internal/
   cli/              flag parsing, subcommands, exit codes
   check/            the read-only checks: inputs, packages, profile, flatpak
-  update/           the command that writes: Update runs Lock (flake.lock), then Pkg (packages/)
+  update/           the command that writes and installs: Lock (flake.lock), Pkg (packages/), Flatpak, Profile
   report/           terminal text and Markdown rendering
   flake/            flake.lock, finding the flake, hosts, own packages, scratch copy
   gh/               tags and heads through git; commits and release notes through the API

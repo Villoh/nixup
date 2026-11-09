@@ -25,10 +25,11 @@ lang: en
 
 The input step of `update` builds each entry in `nixosConfigurations` with `nh os build`. Home Manager, nix-darwin and other outputs are not built. On a flake without `nixosConfigurations`, run `update --source input --no-build` (and `update --source package` for the packages, which are still built); otherwise listing the hosts fails with exit code 2.
 
-## Some sections only report
+## What update cannot move or review
 
-- `flatpak`: nixup lists pending updates. Run `flatpak update` yourself.
-- `profile`: nixup compares the nixpkgs revision of `nix profile` entries with your flake's input named `nixpkgs`. Run `nix profile upgrade` yourself.
+- Pinned `nix profile` entries: an entry pinned to a revision (`github:NixOS/nixpkgs/<rev>`) cannot be moved by `nix profile upgrade`, so `update` never upgrades it. Run `nix profile remove <name>` and install it again. `check` compares those revisions only with your flake's input named `nixpkgs`.
+- Flatpak has no changelog review: the Flatpak step shows versions, not commits or release notes. `LATEST` says `unknown` when the remote publishes no versions, as with a remote added from a `.flatpakref` file.
+- An app installed from a bundle whose remote is disabled, such as a `.flatpak` bundle built by your own package, never has an update in Flatpak. Update it through its package.
 - Pinned tag inputs: `nix flake update` does not move a tag, so `update` does not either. Edit the tag in `flake.nix`.
 
 ## Version heuristics

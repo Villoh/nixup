@@ -1,6 +1,7 @@
-// Package update changes things on disk: flake.lock (Lock) and own packages (Pkg), both
-// driven by Update. They show what changes upstream first, ask, work on a copy or
-// restore on failure, and never activate a system generation.
+// Package update is `nixup update`: flake.lock (Lock) and own packages (Pkg), which only
+// edit the repository, and Flatpak and nix profile, which install right away. Every step
+// shows what changes first, asks, and says how to undo it; none activates a NixOS
+// generation.
 package update
 
 import (
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/exit"
@@ -43,69 +45,144 @@ func (u *Updater) appendReport(path, text string) {
 	fmt.Fprintln(f, text)
 }
 
+// Sources are what update works on, in the order the steps run: inputs first, so
+// packages build against the new lock.
+var Sources = []string{"input", "package", "flatpak", "profile"}
+
+var nouns = map[string][2]string{ // with an article, bare
+	"input":   {"an input", "input"},
+	"package": {"a package", "package"},
+	"flatpak": {"a Flatpak app", "Flatpak app"},
+	"profile": {"a nix profile entry", "nix profile entry"},
+}
+
 // Opts are what `nixup update` takes.
 type Opts struct {
 	Repo    string
-	Names   []string // inputs and packages, mixed; empty: everything
-	Sources []string // "input", "package"; empty: both
+	Names   []string // inputs, packages, Flatpak app IDs, profile entries, mixed; empty: everything
+	Sources []string // some of Sources; empty: all
 	Hosts   []string // for the inputs; empty: every nixosConfiguration
 	NoBuild bool
 	Yes     bool
 	Report  string
 }
 
-// Update brings the flake's inputs (Lock: one scratch copy, every host built) and then its
-// own packages (Pkg: one by one) up to date. Each name is looked up both as a direct input
-// of flake.lock and as a package of the flake. Inputs go first, so packages are built
-// against the new lock. The result is the worst code of the two steps.
+// Update runs one step per source: the inputs (Lock: one scratch copy, every host built),
+// the own packages (Pkg: one by one), Flatpak (one question, then flatpak update) and
+// nix profile (one question, then nix profile upgrade). Each name is looked up in every
+// source and sent to its step; steps without names are skipped when names are given.
+// The result is the worst code of the steps.
 func (u *Updater) Update(o Opts) int {
-	doInputs := len(o.Sources) == 0 || slices.Contains(o.Sources, "input")
-	doPkgs := len(o.Sources) == 0 || slices.Contains(o.Sources, "package")
-	var inputs, pkgs []string
+	on := func(s string) bool { return len(o.Sources) == 0 || slices.Contains(o.Sources, s) }
+	named := map[string][]string{}
 	if len(o.Names) > 0 {
-		lock, err := flake.ReadLock(filepath.Join(o.Repo, "flake.lock"))
+		known, err := u.known(o.Repo, on)
 		if err != nil {
 			return u.fail(err)
 		}
-		isPkg := map[string]bool{}
-		if doPkgs {
-			all, err := flake.Packages(u.R, o.Repo)
-			if err != nil {
-				return u.fail(err)
-			}
-			for _, p := range all {
-				isPkg[p.Name] = true
-			}
-		}
-		direct := lock.Direct()
 		for _, n := range o.Names {
-			_, isInput := direct[n]
+			var in, out []string
+			for _, s := range Sources {
+				switch {
+				case known[s][n] && on(s):
+					in = append(in, s)
+				case known[s][n]:
+					out = append(out, s)
+				}
+			}
 			switch {
-			case isInput && doInputs && isPkg[n]:
-				return u.fail(fmt.Errorf("%s is both an input and a package: pick one with --source input or --source package", n))
-			case isInput && doInputs:
-				inputs = append(inputs, n)
-			case isPkg[n]:
-				pkgs = append(pkgs, n)
-			case isInput: // left out by --source package
-				return u.fail(fmt.Errorf("%s is an input, not a package (drop --source package)", n))
-			case !doPkgs: // left out by --source input; whether it is a package was not looked up
-				return u.fail(fmt.Errorf("no input called %s", n))
+			case len(in) == 1:
+				named[in[0]] = append(named[in[0]], n)
+			case len(in) > 1:
+				var flags []string
+				for _, s := range in {
+					flags = append(flags, "--source "+s)
+				}
+				return u.fail(fmt.Errorf("%s is %s%s: pick one with %s", n, both(in), list(in, 0, "and"), list(flags, -1, "or")))
+			case len(out) > 0:
+				return u.fail(fmt.Errorf("%s is %s, which --source leaves out", n, list(out, 0, "and")))
 			default:
-				return u.fail(fmt.Errorf("no input or package called %s", n))
+				var enabled []string
+				for _, s := range Sources {
+					if on(s) {
+						enabled = append(enabled, s)
+					}
+				}
+				return u.fail(fmt.Errorf("no %s called %s", list(enabled, 1, "or"), n))
 			}
 		}
-		doInputs, doPkgs = len(inputs) > 0, len(pkgs) > 0
 	}
-	code := exit.OK
-	if doInputs {
-		code = u.Lock(LockOpts{Repo: o.Repo, Inputs: inputs, Hosts: o.Hosts, NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report})
-	}
-	if doPkgs {
-		if doInputs {
+	code, ran := exit.OK, false
+	for _, s := range Sources {
+		if !on(s) || (len(o.Names) > 0 && len(named[s]) == 0) ||
+			(s == "flatpak" && !u.R.Has("flatpak")) || (s == "profile" && !u.R.Has("nix")) {
+			continue
+		}
+		if ran {
 			u.T.Println()
 		}
-		code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: pkgs, NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report}))
+		ran = true
+		switch s {
+		case "input":
+			code = max(code, u.Lock(LockOpts{Repo: o.Repo, Inputs: named[s], Hosts: o.Hosts, NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report}))
+		case "package":
+			code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: named[s], NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report}))
+		case "flatpak":
+			code = max(code, u.Flatpak(FlatpakOpts{IDs: named[s], Yes: o.Yes, Report: o.Report}))
+		case "profile":
+			code = max(code, u.Profile(ProfileOpts{Names: named[s], Yes: o.Yes, Report: o.Report}))
+		}
 	}
 	return code
+}
+
+// known is every name each source has. Packages are only evaluated when their step is
+// on; the other sources are cheap local reads.
+func (u *Updater) known(repo string, on func(string) bool) (map[string]map[string]bool, error) {
+	known := map[string]map[string]bool{"input": {}, "package": {}, "flatpak": u.Check.FlatpakInstalled(), "profile": {}}
+	lock, err := flake.ReadLock(filepath.Join(repo, "flake.lock"))
+	if err != nil {
+		return nil, err
+	}
+	for n := range lock.Direct() {
+		known["input"][n] = true
+	}
+	if on("package") {
+		pkgs, err := flake.Packages(u.R, repo)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range pkgs {
+			known["package"][p.Name] = true
+		}
+	}
+	if entries, err := u.Check.ProfileEntries(); err == nil {
+		for _, e := range entries {
+			known["profile"][e.Name] = true
+		}
+	}
+	return known, nil
+}
+
+func both(s []string) string {
+	if len(s) == 2 {
+		return "both "
+	}
+	return ""
+}
+
+// list joins sources (form 0: with an article, 1: bare) or plain strings (form -1) as
+// "a, b and c".
+func list(items []string, form int, conj string) string {
+	words := make([]string, len(items))
+	for i, it := range items {
+		words[i] = it
+		if form >= 0 {
+			words[i] = nouns[it][form]
+		}
+	}
+	if len(words) == 1 {
+		return words[0]
+	}
+	return strings.Join(words[:len(words)-1], ", ") + " " + conj + " " + words[len(words)-1]
 }

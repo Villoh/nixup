@@ -87,7 +87,7 @@ func (h *hostList) Set(v string) error { *h = append(*h, v); return nil }
 
 func runUpdate(args []string, d Deps) int {
 	fs, dir := d.flags("update")
-	source := fs.String("source", "", "comma list of: input, package (default: both)")
+	source := fs.String("source", "", "comma list of: "+strings.Join(update.Sources, ", ")+" (default: all)")
 	var hosts hostList
 	fs.Var(&hosts, "H", "host to build for inputs (repeatable; default: all nixosConfigurations)")
 	noBuild := fs.Bool("no-build", false, "do not build: only update and show the changes")
@@ -97,7 +97,7 @@ func runUpdate(args []string, d Deps) int {
 	if !ok {
 		return code
 	}
-	sources, err := parseSources(*source, []string{"input", "package"})
+	sources, err := parseSources(*source, update.Sources)
 	if err != nil {
 		return d.fail(err)
 	}

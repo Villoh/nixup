@@ -34,11 +34,11 @@ Un flake sin salida `packages` no tiene nada en esta sección.
 
 ### profile
 
-Si tienes `nix` instalado, nixup lee `nix profile list --json`. Para cada entrada cuya URL original contiene una revisión de nixpkgs de 40 caracteres, compara esa revisión con la que tiene bloqueada el input `nixpkgs` de tu flake. Si es distinta, sale como `pinned to an old nixpkgs`. Las entradas que siguen una referencia de flake en vez de una revisión fija salen como `ok`, con `nix profile upgrade <name>` como nota.
+Si tienes `nix` instalado, nixup lee `nix profile list --json`. Para cada entrada cuya URL original contiene una revisión de nixpkgs de 40 caracteres, compara esa revisión con la que tiene bloqueada el input `nixpkgs` de tu flake. Si es distinta, sale como desactualizada con `pinned: nix profile remove, then install again`, porque `nix profile upgrade` no puede mover una entrada fijada. Las entradas que siguen una referencia móvil (como `flake:nixpkgs`) en vez de una revisión fija salen como `ok`, con `nixup update <name>` como acción; como todas las filas `ok`, no se muestran sin `--all`. Si falla `nix profile list`, la sección tiene una fila `error`.
 
 ### flatpak
 
-Si tienes `flatpak` instalado, nixup ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). Solo informa; el `flatpak update` lo haces tú.
+Si tienes `flatpak` instalado, nixup ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). La acción es `nixup update <id de la app>`.
 
 ## Versiones
 
@@ -59,7 +59,11 @@ Los inputs de rama, y todos los inputs en `nixup update`, solo llevan commits, s
 
 ## update, paso a paso
 
-`nixup update` ejecuta primero el paso de inputs y después el de paquetes, para que el build de los paquetes se haga con el lock nuevo. Con nombres, cada paso recibe solo los nombres de su tipo y un paso sin ninguno no se ejecuta; con `--source`, solo se ejecuta ese paso. El paso de paquetes se ejecuta aunque el de inputs se haya rechazado, haya fallado o hayas contestado que no, y en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de los dos.
+`nixup update` ejecuta cuatro pasos en este orden: inputs, paquetes, Flatpak y `nix profile`. Los inputs van primero, para que el build de los paquetes se haga con el lock nuevo. Cada paso se ejecuta aunque uno anterior se haya rechazado, haya fallado o hayas contestado que no; en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de todos los pasos.
+
+Con `--source`, solo se ejecutan los pasos de la lista. Con nombres, cada nombre se busca en `flake.lock`, en los paquetes del flake (que solo se evalúan si el paso de paquetes está activo), en `flatpak list --columns=application` (apps y runtimes) y en `nix profile list --json`. Cada paso recibe solo los nombres de su origen, y un paso sin ninguno no se ejecuta.
+
+Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada llega al sistema hasta que lo aplicas con nh. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento. Su pregunta lo dice, y te indican cómo deshacerlo.
 
 ### El paso de inputs
 
@@ -88,6 +92,25 @@ Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado.
 
 Aquí `nix-update` edita tu repositorio directamente, no una copia. El `git checkout` del paso 6 es lo que deja los archivos como estaban.
 
+### El paso de Flatpak
+
+Se salta si `flatpak` no está en el `PATH`.
+
+1. Ejecuta `flatpak remote-ls --updates --columns=ref,version` y `flatpak list --columns=ref,version`, igual que la sección `flatpak` de check, y se queda con los IDs nombrados si has dado nombres.
+2. Imprime la tabla de actualizaciones pendientes.
+3. Apunta el commit desplegado de cada ref con `flatpak info --show-commit <ref>`.
+4. Pregunta una vez, salvo con `-y`.
+5. Ejecuta `flatpak update -y --noninteractive <ref...>` con exactamente los refs mostrados.
+6. Imprime `flatpak update --commit=<commit anterior> <ref>` para cada ref. También tras un fallo, porque algunos refs pueden haberse movido.
+
+### El paso de nix profile
+
+1. Lee `nix profile list --json`, y se queda con las entradas nombradas si has dado nombres.
+2. Deja fuera las entradas cuya URL original contiene una revisión de 40 caracteres, e imprime cómo actualizarlas a mano: `nix profile remove` y volver a instalarlas.
+3. Pregunta una vez, salvo con `-y`.
+4. Ejecuta `nix profile upgrade <nombre...>` con las entradas que siguen una referencia móvil.
+5. Imprime `nix profile rollback` como forma de volver atrás.
+
 ## Comandos que ejecuta nixup
 
 Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), así que no se lanza nada más.
@@ -107,13 +130,18 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
 | `nix-update --flake <name> --version=<v> [args...]` | update (paquetes) |
 | `nix build --no-link .#<name>` | update (paquetes) |
-| `nix profile list --json` | profile |
+| `nix profile list --json` | profile, update (nombres, nix profile) |
+| `nix profile upgrade <nombre...>` | update (nix profile) |
 | `nix eval --json --impure --expr <getFlake del flake>` | search |
 | `nix-store --query --requisites /run/current-system` | search (qué hay en el sistema) |
 | `flatpak list --app --columns=...` | list, search |
 | `flatpak search --columns=... <nombre>` | search |
-| `flatpak remote-ls --updates --columns=ref,version` | flatpak |
-| `flatpak list --columns=ref,version` | flatpak (versiones instaladas) |
+| `flatpak list --app --columns=application` | search (qué está instalado) |
+| `flatpak list --columns=application` | update (nombres) |
+| `flatpak remote-ls --updates --columns=ref,version` | flatpak, update (Flatpak) |
+| `flatpak list --columns=ref,version` | flatpak, update (Flatpak), versiones instaladas |
+| `flatpak info --show-commit <ref>` | update (Flatpak), antes de actualizar |
+| `flatpak update -y --noninteractive <ref...>` | update (Flatpak) |
 | `gh auth token` | token de GitHub, si no hay ninguna variable definida |
 
 Las peticiones HTTP propias de nixup solo van a `api.github.com`. `git`, `nix` y `nix-update` salen a la red por su cuenta.
@@ -126,6 +154,11 @@ Se escribe:
 - Con el paso de paquetes de `update`: los archivos que cambia `nix-update`, normalmente en `<dir del paquete>`. Se restauran si falla la actualización o el build.
 - Con `--report <archivo>`: Markdown añadido al final de ese archivo.
 - Los builds acaban en el Nix store, como cualquier build.
+
+Se instala, tras un sí o con `-y`:
+
+- Con el paso de Flatpak de `update`: las actualizaciones de Flatpak pendientes, mediante `flatpak update`. Para volver atrás, usa las líneas `flatpak update --commit=<commit anterior> <ref>` que imprime.
+- Con el paso de `nix profile` de `update`: versiones nuevas de las entradas del perfil que siguen una referencia móvil, mediante `nix profile upgrade`. Para deshacerlo, `nix profile rollback`.
 
 Nunca:
 

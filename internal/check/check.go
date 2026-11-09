@@ -232,60 +232,100 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 
 var nixpkgsRev = regexp.MustCompile(`/([0-9a-f]{40})`)
 
-// Profile flags `nix profile` entries pinned to a nixpkgs other than the system one.
-func (c *Checker) Profile(repo string) []Row {
+// ProfileEntry is one `nix profile` element. Rev is the nixpkgs-style revision it is
+// pinned to, "" when it follows a moving reference such as flake:nixpkgs.
+type ProfileEntry struct{ Name, URL, Rev string }
+
+// ProfileEntries lists `nix profile`, sorted by name; none without nix.
+func (c *Checker) ProfileEntries() ([]ProfileEntry, error) {
 	if !c.R.Has("nix") {
-		return nil
+		return nil, nil
 	}
 	out, errs, err := c.R.Capture("", "nix", "profile", "list", "--json")
 	if err != nil {
-		return []Row{{Section: "profile", Name: "nix profile", Status: Error, Note: run.LastLine(errs)}}
+		return nil, fmt.Errorf("nix profile list: %s", run.LastLine(errs))
+	}
+	if strings.TrimSpace(out) == "" {
+		return nil, nil
 	}
 	var data struct {
 		Elements map[string]struct {
 			OriginalURL string `json:"originalUrl"`
 		} `json:"elements"`
 	}
-	if json.Unmarshal([]byte(out), &data) != nil {
-		return nil
+	if err := json.Unmarshal([]byte(out), &data); err != nil {
+		return nil, fmt.Errorf("nix profile list: %w", err)
+	}
+	var entries []ProfileEntry
+	for name, e := range data.Elements {
+		pe := ProfileEntry{Name: name, URL: e.OriginalURL}
+		if m := nixpkgsRev.FindStringSubmatch(e.OriginalURL); m != nil {
+			pe.Rev = m[1]
+		}
+		entries = append(entries, pe)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	return entries, nil
+}
+
+// Profile reports `nix profile` entries. One that follows a moving reference can be
+// upgraded by nixup update; one pinned to a nixpkgs other than the flake's cannot, and
+// says what to do instead. A revision of any other repository says nothing about age.
+func (c *Checker) Profile(repo string) []Row {
+	entries, err := c.ProfileEntries()
+	if err != nil {
+		return []Row{{Section: "profile", Name: "nix profile", Status: Error, Note: err.Error()}}
 	}
 	system := ""
 	if lock, err := flake.ReadLock(filepath.Join(repo, "flake.lock")); err == nil {
 		node, _ := lock.Input("nixpkgs")
 		system = node.Locked.Rev
 	}
-	var names []string
-	for n := range data.Elements {
-		names = append(names, n)
-	}
-	sort.Strings(names)
 	var rows []Row
-	for _, n := range names {
-		m := nixpkgsRev.FindStringSubmatch(data.Elements[n].OriginalURL)
+	for _, e := range entries {
 		switch {
-		case m == nil:
-			rows = append(rows, Row{Section: "profile", Name: n, Current: "tracks flake ref", Status: OK,
-				Note: "nix profile upgrade " + n})
-		case system != "" && m[1] != system:
-			rows = append(rows, Row{Section: "profile", Name: n, Current: flake.ShortRev(m[1]), Latest: flake.ShortRev(system),
-				Status: Outdated, Note: "pinned to an old nixpkgs"})
+		case e.Rev == "":
+			rows = append(rows, Row{Section: "profile", Name: e.Name, Current: "tracks flake ref", Status: OK,
+				Note: "nixup update " + e.Name})
+		case system != "" && e.Rev != system && strings.Contains(strings.ToLower(e.URL), "nixpkgs"):
+			rows = append(rows, Row{Section: "profile", Name: e.Name, Current: flake.ShortRev(e.Rev), Latest: flake.ShortRev(system),
+				Status: Outdated, Note: "pinned: nix profile remove, then install again"})
 		default:
-			rows = append(rows, Row{Section: "profile", Name: n, Current: flake.ShortRev(m[1]), Status: OK})
+			rows = append(rows, Row{Section: "profile", Name: e.Name, Current: flake.ShortRev(e.Rev), Status: OK})
 		}
 	}
 	return rows
 }
 
-// Flatpak lists applications and runtimes with a pending update, with the installed and
-// the new version. A runtime has no version, so its branch is shown and its updates are
-// new builds; an app whose remote publishes no version (a .flatpakref remote) is unknown.
-func (c *Checker) Flatpak() []Row {
+// FlatpakUpdate is one application or runtime with a pending update.
+type FlatpakUpdate struct{ Ref, ID, Current, Latest string }
+
+// FlatpakInstalled are the IDs of the installed applications and runtimes; none without
+// flatpak. Runtimes are included because check suggests `nixup update <runtime>` too.
+func (c *Checker) FlatpakInstalled() map[string]bool {
+	apps := map[string]bool{}
 	if !c.R.Has("flatpak") {
-		return nil
+		return apps
+	}
+	if out, _, err := c.R.Capture("", "flatpak", "list", "--columns=application"); err == nil {
+		for _, f := range fields(out) {
+			apps[f[0]] = true
+		}
+	}
+	return apps
+}
+
+// FlatpakUpdates lists applications and runtimes with a pending update, with the
+// installed and the new version. A runtime has no version, so its branch is shown and
+// its updates are new builds; an app whose remote publishes no version (a .flatpakref
+// remote) is unknown.
+func (c *Checker) FlatpakUpdates() ([]FlatpakUpdate, error) {
+	if !c.R.Has("flatpak") {
+		return nil, nil
 	}
 	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=ref,version")
 	if err != nil {
-		return []Row{{Section: "flatpak", Name: "flatpak", Status: Error, Note: run.LastLine(errs)}}
+		return nil, fmt.Errorf("flatpak remote-ls: %s", run.LastLine(errs))
 	}
 	installed := map[string]string{} // "id/arch/branch" -> version
 	if list, _, err := c.R.Capture("", "flatpak", "list", "--columns=ref,version"); err == nil {
@@ -294,7 +334,7 @@ func (c *Checker) Flatpak() []Row {
 			installed[id+"/"+arch+"/"+branch] = f[1]
 		}
 	}
-	var rows []Row
+	var ups []FlatpakUpdate
 	seen := map[string]bool{}
 	for _, f := range fields(out) {
 		ref, latest := f[0], f[1]
@@ -312,8 +352,21 @@ func (c *Checker) Flatpak() []Row {
 		case latest == current:
 			latest = "new build"
 		}
-		rows = append(rows, Row{Section: "flatpak", Name: id, Current: current, Latest: latest,
-			Status: Outdated, Note: "flatpak update"})
+		ups = append(ups, FlatpakUpdate{Ref: ref, ID: id, Current: current, Latest: latest})
+	}
+	return ups, nil
+}
+
+// Flatpak reports the pending Flatpak updates.
+func (c *Checker) Flatpak() []Row {
+	ups, err := c.FlatpakUpdates()
+	if err != nil {
+		return []Row{{Section: "flatpak", Name: "flatpak", Status: Error, Note: err.Error()}}
+	}
+	var rows []Row
+	for _, u := range ups {
+		rows = append(rows, Row{Section: "flatpak", Name: u.ID, Current: u.Current, Latest: u.Latest,
+			Status: Outdated, Note: "nixup update " + u.ID})
 	}
 	return rows
 }

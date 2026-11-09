@@ -31,7 +31,7 @@ Every command that works on a flake accepts `-C <dir>`. See [Configuration](conf
 
 - Results, reviews and questions go to stdout.
 - Errors go to stderr.
-- The output of `nix flake update`, `nh os build`, `nix-update` and `nix build` is streamed to stderr.
+- The output of `nix flake update`, `nh os build`, `nix-update`, `nix build`, `flatpak update` and `nix profile upgrade` is streamed to stderr.
 
 So `nixup check --json > out.json` gives clean JSON.
 
@@ -86,34 +86,42 @@ Exit codes:
 
 ## update
 
-Reviews, builds and applies updates: first the flake's inputs (`flake.lock`), then the packages your flake defines in its own `packages.<system>` output.
+Reviews and applies updates in four steps, in this order: the flake's inputs (`flake.lock`), the packages your flake defines in its own `packages.<system>` output, Flatpak, and `nix profile`.
+
+The input and package steps only edit files in your repository; you apply them to the system with nh. The Flatpak and `nix profile` steps install on the machine right away, after one question each, and print how to undo it.
 
 ```bash
 nixup update
 nixup update nixpkgs home-manager
 nixup update ripgrep --no-build
+nixup update co.hyprlab.Hylki
 nixup update --source input -H desktop -H laptop
 nixup update --source package -y --report report.md
+nixup update --source flatpak
 ```
 
-Without names everything is updated: every input, then every package. Each name is looked up both as a direct input of `flake.lock` and as a package of the flake. Named inputs go to the input step and named packages to the package step; a step with no names of its kind is skipped, so `nixup update ripgrep` never touches `flake.lock`. Inputs always go first, so packages are built against the new lock.
+Without names everything is updated: every input, every package, every pending Flatpak update and every `nix profile` entry that follows a moving reference. Each name is looked up as a direct input of `flake.lock`, as a package of the flake (only when the package step is on), as an installed Flatpak app ID and as a `nix profile` entry. Each name goes to the step of its source; a step with no names of its kind is skipped, so `nixup update ripgrep` never touches `flake.lock` and `nixup update co.hyprlab.Hylki` runs only the Flatpak step. Inputs always go first, so packages are built against the new lock.
 
-A name that is not an input or a package (`no input or package called <name>`), or that is both (`<name> is both an input and a package: pick one with --source input or --source package`), is an error, and nothing runs. So is a name that `--source` leaves out: `<name> is an input, not a package (drop --source package)`, or `no input called <name>` with `--source input`, where packages are not even evaluated.
+A name that does not lead to exactly one step is an error, and nothing runs:
+
+- In more than one enabled source: `<name> is both an input and a package: pick one with --source input or --source package`. With three or more sources: `<name> is an input, a package and a Flatpak app: pick one with --source input, --source package or --source flatpak`.
+- Only in sources that `--source` leaves out: `<name> is an input, which --source leaves out`.
+- Nowhere: `no input, package, Flatpak app or nix profile entry called <name>`. The message lists only the enabled sources, so with `--source input` it is `no input called <name>`, and packages are not even evaluated.
 
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `--source <list>` | Limit the run to one step: `input` or `package` (plurals work too). Default: both. Anything else is an error. |
+| `--source <list>` | Comma-separated steps to run: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. Anything else is an error. |
 | `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
-| `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. |
-| `-y` | Write the new lock and update the packages without asking. Needed for unattended runs. |
-| `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package) to this file. Created if missing. |
+| `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
+| `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. |
+| `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
 
 ### Inputs
 
 The input step, in order:
 
-1. Refuse to start if `flake.lock` has uncommitted changes. The package step still runs.
+1. Refuse to start if `flake.lock` has uncommitted changes. The other steps still run.
 2. Copy the working tree to a temporary directory and run `nix flake update --flake <copy> [input...]` there.
 3. If nothing changed, print `flake.lock is already up to date.` and stop.
 4. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
@@ -134,13 +142,39 @@ The package step goes through the packages one at a time. For each outdated pack
 
 Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and none is outdated, the step prints `Every package is up to date.`
 
-Exit codes. The worst code of the two steps, and of all the packages, wins:
+### Flatpak
+
+The Flatpak step runs only when `flatpak` is installed. Without it the step is skipped without a message. In order:
+
+1. List the pending updates with `flatpak remote-ls --updates` and the installed versions with `flatpak list`, the same data as `check`. With names, keep only those IDs; a named one with no update prints `<id> is up to date.` With no names and nothing pending, print `Every Flatpak is up to date.` and stop.
+2. Print a table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`. `LATEST` is the new version, `unknown` when the remote publishes none, or `new build` for runtimes and rebuilds of the same version.
+3. Read the deployed commit of each ref with `flatpak info --show-commit <ref>`.
+4. Ask once, `Update 3 Flatpak refs now? This installs them right away. [y/N]` (`Update 1 Flatpak ref now? This installs it right away.` for one), unless `-y`. A no prints `Skipped.`
+5. Run `flatpak update -y --noninteractive` with exactly those refs.
+6. Print `Flatpak updated.`, or `flatpak update failed; some refs may have been updated.` and exit code 2. In both cases, print one line per ref to go back: `flatpak update --commit=<previous commit> <ref>`.
+
+Names are Flatpak IDs of apps or runtimes, as in `nixup update co.hyprlab.Hylki` or `nixup update org.gnome.Platform`, the names `check` shows. An app installed from a bundle whose remote is disabled, such as a `.flatpak` bundle built by one of your packages, never has an update in Flatpak. It is updated through its package.
+
+### nix profile
+
+The `nix profile` step, in order:
+
+1. Read `nix profile list --json`. With names, keep only those entries.
+2. Leave out every entry pinned to a revision (`github:NixOS/nixpkgs/<40 hex characters>`), because `nix profile upgrade` cannot move it. For each one print `<name> is pinned to <short rev>: nix profile upgrade cannot move it. To update it, nix profile remove <name> and install it again.`
+3. If no entry left follows a moving reference (such as `flake:nixpkgs`, or `github:owner/repo` without a revision), stop. Without names it first prints `No nix profile entry follows a moving reference: nothing to upgrade.`
+4. Ask `Upgrade 2 nix profile entries (a, b) now? This installs them right away. [y/N]`, unless `-y`. A no prints `Skipped.`
+5. Run `nix profile upgrade` with those entry names.
+6. Print `nix profile upgraded. To undo it: nix profile rollback`. A failure prints `nix profile upgrade failed.` and exits with 2.
+
+Names are `nix profile` entry names, as `nix profile list` shows them.
+
+Exit codes. The worst code of the four steps, and of all the packages, wins:
 
 | Code | Meaning |
 |---|---|
 | 0 | Everything was updated, you answered no, or there was nothing to update. |
 | 1 | Something was refused because of uncommitted changes: `flake.lock` or a package directory. Commit or stash, then run again. |
-| 2 | Something failed: a name or `--source` was wrong, a check failed, or `nix flake update`, listing hosts, a build, `nix-update` or writing the file failed. |
+| 2 | Something failed: a name or `--source` was wrong, a check failed, or `nix flake update`, listing hosts, a build, `nix-update`, writing the file, `flatpak update` or `nix profile upgrade` failed. |
 
 ## list
 

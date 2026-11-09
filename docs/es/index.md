@@ -8,9 +8,9 @@ lang: es
 
 [English](../index.md) | **Español**
 
-nixup es una herramienta de línea de comandos para quien gestiona NixOS con un flake. Responde a dos preguntas: qué está desactualizado y qué ha cambiado upstream desde la versión que tienes. Después actualiza `flake.lock` y tus propios paquetes, pero solo tras un build en un sitio seguro y un sí por tu parte.
+nixup es una herramienta de línea de comandos para quien gestiona NixOS con un flake. Responde a dos preguntas: qué está desactualizado y qué ha cambiado upstream desde la versión que tienes. Después actualiza `flake.lock` y tus propios paquetes, pero solo tras un build en un sitio seguro y un sí por tu parte. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte.
 
-No activa nada. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demonios ni timers. Cuando nixup escribe un archivo, tú revisas el diff, pruebas el sistema con tus herramientas de siempre y haces el commit.
+No activa ninguna generación de NixOS. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demonios ni timers. Cuando nixup escribe un archivo, tú revisas el diff, pruebas el sistema con tus herramientas de siempre y haces el commit. Los pasos de Flatpak y de `nix profile` son la excepción a "nixup solo escribe archivos": instalan en el momento y te dicen cómo deshacerlo.
 
 ## Qué comprueba
 
@@ -18,13 +18,13 @@ No activa nada. En el código no hay ningún `switch`, `boot` ni `sudo`, ni demo
 |---|---|---|
 | `inputs` | Los inputs de rama con el último commit de la rama remota; los fijados a un tag de release con el tag más nuevo | `nixup update`, o editando `flake.nix` si es un tag fijado |
 | `packages` | Cada paquete de la salida `packages.<system>` de tu flake con su tag o release más reciente en GitHub | `nixup update` (ejecuta `nix-update`) |
-| `profile` | Entradas de `nix profile` fijadas a una revisión de nixpkgs distinta de la del input `nixpkgs` de tu flake | `nix profile upgrade` |
-| `flatpak` | Aplicaciones y runtimes con una actualización pendiente | `flatpak update` |
+| `profile` | Entradas de `nix profile` fijadas a una revisión de nixpkgs distinta de la del input `nixpkgs` de tu flake; las fijadas a otro repositorio solo se listan | `nixup update` para las entradas que siguen una referencia móvil; una entrada fijada necesita `nix profile remove` y volver a instalarla |
+| `flatpak` | Aplicaciones y runtimes con una actualización pendiente | `nixup update` |
 
 ## Los comandos
 
 - `nixup check` lista lo que está desactualizado. Es el comando por defecto y solo lee.
-- `nixup update` primero actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream, hace el build de todos los hosts y escribe el nuevo lock cuando confirmas. Después actualiza los paquetes que define tu flake, de uno en uno, tras enseñarte qué ha cambiado upstream. Con nombres o `--source` lo limitas a algunos inputs o paquetes.
+- `nixup update` primero actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream, hace el build de todos los hosts y escribe el nuevo lock cuando confirmas. Después actualiza los paquetes que define tu flake, de uno en uno, tras enseñarte qué ha cambiado upstream. Por último instala las actualizaciones de Flatpak pendientes y actualiza las entradas de `nix profile` que siguen una referencia móvil, con una pregunta cada uno. Con nombres o `--source` lo limitas a algunos inputs, paquetes, apps de Flatpak o entradas del perfil.
 - `nixup list` enseña todo lo que vigila con las versiones que tienes, sin tocar la red.
 - `nixup search <nombre>` busca un paquete en tu nixpkgs fijado, tus paquetes, tus inputs y Flatpak.
 

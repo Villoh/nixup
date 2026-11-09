@@ -236,7 +236,7 @@ func TestUpdateFlagsAfterPackageNames(t *testing.T) {
 func TestUpdateUnknownName(t *testing.T) {
 	f := newFixture(t, nil)
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	if code := f.run("update", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no input or package called nope") {
+	if code := f.run("update", "nope", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "no input, package, Flatpak app or nix profile entry called nope") {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 }
@@ -385,7 +385,7 @@ func TestOldUpdateCommandsAreGone(t *testing.T) {
 
 func TestUpdateRejectsOtherSources(t *testing.T) {
 	f := newFixture(t, nil)
-	if code := f.run("update", "--source", "flatpak", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), `unknown source "flatpak" (one of: input, package)`) {
+	if code := f.run("update", "--source", "bogus", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), `unknown source "bogus" (one of: input, package, flatpak, profile)`) {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 }

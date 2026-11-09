@@ -15,7 +15,7 @@ cmd/nixup/          main: conecta la terminal real, el ejecutor de procesos y el
 internal/
   cli/              parseo de flags, subcomandos, códigos de salida
   check/            las comprobaciones de solo lectura: inputs, packages, profile, flatpak
-  update/           el comando que escribe: Update ejecuta Lock (flake.lock) y luego Pkg (packages/)
+  update/           el comando que escribe e instala: Lock (flake.lock), Pkg (packages/), Flatpak, Profile
   report/           salida en texto para la terminal y en Markdown
   flake/            flake.lock, localizar el flake, hosts, paquetes propios, copia temporal
   gh/               tags y ramas con git; commits y release notes con la API
