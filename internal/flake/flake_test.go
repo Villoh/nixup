@@ -310,6 +310,7 @@ func flakeDir(t *testing.T) string {
 }
 
 func TestResolvePrecedence(t *testing.T) {
+	t.Chdir(t.TempDir()) // outside any flake: the variables are used
 	flagDir, nixup, nhOS, nh := flakeDir(t), flakeDir(t), flakeDir(t), flakeDir(t)
 	cases := []struct {
 		name       string
@@ -332,7 +333,22 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
+func TestResolveTheFlakeYouAreInBeatsVariables(t *testing.T) {
+	here, configured := flakeDir(t), flakeDir(t)
+	sub := filepath.Join(here, "modules")
+	os.MkdirAll(sub, 0o755)
+	t.Chdir(sub)
+	got, from, err := flake.Resolve("", env("NIXUP_FLAKE", configured, "NH_FLAKE", "github:not/even/valid"))
+	if want, _ := filepath.EvalSymlinks(here); err != nil || from != "" || (got != here && got != want) {
+		t.Errorf("got %q from %q, %v; want %q: inside a flake, that flake (variables are not even read)", got, from, err, here)
+	}
+	if got, _, _ := flake.Resolve(configured, env("NIXUP_FLAKE", configured)); got != configured {
+		t.Errorf("-C still beats the flake you are in: %q", got)
+	}
+}
+
 func TestResolveTildeAndRelative(t *testing.T) {
+	t.Chdir(t.TempDir())
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, "cfg"), 0o755); err != nil {
@@ -366,7 +382,7 @@ func TestResolveErrors(t *testing.T) {
 	inside := flakeDir(t)
 	child := filepath.Join(inside, "sub")
 	os.MkdirAll(child, 0o755)
-	t.Chdir(inside)
+	t.Chdir(t.TempDir()) // outside any flake, so the variables are read
 	for name, e := range map[string]func(string) string{
 		"parent flake is not used": env("NIXUP_FLAKE", child),
 		"missing directory":        env("NIXUP_FLAKE", filepath.Join(inside, "nope")),
@@ -382,7 +398,6 @@ func TestResolveErrors(t *testing.T) {
 		t.Errorf("the error must name the variable and the problem: %v", err)
 	}
 
-	t.Chdir(t.TempDir())
 	_, _, err = flake.Resolve("", env())
 	if err == nil || !strings.Contains(err.Error(), "NIXUP_FLAKE") {
 		t.Errorf("with nothing configured, the error must say how to configure it: %v", err)

@@ -3,7 +3,6 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,63 +261,41 @@ func TestFlakeFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestEnvironmentFlakeNotice(t *testing.T) {
-	env := func(repo string) func(string) string {
-		return func(k string) string {
-			if k == "NH_OS_FLAKE" {
-				return repo + "#desktop"
-			}
-			return ""
+func TestTheFlakeYouAreInWinsQuietly(t *testing.T) {
+	configured := newFixture(t, map[string]string{"there": "o/there@#" + strings.Repeat("a", 40)})
+	here := testutil.Tree(t, map[string]string{"flake.nix": "{}", "sub/x": "",
+		"flake.lock": testutil.LockJSON(map[string]string{"here": "o/here@#" + strings.Repeat("b", 40)})})
+	t.Chdir(filepath.Join(here, "sub"))
+	configured.deps.Env = func(k string) string {
+		if k == "NH_OS_FLAKE" {
+			return configured.repo + "#desktop"
+		}
+		return ""
+	}
+	configured.e.Run.Missing = map[string]bool{"flatpak": true}
+	configured.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	configured.run("list", "--json")
+	if out := configured.out.String(); !strings.Contains(out, `"here"`) || strings.Contains(out, `"there"`) {
+		t.Errorf("inside a flake, that flake is used: %s", out)
+	}
+	if configured.errb.Len() != 0 {
+		t.Errorf("and nothing needs to be said about it: %q", configured.errb)
+	}
+
+	t.Chdir(t.TempDir()) // outside any flake: the configured one, also quietly, even before writing
+	configured.out.Reset()
+	configured.run("pkg")
+	if configured.errb.Len() != 0 {
+		t.Errorf("no notice: %q", configured.errb)
+	}
+	var dirs []string
+	for _, c := range configured.e.Run.Calls() {
+		if strings.HasPrefix(c.String(), "nix eval --json .#packages.") {
+			dirs = append(dirs, c.Dir)
 		}
 	}
-	notice := func(f *fixture) string { return "using " + f.repo + " ($NH_OS_FLAKE)" }
-
-	// Commands that write say where, even from outside any flake.
-	f := newFixture(t, nil)
-	t.Chdir(t.TempDir())
-	f.deps.Env = env(f.repo)
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	f.run("pkg")
-	if !strings.Contains(f.errb.String(), notice(f)) {
-		t.Errorf("pkg writes: %q", f.errb)
-	}
-	f = newFixture(t, nil)
-	f.deps.Env = env(f.repo)
-	f.e.Run.On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("dirty")})
-	f.run("lock")
-	if !strings.Contains(f.errb.String(), notice(f)) {
-		t.Errorf("lock writes: %q", f.errb)
-	}
-
-	// Inside another flake the variable wins over the directory: always said.
-	f = newFixture(t, nil)
-	other := testutil.Tree(t, map[string]string{"flake.nix": "{}", "flake.lock": "{}", "sub/x": ""})
-	t.Chdir(filepath.Join(other, "sub"))
-	f.deps.Env = env(f.repo)
-	f.e.Run.Missing = map[string]bool{"flatpak": true, "nix": true}
-	f.run("check", "--only", "inputs")
-	if got := strings.TrimSpace(f.errb.String()); got != "nixup: using $NH_OS_FLAKE, not the flake here (-C . to use this one)" {
-		t.Errorf("inside another flake: %q", got)
-	}
-
-	// Paths under the home directory are shortened.
-	f = newFixture(t, nil)
-	t.Setenv("HOME", filepath.Dir(f.repo))
-	t.Chdir(t.TempDir())
-	f.deps.Env = env(f.repo)
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	f.run("pkg")
-	if want := "using ~/" + filepath.Base(f.repo) + " ($NH_OS_FLAKE)"; !strings.Contains(f.errb.String(), want) {
-		t.Errorf("want %q in %q", want, f.errb)
-	}
-
-	// Inside the chosen flake itself: nothing to point out.
-	f = newFixture(t, nil)
-	t.Chdir(f.repo)
-	f.deps.Env = env(f.repo)
-	f.run("check", "--only", "inputs")
-	if strings.Contains(f.errb.String(), "using") {
-		t.Errorf("inside the same flake: %q", f.errb)
+	if len(dirs) != 2 || dirs[0] != here || dirs[1] != configured.repo {
+		t.Errorf("list evaluated the flake it was in, pkg the configured one: %v", dirs)
 	}
 }
 
@@ -336,6 +313,7 @@ func TestFlagBeatsEnvironmentAndStaysQuiet(t *testing.T) {
 
 func TestBadEnvironmentFlakeIsAnError(t *testing.T) {
 	f := newFixture(t, nil)
+	t.Chdir(t.TempDir()) // outside any flake, so the variable is read
 	f.deps.Env = func(k string) string {
 		if k == "NIXUP_FLAKE" {
 			return "github:Villoh/nixos-config"

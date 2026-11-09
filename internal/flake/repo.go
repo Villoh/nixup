@@ -37,13 +37,17 @@ func FindRepo(dir string) (string, error) {
 // needs no extra setup here.
 var envVars = []string{"NIXUP_FLAKE", "NH_OS_FLAKE", "NH_FLAKE"}
 
-// Resolve finds the flake to work on. Precedence: the -C flag, then NIXUP_FLAKE,
-// NH_OS_FLAKE and NH_FLAKE, then a search upwards from the current directory.
-// source says where the answer came from: "-C", "$NIXUP_FLAKE", ... or "" for the search.
+// Resolve finds the flake to work on. Precedence: the -C flag, then the flake around the
+// current directory (searching upwards, like git), then NIXUP_FLAKE, NH_OS_FLAKE and
+// NH_FLAKE. Inside a flake you work on that flake; anywhere else, on the configured one.
+// source says where the answer came from: "-C", "" for the current directory, "$NH_FLAKE"...
 func Resolve(flagDir string, getenv func(string) string) (repo, source string, err error) {
 	if flagDir != "" {
 		repo, err = FindRepo(flagDir)
 		return repo, "-C", err
+	}
+	if repo, err := FindRepo("."); err == nil {
+		return repo, "", nil
 	}
 	for _, name := range envVars {
 		v := getenv(name)
@@ -60,11 +64,7 @@ func Resolve(flagDir string, getenv func(string) string) (repo, source string, e
 		}
 		return dir, "$" + name, nil
 	}
-	repo, err = FindRepo(".")
-	if err != nil {
-		err = fmt.Errorf("%w (run it inside the flake, use -C, or set NIXUP_FLAKE or NH_FLAKE)", err)
-	}
-	return repo, "", err
+	return "", "", fmt.Errorf("no flake.nix + flake.lock here or above (run it inside the flake, use -C, or set NIXUP_FLAKE or NH_FLAKE)")
 }
 
 // localPath turns a value such as "~/nixos#desktop" or "path:/etc/nixos" into a directory.

@@ -12,13 +12,15 @@ nixup has no configuration file. It takes a flag, a few environment variables, a
 
 ## Which flake
 
-nixup works on one flake: a directory with both `flake.nix` and `flake.lock`. It picks the first of these that is set:
+nixup works on one flake: a directory with both `flake.nix` and `flake.lock`. It picks the first of these that applies:
 
 1. `-C <dir>`
-2. `NIXUP_FLAKE`
-3. `NH_OS_FLAKE`
-4. `NH_FLAKE`
-5. Otherwise, a search upwards from the current directory.
+2. The flake you are in: the current directory or the closest parent with both files, like git finds its repository.
+3. `NIXUP_FLAKE`
+4. `NH_OS_FLAKE`
+5. `NH_FLAKE`
+
+Inside a flake you work on that flake; anywhere else, on the one you configured. nixup prints nothing about which one it picked.
 
 `NH_OS_FLAKE` and `NH_FLAKE` are the variables [nh](https://github.com/nix-community/nh) reads, so if `nh` already knows your flake, nixup needs no extra setup. On NixOS, `programs.nh.flake` sets `NH_FLAKE` for you:
 
@@ -35,30 +37,23 @@ nixup works on one flake: a directory with both `flake.nix` and `flake.lock`. It
 
 ### -C
 
-`-C <dir>` starts the upward search at `<dir>`, so `-C ~/nixos-config/hosts` finds `~/nixos-config`. It also wins over every environment variable, and nixup prints nothing extra about it.
+`-C <dir>` starts the upward search at `<dir>`, so `-C ~/nixos-config/hosts` finds `~/nixos-config`. It wins over the directory you are in and over every environment variable.
 
 ### Environment variables
 
-A value from `NIXUP_FLAKE`, `NH_OS_FLAKE` or `NH_FLAKE` is used as is:
+The variables are read only outside a flake. A value from `NIXUP_FLAKE`, `NH_OS_FLAKE` or `NH_FLAKE` is used as is:
 
 - A `#host` suffix is dropped: `~/nixos-config#desktop` means `~/nixos-config`.
 - A `path:` prefix is dropped.
 - A leading `~` is expanded to your home directory.
 - Remote references such as `github:owner/repo` are rejected, because nixup has to write to the flake.
-- The directory itself must contain `flake.nix` and `flake.lock`. nixup never falls back to a parent directory or to the current one.
+- The directory itself must contain `flake.nix` and `flake.lock`. nixup never falls back to a parent directory.
 
 An invalid value is an error (exit code 2), even if a later variable would have worked:
 
 ```text
 nixup: $NIXUP_FLAKE: "github:foo/bar" is not a local directory
 nixup: $NH_FLAKE=/tmp: no flake.nix + flake.lock there
-```
-
-When the flake comes from a variable, nixup says so on stderr (so `--json` output stays clean) only where it matters: before `lock` and `pkg` write to it, and when you are inside a different flake, which the variable overrides. `check`, `list` and `search` run from anywhere else stay quiet.
-
-```text
-nixup: using ~/nixos-config ($NH_FLAKE)
-nixup: using $NH_FLAKE, not the flake here (-C . to use this one)
 ```
 
 ## Color

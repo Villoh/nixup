@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,8 +39,8 @@ const usage = `nixup — update checker and safe updater for flake-based NixOS
   nixup search    look a package name up in nixpkgs, your packages, your inputs and Flatpak
   nixup version
 
-Common flags: -C <dir> flake directory. Without it: $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE,
-              then a search upwards from the current directory.
+Common flags: -C <dir> flake directory. Without it: the flake you are in (searching upwards),
+              else $NIXUP_FLAKE, $NH_OS_FLAKE or $NH_FLAKE.
 Run 'nixup <command> -h' for the flags of each command.`
 
 // Deps are the things commands act through; tests replace them.
@@ -106,7 +105,7 @@ func (d Deps) updater() *update.Updater {
 func (d Deps) flags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(d.T.Err)
-	return fs, fs.String("C", "", "flake directory (default: $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE, else search upwards from here)")
+	return fs, fs.String("C", "", "flake directory (default: the flake you are in, else $NIXUP_FLAKE, $NH_OS_FLAKE, $NH_FLAKE)")
 }
 
 // parse accepts flags before, between and after positional arguments (Go's flag package
@@ -140,41 +139,9 @@ func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string,
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	repo, source, err := flake.Resolve(*dir, getenv)
+	repo, _, err = flake.Resolve(*dir, getenv)
 	if err != nil {
 		return nil, "", d.fail(err), false
 	}
-	if strings.HasPrefix(source, "$") { // the user did not point here in this command
-		if otherFlake(repo) {
-			d.T.Errorln("nixup: using " + source + ", not the flake here (-C . to use this one)")
-		} else if fs.Name() == "lock" || fs.Name() == "pkg" {
-			d.T.Errorln("nixup: using", tilde(repo), "("+source+")") // about to write there
-		}
-	}
 	return pos, repo, exit.OK, true
-}
-
-// otherFlake reports whether the current directory is inside a flake other than repo:
-// the case where an environment variable silently wins over the directory you are in.
-func otherFlake(repo string) bool {
-	here, err := flake.FindRepo(".")
-	if err != nil {
-		return false
-	}
-	real := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
-		return p
-	}
-	return real(here) != real(repo)
-}
-
-// tilde shortens a path under the home directory to ~/...
-func tilde(p string) string {
-	home, err := os.UserHomeDir()
-	if rel, ok := strings.CutPrefix(p, home+string(filepath.Separator)); err == nil && ok {
-		return "~/" + rel
-	}
-	return p
 }

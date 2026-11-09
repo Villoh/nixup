@@ -12,13 +12,15 @@ nixup no tiene archivo de configuración. Se maneja con un flag, unas pocas vari
 
 ## Qué flake usa
 
-nixup trabaja sobre un flake: un directorio con `flake.nix` y `flake.lock`. Se queda con lo primero de esta lista que esté definido:
+nixup trabaja sobre un flake: un directorio con `flake.nix` y `flake.lock`. Se queda con lo primero de esta lista que encaje:
 
 1. `-C <dir>`
-2. `NIXUP_FLAKE`
-3. `NH_OS_FLAKE`
-4. `NH_FLAKE`
-5. Si no hay nada, busca hacia arriba desde el directorio actual.
+2. El flake en el que estás: el directorio actual o el padre más cercano que tenga los dos archivos, igual que git encuentra su repositorio.
+3. `NIXUP_FLAKE`
+4. `NH_OS_FLAKE`
+5. `NH_FLAKE`
+
+Dentro de un flake trabajas sobre ese flake; en cualquier otro sitio, sobre el que tengas configurado. nixup no imprime nada sobre cuál ha elegido.
 
 `NH_OS_FLAKE` y `NH_FLAKE` son las variables que lee [nh](https://github.com/nix-community/nh), así que si `nh` ya conoce tu flake, nixup no necesita nada más. En NixOS, `programs.nh.flake` define `NH_FLAKE` por ti:
 
@@ -35,30 +37,23 @@ nixup trabaja sobre un flake: un directorio con `flake.nix` y `flake.lock`. Se q
 
 ### -C
 
-`-C <dir>` empieza la búsqueda hacia arriba en `<dir>`, así que `-C ~/nixos-config/hosts` encuentra `~/nixos-config`. Además tiene prioridad sobre todas las variables de entorno, y nixup no imprime nada extra.
+`-C <dir>` empieza la búsqueda hacia arriba en `<dir>`, así que `-C ~/nixos-config/hosts` encuentra `~/nixos-config`. Tiene prioridad sobre el directorio en el que estás y sobre todas las variables de entorno.
 
 ### Variables de entorno
 
-El valor de `NIXUP_FLAKE`, `NH_OS_FLAKE` o `NH_FLAKE` se usa tal cual:
+Las variables solo se leen fuera de un flake. El valor de `NIXUP_FLAKE`, `NH_OS_FLAKE` o `NH_FLAKE` se usa tal cual:
 
 - Se quita el sufijo `#host`: `~/nixos-config#desktop` equivale a `~/nixos-config`.
 - Se quita el prefijo `path:`.
 - Un `~` al principio se expande a tu directorio personal.
 - Las referencias remotas como `github:owner/repo` se rechazan, porque nixup tiene que escribir en el flake.
-- El propio directorio tiene que contener `flake.nix` y `flake.lock`. nixup nunca tira de un directorio padre ni del actual.
+- El propio directorio tiene que contener `flake.nix` y `flake.lock`. nixup nunca tira de un directorio padre.
 
 Un valor no válido es un error (código de salida 2), aunque una variable posterior hubiera servido:
 
 ```text
 nixup: $NIXUP_FLAKE: "github:foo/bar" is not a local directory
 nixup: $NH_FLAKE=/tmp: no flake.nix + flake.lock there
-```
-
-Cuando el flake sale de una variable, nixup lo indica por stderr (así la salida de `--json` sigue limpia) solo donde importa: antes de que `lock` y `pkg` escriban en él, y cuando estás dentro de otro flake, que la variable deja de lado. `check`, `list` y `search` lanzados desde cualquier otro sitio no dicen nada.
-
-```text
-nixup: using ~/nixos-config ($NH_FLAKE)
-nixup: using $NH_FLAKE, not the flake here (-C . to use this one)
 ```
 
 ## Color

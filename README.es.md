@@ -57,7 +57,7 @@ nixup list               # todo lo que vigila, con las versiones actuales, sin r
 nixup search ripgrep     # en tu nixpkgs, tus paquetes, tus inputs y Flatpak
 ```
 
-Ejecútalo dentro del flake, pásale `-C <dir>` o deja que lea `NIXUP_FLAKE`, `NH_OS_FLAKE` o `NH_FLAKE`.
+Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAKE`, `NH_OS_FLAKE` o `NH_FLAKE` (las dos últimas son las de nh). `-C <dir>` tiene prioridad sobre ambos.
 
 ## Por qué es seguro
 

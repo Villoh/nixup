@@ -57,7 +57,7 @@ nixup list               # everything it watches, with current versions, offline
 nixup search ripgrep     # in your nixpkgs, your packages, your inputs and Flatpak
 ```
 
-Run it inside the flake, pass `-C <dir>`, or let it read `NIXUP_FLAKE`, `NH_OS_FLAKE` or `NH_FLAKE`.
+It works on the flake you are in; anywhere else it reads `NIXUP_FLAKE`, `NH_OS_FLAKE` or `NH_FLAKE` (the last two are nh's). `-C <dir>` overrides both.
 
 ## How it stays safe
 

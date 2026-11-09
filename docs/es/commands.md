@@ -31,7 +31,7 @@ Todos los comandos que trabajan sobre un flake aceptan `-C <dir>`. En [Configura
 ## Salidas
 
 - Los resultados, las revisiones y las preguntas van a stdout.
-- Los errores, y la línea `nixup: using <path> ($VAR)` (en [Configuración](configuration.md) se explica cuándo sale), van a stderr.
+- Los errores van a stderr.
 - La salida de `nix flake update`, `nh os build`, `nix-update` y `nix build` se vuelca en directo a stderr.
 
 Así, `nixup check --json > out.json` te da un JSON limpio.
