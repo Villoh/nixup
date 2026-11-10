@@ -96,7 +96,12 @@ func (c *Checker) All(repo string, only []string, review bool) []Row {
 	}
 	var rows []Row
 	for _, group := range par.Map(len(names), len(names), func(i int) []Row { return jobs[names[i]]() }) {
-		rows = append(rows, group...)
+		for _, r := range group {
+			if r.Status == OK && r.Latest == "" {
+				r.Latest = r.Current // up to date: the latest is what you have
+			}
+			rows = append(rows, r)
+		}
 	}
 	return rows
 }

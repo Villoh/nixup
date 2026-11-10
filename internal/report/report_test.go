@@ -76,8 +76,8 @@ func TestTextAllAndReview(t *testing.T) {
 	if l := lines(s); !strings.HasPrefix(l[1], "input    nixpkgs  aaa1111") || !strings.HasSuffix(l[1], "ok") {
 		t.Errorf("--all shows up-to-date rows:\n%s", s)
 	}
-	if strings.Contains(s, "up to date (--all") {
-		t.Errorf("nothing hidden with --all:\n%s", s)
+	if strings.Contains(s, "up to date (--all") || !strings.Contains(s, " · 1 up to date\n") {
+		t.Errorf("nothing hidden with --all, but still counted:\n%s", s)
 	}
 	review := strings.Index(s, "dms input  v1.6.2 → v2.0.0\n  source   https://github.com/lgse/strata")
 	if review < 0 || review < strings.Index(s, "1 to update") {

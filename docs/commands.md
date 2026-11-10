@@ -58,7 +58,7 @@ nixup check --markdown --review
 
 `check` takes no names; extra words after it are ignored.
 
-The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` and `ACTION`, followed by a summary line and, with `--review`, one block of upstream changes per update. `STATUS` is `update`, `major` or `0.x-minor` (likely breaking), `ok`, `info` or `error`; see [Getting started](getting-started.md#reading-the-report). In JSON the statuses are `outdated`, `ok`, `info` and `error`, and a likely breaking jump has a `warning`:
+The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` and `ACTION`, followed by a summary line and, with `--review`, one block of upstream changes per update. `STATUS` is `update`, `major` or `0.x-minor` (likely breaking), `ok`, `info` or `error`; see [Getting started](getting-started.md#reading-the-report). An `ok` row repeats its version under `LATEST`, and the summary counts the `ok` rows even when they are hidden. In JSON the statuses are `outdated`, `ok`, `info` and `error`, and a likely breaking jump has a `warning`:
 
 ```json
 [

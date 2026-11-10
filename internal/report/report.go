@@ -41,16 +41,18 @@ func status(r check.Row) string {
 	return r.Status
 }
 
-// Text prints check results as one table. Up-to-date rows are only counted unless all is
-// set; with review, the upstream changes of each update follow the table.
+// Text prints check results as one table. Up-to-date rows are always counted, and only
+// shown when all is set; with review, the upstream changes of each update follow the table.
 func Text(t *ui.Term, rows []check.Row, all, review bool) {
 	var shown []check.Row
-	updates, breaking, info, errs, hidden := 0, 0, 0, 0, 0
+	updates, breaking, info, errs, ok := 0, 0, 0, 0, 0
 	for _, r := range rows {
 		switch st := status(r); {
-		case r.Status == check.OK && !all:
-			hidden++
-			continue
+		case r.Status == check.OK:
+			ok++
+			if !all {
+				continue
+			}
 		case r.Status == check.Outdated:
 			updates++
 			if st != "update" {
@@ -95,8 +97,11 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 	if errs > 0 {
 		sum = append(sum, plural(errs, "error", "errors"))
 	}
-	if hidden > 0 {
-		sum = append(sum, fmt.Sprintf("%d up to date (--all to show them)", hidden))
+	switch {
+	case ok > 0 && all:
+		sum = append(sum, fmt.Sprintf("%d up to date", ok))
+	case ok > 0:
+		sum = append(sum, fmt.Sprintf("%d up to date (--all to show them)", ok))
 	}
 	if updates == 0 && errs == 0 {
 		sum = append([]string{"Everything is up to date."}, sum...)

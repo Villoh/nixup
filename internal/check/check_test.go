@@ -307,6 +307,9 @@ func TestAllRunsOnlyRequestedSections(t *testing.T) {
 	e2.Head("o/np", "", "aaa")
 	e2.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
 	rows = checker(e2).All(repo, nil, false)
+	if len(rows) == 1 && (rows[0].Status != check.OK || rows[0].Latest != rows[0].Current) {
+		t.Errorf("an up-to-date row shows its version as the latest: %+v", rows[0])
+	}
 	if len(rows) != 1 || rows[0].Name != "np" {
 		t.Errorf("no filter runs every section: %+v", rows)
 	}
