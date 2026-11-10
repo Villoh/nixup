@@ -141,8 +141,8 @@ nixup reads like a careful colleague reporting what they found. Rules:
 | `mark-light.svg` | Mark without tile, for light backgrounds | 0.3 KB |
 | `mark-dark.svg` | Mark without tile, for dark backgrounds | 0.3 KB |
 | `logo-mono.svg` | Mark without tile, one colour (`currentColor`), single path | 0.3 KB |
-| `header-light.svg` | README banner for light themes, 1280×320, transparent background | 14 KB |
-| `header-dark.svg` | README banner for dark themes, 1280×320, transparent background | 14 KB |
+| `header-light.svg` | README banner for light themes, 1020×194, transparent background | 14 KB |
+| `header-dark.svg` | README banner for dark themes, 1020×194, transparent background | 14 KB |
 | `social.svg` | Source of the social preview, 1280×640, Night background | 21 KB |
 | `social.png` | Social preview rendered from `social.svg` (GitHub: Settings → Social preview) | 46 KB |
 | `brand.md` | This guide | |
@@ -155,8 +155,12 @@ Inter and outline it again; re-render the PNG with
 README snippet:
 
 ```html
+<div align="center">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">
-  <img alt="nixup: safe updates for flake-based NixOS. Review first, then decide." src="brand/header-light.svg">
+  <img alt="nixup: safe updates for flake-based NixOS. Review first, then decide." src="brand/header-light.svg" width="640">
 </picture>
+
+</div>
 ```

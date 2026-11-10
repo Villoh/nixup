@@ -1,9 +1,18 @@
-**English** | [Español](README.es.md)
+<div align="center">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">
-  <img alt="nixup" src="brand/header-light.svg">
+  <img alt="nixup" src="brand/header-light.svg" width="640">
 </picture>
+
+[![CI](https://img.shields.io/github/actions/workflow/status/Villoh/nixup/ci.yml?branch=main&label=ci)](https://github.com/Villoh/nixup/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Villoh/nixup?color=4A6FC4)](https://github.com/Villoh/nixup/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/Villoh/nixup?color=4A6FC4)](go.mod)
+[![License: MIT](https://img.shields.io/github/license/Villoh/nixup?color=4A6FC4)](LICENSE)
+
+**English** | [Español](README.es.md)
+
+</div>
 
 nixup checks a flake-based NixOS configuration for updates and applies them only after you have read what changed upstream. It compares your flake inputs, the packages your flake defines, `nix profile` entries and Flatpak apps with their upstream. For each pending update it shows the commits and release notes in between, then builds in a scratch copy before it writes anything. It can also install pending Flatpak updates and upgrade `nix profile` entries, after asking. It never activates a NixOS generation: no `switch`, no `boot`, no `sudo`, no daemon. Written in Go, standard library only.
 

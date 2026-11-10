@@ -1,9 +1,18 @@
-[English](README.md) | **Español**
+<div align="center">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">
-  <img alt="nixup" src="brand/header-light.svg">
+  <img alt="nixup" src="brand/header-light.svg" width="640">
 </picture>
+
+[![CI](https://img.shields.io/github/actions/workflow/status/Villoh/nixup/ci.yml?branch=main&label=ci)](https://github.com/Villoh/nixup/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Villoh/nixup?color=4A6FC4)](https://github.com/Villoh/nixup/releases/latest)
+[![Go](https://img.shields.io/github/go-mod/go-version/Villoh/nixup?color=4A6FC4)](go.mod)
+[![License: MIT](https://img.shields.io/github/license/Villoh/nixup?color=4A6FC4)](LICENSE)
+
+[English](README.md) | **Español**
+
+</div>
 
 nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias, y hace el build en una copia temporal antes de escribir nada. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte. Nunca activa una generación de NixOS: ni `switch`, ni `boot`, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
 
