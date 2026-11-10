@@ -66,7 +66,8 @@ Google Sans Flex is not used in brand assets.
 ## Logo usage
 
 **Parts.** The mark comes in two versions, with and without the tile, and the lockup is
-mark + wordmark + tagline (the headers). The wordmark is never used without the mark,
+mark + wordmark (the headers). The tagline goes under it as text, so it can be read,
+selected and translated. The wordmark is never used without the mark,
 except in running text where it is just the name.
 
 **Clear space.** Around the mark: at least 1/4 of its width. In the lockup, the gap
@@ -141,15 +142,15 @@ nixup reads like a careful colleague reporting what they found. Rules:
 | `mark-light.svg` | Mark without tile, for light backgrounds | 0.3 KB |
 | `mark-dark.svg` | Mark without tile, for dark backgrounds | 0.3 KB |
 | `logo-mono.svg` | Mark without tile, one colour (`currentColor`), single path | 0.3 KB |
-| `header-light.svg` | README banner for light themes, 1020×194, transparent background | 14 KB |
-| `header-dark.svg` | README banner for dark themes, 1020×194, transparent background | 14 KB |
+| `header-light.svg` | README banner (mark + wordmark) for light themes, 518×184, transparent background | 2 KB |
+| `header-dark.svg` | README banner (mark + wordmark) for dark themes, 518×184, transparent background | 2 KB |
 | `social.svg` | Source of the social preview, 1280×640, Night background | 21 KB |
 | `social.png` | Social preview rendered from `social.svg` (GitHub: Settings → Social preview) | 46 KB |
 | `brand.md` | This guide | |
 
 All text in the SVGs is outlined (no font files, no raster images). Each glyph is
-defined once in `<defs>` and placed with `<use>`. To change the tagline, set it in
-Inter and outline it again; re-render the PNG with
+defined once in `<defs>` and placed with `<use>`. To change the tagline of the social
+preview, set it in Inter and outline it again; re-render the PNG with
 `rsvg-convert -w 1280 -h 640 social.svg -o social.png`.
 
 README snippet:
@@ -159,8 +160,10 @@ README snippet:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">
-  <img alt="nixup: safe updates for flake-based NixOS. Review first, then decide." src="brand/header-light.svg" width="640">
+  <img alt="nixup" src="brand/header-light.svg" width="420">
 </picture>
+
+Safe updates for flake-based NixOS. Review first, then decide.
 
 </div>
 ```

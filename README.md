@@ -2,8 +2,10 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="brand/header-dark.svg">
-  <img alt="nixup" src="brand/header-light.svg" width="640">
+  <img alt="nixup" src="brand/header-light.svg" width="420">
 </picture>
+
+Safe updates for flake-based NixOS. Review first, then decide.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Villoh/nixup/ci.yml?branch=main&label=ci)](https://github.com/Villoh/nixup/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Villoh/nixup?color=4A6FC4)](https://github.com/Villoh/nixup/releases/latest)
