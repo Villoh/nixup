@@ -58,7 +58,24 @@ func (t *Term) Confirm(prompt string) bool {
 	if t.rd == nil {
 		t.rd = bufio.NewReader(t.In)
 	}
-	fmt.Fprintf(t.Out, "%s [y/N] ", prompt)
-	line, _ := t.rd.ReadString('\n')
-	return strings.EqualFold(strings.TrimSpace(line), "y")
+	if f, ok := t.In.(*os.File); ok {
+		// Drop what reached the terminal before the question: an Enter pressed during a
+		// build, or bytes the terminal sent to the program that just ran.
+		flushInput(f)
+		t.rd.Discard(t.rd.Buffered())
+	}
+	for {
+		fmt.Fprintf(t.Out, "%s [y/N] ", prompt)
+		line, err := t.rd.ReadString('\n')
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "y", "yes":
+			return true
+		case "", "n", "no":
+			return false
+		}
+		if err != nil {
+			return false
+		}
+		fmt.Fprintf(t.Out, "Answer y or n (got %q).\n", strings.TrimSpace(line))
+	}
 }

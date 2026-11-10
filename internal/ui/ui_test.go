@@ -28,8 +28,11 @@ func TestConfirm(t *testing.T) {
 		{"yes", "y\n", true, true},
 		{"uppercase yes", "Y\n", true, true},
 		{"no", "n\n", true, false},
-		{"empty means no", "\n", true, false},
-		{"word is not y", "yes\n", true, false},
+		{"empty means no, without asking again", "\ny\n", true, false},
+		{"yes in full", "yes\n", true, true},
+		{"no in full", "No\n", true, false},
+		{"anything else asks again", "\x1b[I\ny\n", true, true},
+		{"anything else then eof", "maybe", true, false},
 		{"eof", "", true, false},
 		{"not interactive ignores a yes", "y\n", false, false},
 	}
@@ -45,6 +48,14 @@ func TestConfirm(t *testing.T) {
 		if !c.interactive && out.Len() != 0 {
 			t.Errorf("%s: must not prompt without a terminal", c.name)
 		}
+	}
+}
+
+func TestConfirmAsksAgain(t *testing.T) {
+	var out bytes.Buffer
+	term := &Term{Out: &out, In: strings.NewReader("sure\nn\n"), Interactive: true}
+	if term.Confirm("ok?") || strings.Count(out.String(), "ok? [y/N]") != 2 || !strings.Contains(out.String(), `Answer y or n (got "sure").`) {
+		t.Errorf("an answer that is neither y nor n is asked again: %q", out.String())
 	}
 }
 
