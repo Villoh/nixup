@@ -73,7 +73,7 @@ Los inputs de rama, y todos los inputs en `nixup update`, solo llevan commits, s
 
 ## update, paso a paso
 
-`nixup update` ejecuta cuatro pasos en este orden: inputs, paquetes, Flatpak y `nix profile`. Los inputs van primero, para que el build de los paquetes se haga con el lock nuevo. Cada paso se ejecuta aunque uno anterior se haya rechazado, haya fallado o hayas contestado que no; en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de todos los pasos.
+`nixup update` ejecuta cuatro pasos en este orden: inputs, paquetes, Flatpak y `nix profile`. Los inputs van primero, para que el build de los paquetes se haga con el lock nuevo. Cada paso se ejecuta aunque uno anterior haya fallado o hayas contestado que no; en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de todos los pasos.
 
 Con `--source`, solo se ejecutan los pasos de la lista. Con nombres, cada nombre se busca en `flake.lock`, en los paquetes del flake (que solo se evalúan si el paso de paquetes está activo), en `flatpak list --columns=application` (apps y runtimes) y en `nix profile list --json`. Cada paso recibe solo los nombres de su origen, y un paso sin ninguno no se ejecuta.
 
@@ -81,7 +81,7 @@ Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada l
 
 ### El paso de inputs
 
-1. Si `git diff --quiet -- flake.lock` detecta cambios, para con código de salida 1.
+1. Si `git diff --quiet -- flake.lock` detecta cambios, lee el lock del último commit con `git show HEAD:flake.lock` para nombrar los inputs que ya se han movido, y pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0. Si dices que sí, la actualización se hace sobre el `flake.lock` de trabajo, así que esos cambios se conservan y solo se enseña lo que mueve nixup.
 2. Crea un directorio temporal y copia en él todos los archivos que lista `git ls-files --cached --others --exclude-standard`: los archivos versionados con sus cambios sin commitear, más los archivos sin versionar que no están ignorados. Se saltan los enlaces simbólicos y los archivos borrados del árbol de trabajo. Esta es la copia temporal.
 3. Ejecuta `nix flake update --flake <copia>`, con los nombres de input que hayas dado.
 4. Compara el lock antiguo con el nuevo. Para cada input directo cuyo commit se ha movido, imprime los commits de upstream. Cuenta los demás nodos que se han movido.
@@ -98,13 +98,13 @@ Como la copia incluye los archivos sin commitear y sin versionar, el build prueb
 Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado. `<dir del paquete>` es el directorio del archivo que define el paquete, leído de su `meta.position` igual que hace `nix-update` (`packages/prebuilt/kopuz` para un paquete en `packages/prebuilt/kopuz/package.nix`); si el paquete se define en un archivo en la raíz del flake, como `flake.nix`, es solo ese archivo, nunca el repositorio entero. Si el archivo no es parte de este flake, el paquete se rechaza antes de ejecutar nada.
 
 1. Hace la misma comprobación que `nixup check` para ese paquete, con la revisión.
-2. Si está desactualizado, imprime la revisión y pregunta, salvo con `-y`.
-3. Si `git diff --quiet -- <dir del paquete>` detecta cambios, rechaza este paquete con código de salida 1 y sigue.
-4. Ejecuta `nix-update --flake <name> --version=<versión revisada>` más los argumentos extra del script de actualización. Si `nix-update` no está en el `PATH`, usa `nix run nixpkgs#nix-update --`.
+2. Si está desactualizado, imprime la revisión.
+3. Si `git diff --quiet -- <dir del paquete>` detecta cambios, pregunta si actualizar sobre ellos, salvo con `--allow-dirty` o `-y`. Si dices que no, se salta este paquete con código de salida 0. Después pregunta si actualizarlo, salvo con `-y`.
+4. Guarda todos los archivos normales de `<dir del paquete>`. Ejecuta `nix-update --flake <name> --version=<versión revisada>` más los argumentos extra del script de actualización. Si `nix-update` no está en el `PATH`, usa `nix run nixpkgs#nix-update --`.
 5. Ejecuta `nix build --no-link .#<name>`, salvo con `--no-build`.
-6. Si falla el paso 4 o el 5, ejecuta `git checkout -- <dir del paquete>`. Si todo va bien, imprime `git diff -- <dir del paquete>`.
+6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban y borra los archivos añadidos desde entonces. Si todo va bien, imprime `git diff -- <dir del paquete>`.
 
-Aquí `nix-update` edita tu repositorio directamente, no una copia. El `git checkout` del paso 6 es lo que deja los archivos como estaban.
+Aquí `nix-update` edita tu repositorio directamente, no una copia. Los archivos guardados en el paso 4 son lo que deja el paquete como estaba, con los cambios sin commitear incluidos. No se usa git para eso.
 
 ### El paso de Flatpak
 
@@ -135,7 +135,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git ls-remote https://github.com/<repo> <ref>` | inputs de rama |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), copia temporal |
 | `git diff --quiet -- <path>` | update (inputs y paquetes) |
-| `git checkout -- <dir del paquete>` | update (paquetes), tras un fallo |
+| `git show HEAD:flake.lock` | update (inputs), para nombrar lo que ya ha movido un `flake.lock` sin commitear |
 | `git diff -- <dir del paquete>` | update (paquetes), tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
@@ -165,7 +165,7 @@ Las peticiones HTTP propias de nixup solo van a `api.github.com`. `git`, `nix` y
 Se escribe:
 
 - Con el paso de inputs de `update`: tu `flake.lock`, tras un sí o con `-y`. Una copia temporal, que se borra al terminar.
-- Con el paso de paquetes de `update`: los archivos que cambia `nix-update`, normalmente en `<dir del paquete>`. Se restauran si falla la actualización o el build.
+- Con el paso de paquetes de `update`: los archivos que cambia `nix-update`, normalmente en `<dir del paquete>`. Si falla la actualización o el build, los archivos de `<dir del paquete>` vuelven a quedar como estaban.
 - Con `--report <archivo>`: Markdown añadido al final de ese archivo.
 - Los builds acaban en el Nix store, como cualquier build.
 

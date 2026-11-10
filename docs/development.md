@@ -81,7 +81,7 @@ if f.Count("nh os build") != 0 {
 - `Term` returns a terminal that captures stdout and stderr, and answers questions from a string when one is given.
 - `LockJSON` builds a minimal `flake.lock`.
 
-A few tests run real processes on purpose: the `run` package tests start `sh`, and one `flake` test creates a temporary git repository to check the scratch copy, the uncommitted-changes check and the restore against real git. It is skipped when `git` is not installed.
+A few tests run real processes on purpose: the `run` package tests start `sh`, and one `flake` test creates a temporary git repository to check the scratch copy and the uncommitted-changes check against real git. It is skipped when `git` is not installed. The restore of a failed package update uses no git and is tested on plain files (`TestSnapshot`).
 
 ## Commits
 

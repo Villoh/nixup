@@ -96,7 +96,7 @@ For example:
 
 | Tool | Used for | When missing |
 |---|---|---|
-| `git` | `ls-remote` for tags and heads, the scratch copy, the uncommitted-changes checks, restoring a package | Most checks fail |
+| `git` | `ls-remote` for tags and heads, the scratch copy, the uncommitted-changes checks, the committed `flake.lock` | Most checks fail |
 | `nix` | `nix eval` of packages and hosts, `nix flake update`, `nix build`, `nix profile list`, `nix profile upgrade` | The `profile` section is skipped; `packages` and `update` fail |
 | `nh` | `nh os build` in the input step of `nixup update` | That step fails unless `--no-build` |
 | `nix-update` | The package step of `nixup update` | nixup runs `nix run nixpkgs#nix-update --` instead |

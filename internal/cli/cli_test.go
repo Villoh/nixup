@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -202,6 +203,17 @@ func TestUpdateParsesFlagsAfterInputs(t *testing.T) {
 		}
 	}
 	t.Errorf("nix flake update did not run: %v", f.e.Run.Calls())
+}
+
+func TestUpdateAllowDirty(t *testing.T) {
+	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("dirty")})
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
+	f.run("update", "nixpkgs", "--allow-dirty", "--no-build", "-C", f.repo)
+	if !strings.Contains(f.out.String(), "updating on top of them; they are kept.") || f.e.Run.Count("nix flake update") != 1 {
+		t.Errorf("--allow-dirty goes on without asking:\n%s%s", f.out, f.errb)
+	}
 }
 
 func TestUpdateRepeatedHostFlags(t *testing.T) {

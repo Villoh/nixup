@@ -114,14 +114,15 @@ Un nombre que no lleva a un único paso es un error, y no se ejecuta nada:
 | `--source <lista>` | Pasos a ejecutar, separados por comas: `input`, `package`, `flatpak`, `profile` (también en plural). Por defecto, todos. Cualquier otro valor es un error. |
 | `-H <host>` | Host del que hacer el build en el paso de inputs. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
 | `--no-build` | Actualiza y enseña los cambios, pero no hace el build: ni `nh os build` para los inputs ni `nix build` para los paquetes. Los pasos de Flatpak y de `nix profile` no construyen nada en ningún caso. |
-| `-y` | Escribe el nuevo lock, actualiza los paquetes, instala las actualizaciones de Flatpak y actualiza las entradas de `nix profile` sin preguntar. Necesario en ejecuciones desatendidas. |
+| `-y` | Escribe el nuevo lock, actualiza los paquetes, instala las actualizaciones de Flatpak y actualiza las entradas de `nix profile` sin preguntar. Necesario en ejecuciones desatendidas. Implica `--allow-dirty`. |
+| `--allow-dirty` | Actualiza sobre cambios sin commitear en `flake.lock` o en un paquete sin preguntar. Esos cambios se conservan. |
 | `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado, la tabla de Flatpak con los comandos para volver atrás, las entradas de `nix profile` actualizadas). Si no existe, lo crea. |
 
 ### Inputs
 
 El paso de inputs, en orden:
 
-1. Si `flake.lock` tiene cambios sin commitear, no arranca. Los demás pasos se ejecutan igualmente.
+1. Si `flake.lock` tiene cambios sin commitear, pregunta `flake.lock has uncommitted changes (nixpkgs, home-manager). Update on top of them? They are kept. [y/N]`. Los nombres son los inputs que tu `flake.lock` de trabajo ya ha movido desde el último commit; el paréntesis no sale si nixup no lo puede saber. Si dices que no, imprime `Skipped.` y termina el paso; los demás pasos se ejecutan igualmente. Con `--allow-dirty` o `-y` no pregunta, solo imprime `flake.lock has uncommitted changes (...): updating on top of them; they are kept.` La actualización parte entonces de tu `flake.lock` de trabajo, así que los cambios que enseña son solo los que ha movido nixup.
 2. Copia el árbol de trabajo a un directorio temporal y ejecuta allí `nix flake update --flake <copia> [input...]`.
 3. Si no ha cambiado nada, imprime `flake.lock is already up to date.` y para.
 4. Para cada input directo que se ha movido, imprime el commit antiguo y el nuevo y los commits de upstream. Los inputs que no son directos se cuentan en una línea.
@@ -134,11 +135,11 @@ El paso de inputs, en orden:
 El paso de paquetes los recorre de uno en uno. Para cada paquete desactualizado, nixup:
 
 1. Imprime la versión actual y la nueva, el aviso de salto mayor si lo hay y la revisión de upstream.
-2. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
-3. Si `<dir del paquete>` tiene cambios sin commitear, rechaza este paquete y sigue con el siguiente.
-4. Ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete.
+2. Si `<dir del paquete>` tiene cambios sin commitear, pregunta `<dir del paquete> has uncommitted changes. Update on top of them? They are kept. [y/N]`. Si dices que no, imprime `Skipped.` y sigue con el siguiente. Con `--allow-dirty` o `-y` no pregunta, solo imprime `<dir del paquete> has uncommitted changes: updating on top of them; they are kept.`
+3. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
+4. Guarda todos los archivos de `<dir del paquete>` y después ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete.
 5. Salvo con `--no-build`, ejecuta `nix build --no-link .#<name>`.
-6. Si falla el paso 4 o el 5, restaura `<dir del paquete>` con `git checkout`. Si no, imprime `git diff -- <dir del paquete>`.
+6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban, con los cambios sin commitear incluidos, borra los archivos añadidos desde entonces e imprime `nix-update failed; <dir del paquete> restored.` o `build FAILED; <dir del paquete> restored.` Si no, imprime `git diff -- <dir del paquete>`, que también enseña los cambios sin commitear que ya tenías.
 
 Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y ninguno está desactualizado, el paso imprime `Every package is up to date.`
 
@@ -173,7 +174,6 @@ Códigos de salida. Gana el peor código de los cuatro pasos y de todos los paqu
 | Código | Significado |
 |---|---|
 | 0 | Se ha actualizado todo, has contestado que no o no había nada que actualizar. |
-| 1 | Se ha rechazado algo por cambios sin commitear: `flake.lock` o el directorio de un paquete. Haz commit o stash y vuelve a ejecutarlo. |
 | 2 | Algo ha fallado: un nombre o `--source` estaban mal, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update`, la escritura del archivo, `flatpak update` o `nix profile upgrade`. |
 
 ## list

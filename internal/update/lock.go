@@ -14,22 +14,19 @@ import (
 )
 
 type LockOpts struct {
-	Repo    string
-	Inputs  []string // empty: all
-	Hosts   []string // empty: every nixosConfiguration
-	NoBuild bool
-	Yes     bool
-	Report  string
+	Repo       string
+	Inputs     []string // empty: all
+	Hosts      []string // empty: every nixosConfiguration
+	NoBuild    bool
+	Yes        bool
+	AllowDirty bool // go on over an uncommitted flake.lock without asking (-y does too)
+	Report     string
 }
 
 // Lock updates flake.lock in a scratch copy, shows what moved, builds every host there and
 // only then, after a yes, writes the new lock into the repo.
 func (u *Updater) Lock(o LockOpts) int {
 	t := u.T
-	if flake.Dirty(u.R, o.Repo, "flake.lock") {
-		t.Errorln(t.Paint("flake.lock has uncommitted changes: commit or stash it, then re-run.", 33))
-		return exit.Pending
-	}
 	lockPath := filepath.Join(o.Repo, "flake.lock")
 	oldData, err := os.ReadFile(lockPath)
 	if err != nil {
@@ -38,6 +35,9 @@ func (u *Updater) Lock(o LockOpts) int {
 	old, err := flake.ParseLock(oldData)
 	if err != nil {
 		return u.fail(err)
+	}
+	if flake.Dirty(u.R, o.Repo, "flake.lock") && !u.onDirty("flake.lock", u.uncommittedInputs(o.Repo, old), o.AllowDirty || o.Yes) {
+		return exit.OK
 	}
 	tmp, err := os.MkdirTemp("", "nixup-")
 	if err != nil {
@@ -100,6 +100,28 @@ func (u *Updater) Lock(o LockOpts) int {
 	t.Println(t.Paint("flake.lock updated (not committed, nothing activated).", 32))
 	t.Println("Next: git diff flake.lock && nix flake check && nh os test . -H <host>")
 	return exit.OK
+}
+
+// uncommittedInputs names the inputs the working flake.lock moved since the last commit,
+// as " (a, b)", or "" when that cannot be told.
+func (u *Updater) uncommittedInputs(repo string, working *flake.Lock) string {
+	out, _, err := u.R.Capture(repo, "git", "show", "HEAD:flake.lock")
+	if err != nil {
+		return ""
+	}
+	head, err := flake.ParseLock([]byte(out))
+	if err != nil {
+		return ""
+	}
+	changes, _ := flake.Diff(head, working)
+	var names []string
+	for _, c := range changes {
+		names = append(names, c.Name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(names, ", ") + ")"
 }
 
 // showChanges prints each moved input with its upstream review and returns the same as Markdown.

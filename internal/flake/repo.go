@@ -2,8 +2,10 @@ package flake
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -107,19 +109,54 @@ func Hosts(r run.Runner, flakeDir string) ([]string, error) {
 	return hosts, nil
 }
 
-// Dirty reports whether git sees uncommitted changes in the given paths of repo.
+// Dirty reports whether git sees uncommitted changes in the given paths of repo. git
+// failing with a message (not a repository, no git) is not a change.
 func Dirty(r run.Runner, repo string, paths ...string) bool {
-	_, _, err := r.Capture(repo, "git", append([]string{"diff", "--quiet", "--"}, paths...)...)
-	return err != nil
+	_, errs, err := r.Capture(repo, "git", append([]string{"diff", "--quiet", "--"}, paths...)...)
+	return err != nil && strings.TrimSpace(errs) == ""
 }
 
-// Restore puts tracked files back to their committed state.
-func Restore(r run.Runner, repo string, paths ...string) error {
-	_, errs, err := r.Capture(repo, "git", append([]string{"checkout", "--"}, paths...)...)
-	if err != nil {
-		return fmt.Errorf("git checkout: %s", run.LastLine(errs))
+// Snapshot saves the regular files under rel (a file or a directory) and returns a
+// function that puts them back as they were, uncommitted changes included, and removes
+// the files added since.
+func Snapshot(repo, rel string) (restore func() error, err error) {
+	type file struct {
+		data []byte
+		mode fs.FileMode
 	}
-	return nil
+	root := filepath.Join(repo, rel)
+	saved := map[string]file{}
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		saved[p] = file{data, info.Mode()}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return func() error {
+		var errs []error
+		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if _, kept := saved[p]; err == nil && d.Type().IsRegular() && !kept {
+				errs = append(errs, os.Remove(p))
+			}
+			return nil
+		})
+		for p, f := range saved {
+			errs = append(errs, os.MkdirAll(filepath.Dir(p), 0o755), os.WriteFile(p, f.data, f.mode))
+		}
+		return errors.Join(errs...)
+	}, nil
 }
 
 // ScratchCopy copies the working tree (uncommitted and untracked files included, ignored

@@ -3,6 +3,6 @@ package exit
 
 const (
 	OK      = 0 // nothing to do, or done
-	Pending = 1 // updates available (check), or a precondition refused the run (update)
+	Pending = 1 // updates available (check)
 	Error   = 2 // something failed
 )

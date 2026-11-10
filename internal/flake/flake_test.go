@@ -108,7 +108,7 @@ func TestHosts(t *testing.T) {
 	}
 }
 
-func TestDirtyAndRestore(t *testing.T) {
+func TestDirty(t *testing.T) {
 	clean := &run.Fake{}
 	if flake.Dirty(clean, "/r", "flake.lock") {
 		t.Error("git diff --quiet succeeding means clean")
@@ -117,16 +117,51 @@ func TestDirtyAndRestore(t *testing.T) {
 	if !flake.Dirty(dirty, "/r", "flake.lock") {
 		t.Error("git diff --quiet failing means dirty")
 	}
-	f := &run.Fake{}
-	if err := flake.Restore(f, "/r", "packages/x"); err != nil {
+	broken := (&run.Fake{}).On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("exit 128"), Err: "fatal: not a git repository\n"})
+	if flake.Dirty(broken, "/r", "flake.lock") {
+		t.Error("git failing with a message is not a change")
+	}
+}
+
+func TestSnapshot(t *testing.T) {
+	repo := t.TempDir()
+	write := func(rel, s string) {
+		os.MkdirAll(filepath.Dir(filepath.Join(repo, rel)), 0o755)
+		os.WriteFile(filepath.Join(repo, rel), []byte(s), 0o644)
+	}
+	read := func(rel string) string { b, _ := os.ReadFile(filepath.Join(repo, rel)); return string(b) }
+	write("packages/x/package.nix", "uncommitted edit")
+	write("packages/x/deps/lock.json", "deps v1")
+	write("packages/y.nix", "y v1")
+
+	restore, err := flake.Snapshot(repo, "packages/x")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Count("git checkout -- packages/x") != 1 {
-		t.Errorf("calls: %v", f.Calls())
+	write("packages/x/package.nix", "by nix-update")
+	os.Remove(filepath.Join(repo, "packages/x/deps/lock.json"))
+	write("packages/x/new.patch", "added")
+	write("packages/y.nix", "y v2")
+	if err := restore(); err != nil {
+		t.Fatal(err)
 	}
-	bad := (&run.Fake{}).On(run.Rule{Prefix: "git checkout", Fail: errors.New("x"), Err: "pathspec did not match\n"})
-	if err := flake.Restore(bad, "/r", "nope"); err == nil || !strings.Contains(err.Error(), "pathspec") {
-		t.Errorf("err = %v", err)
+	if read("packages/x/package.nix") != "uncommitted edit" || read("packages/x/deps/lock.json") != "deps v1" {
+		t.Errorf("files come back as they were, uncommitted edits included: %q %q", read("packages/x/package.nix"), read("packages/x/deps/lock.json"))
+	}
+	if _, err := os.Stat(filepath.Join(repo, "packages/x/new.patch")); err == nil {
+		t.Error("a file added since the snapshot is removed")
+	}
+	if read("packages/y.nix") != "y v2" {
+		t.Error("nothing outside the snapshot is touched")
+	}
+
+	one, _ := flake.Snapshot(repo, "packages/y.nix")
+	write("packages/y.nix", "y v3")
+	if one(); read("packages/y.nix") != "y v2" {
+		t.Errorf("a single file: %q", read("packages/y.nix"))
+	}
+	if _, err := flake.Snapshot(repo, "packages/nope"); err == nil {
+		t.Error("a missing path is an error, not an empty snapshot")
 	}
 }
 
@@ -301,13 +336,6 @@ func TestScratchCopyAndDirtyWithRealGit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dst, "result")); err == nil {
 		t.Error("ignored files must not be copied")
-	}
-
-	if err := flake.Restore(r, repo, "tracked.nix"); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(repo, "tracked.nix")); string(b) != "v1" {
-		t.Errorf("Restore must bring back the committed content, got %q", b)
 	}
 }
 

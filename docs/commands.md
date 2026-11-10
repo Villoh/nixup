@@ -114,14 +114,15 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 | `--source <list>` | Comma-separated steps to run: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. Anything else is an error. |
 | `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
 | `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
-| `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. |
+| `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. Implies `--allow-dirty`. |
+| `--allow-dirty` | Update over uncommitted changes in `flake.lock` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
 
 ### Inputs
 
 The input step, in order:
 
-1. Refuse to start if `flake.lock` has uncommitted changes. The other steps still run.
+1. If `flake.lock` has uncommitted changes, ask `flake.lock has uncommitted changes (nixpkgs, home-manager). Update on top of them? They are kept. [y/N]`. The names are the inputs your working `flake.lock` already moved since the last commit; the parenthesis is left out when nixup cannot tell. A no prints `Skipped.` and ends the step; the other steps still run. With `--allow-dirty` or `-y` there is no question, only `flake.lock has uncommitted changes (...): updating on top of them; they are kept.` The update then starts from your working `flake.lock`, so the changes shown are only what nixup moved.
 2. Copy the working tree to a temporary directory and run `nix flake update --flake <copy> [input...]` there.
 3. If nothing changed, print `flake.lock is already up to date.` and stop.
 4. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
@@ -134,11 +135,11 @@ The input step, in order:
 The package step goes through the packages one at a time. For each outdated package nixup:
 
 1. Prints the current and new version, the major-jump warning if any, and the upstream review.
-2. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
-3. Refuses this package if `<pkg dir>` has uncommitted changes, and moves on.
-4. Runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`.
+2. If `<pkg dir>` has uncommitted changes, asks `<pkg dir> has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and moves on. With `--allow-dirty` or `-y` there is no question, only `<pkg dir> has uncommitted changes: updating on top of them; they are kept.`
+3. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
+4. Saves every file under `<pkg dir>`, then runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`.
 5. Unless `--no-build`, runs `nix build --no-link .#<name>`.
-6. If step 4 or 5 fails, restores `<pkg dir>` with `git checkout`. Otherwise prints `git diff -- <pkg dir>`.
+6. If step 4 or 5 fails, writes the saved files back as they were, uncommitted edits included, removes the files added since and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.` Otherwise prints `git diff -- <pkg dir>`, which also shows the uncommitted changes you already had.
 
 Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and none is outdated, the step prints `Every package is up to date.`
 
@@ -173,7 +174,6 @@ Exit codes. The worst code of the four steps, and of all the packages, wins:
 | Code | Meaning |
 |---|---|
 | 0 | Everything was updated, you answered no, or there was nothing to update. |
-| 1 | Something was refused because of uncommitted changes: `flake.lock` or a package directory. Commit or stash, then run again. |
 | 2 | Something failed: a name or `--source` was wrong, a check failed, or `nix flake update`, listing hosts, a build, `nix-update`, writing the file, `flatpak update` or `nix profile upgrade` failed. |
 
 ## list

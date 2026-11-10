@@ -58,13 +58,14 @@ var nouns = map[string][2]string{ // with an article, bare
 
 // Opts are what `nixup update` takes.
 type Opts struct {
-	Repo    string
-	Names   []string // inputs, packages, Flatpak app IDs, profile entries, mixed; empty: everything
-	Sources []string // some of Sources; empty: all
-	Hosts   []string // for the inputs; empty: every nixosConfiguration
-	NoBuild bool
-	Yes     bool
-	Report  string
+	Repo       string
+	Names      []string // inputs, packages, Flatpak app IDs, profile entries, mixed; empty: everything
+	Sources    []string // some of Sources; empty: all
+	Hosts      []string // for the inputs; empty: every nixosConfiguration
+	NoBuild    bool
+	Yes        bool
+	AllowDirty bool
+	Report     string
 }
 
 // Update runs one step per source: the inputs (Lock: one scratch copy, every host built),
@@ -124,9 +125,9 @@ func (u *Updater) Update(o Opts) int {
 		ran = true
 		switch s {
 		case "input":
-			code = max(code, u.Lock(LockOpts{Repo: o.Repo, Inputs: named[s], Hosts: o.Hosts, NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report}))
+			code = max(code, u.Lock(LockOpts{Repo: o.Repo, Inputs: named[s], Hosts: o.Hosts, NoBuild: o.NoBuild, Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
 		case "package":
-			code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: named[s], NoBuild: o.NoBuild, Yes: o.Yes, Report: o.Report}))
+			code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: named[s], NoBuild: o.NoBuild, Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
 		case "flatpak":
 			code = max(code, u.Flatpak(FlatpakOpts{IDs: named[s], Yes: o.Yes, Report: o.Report}))
 		case "profile":

@@ -73,7 +73,7 @@ Branch inputs, and every input in `nixup update`, get commits only, without rele
 
 ## update, step by step
 
-`nixup update` runs four steps in this order: inputs, packages, Flatpak and `nix profile`. Inputs go first, so packages are built against the new lock. Each step runs even when an earlier one was refused, failed or you answered no; packages are then built against the lock you already had. The exit code is the highest of the steps.
+`nixup update` runs four steps in this order: inputs, packages, Flatpak and `nix profile`. Inputs go first, so packages are built against the new lock. Each step runs even when an earlier one failed or you answered no; packages are then built against the lock you already had. The exit code is the highest of the steps.
 
 With `--source`, only the listed steps run. With names, each name is looked up in `flake.lock`, in the flake's packages (evaluated only when the package step is on), in `flatpak list --columns=application` (apps and runtimes) and in `nix profile list --json`. Each step gets only the names of its source, and a step with none is skipped.
 
@@ -81,7 +81,7 @@ The input and package steps only edit files in your repository; nothing reaches 
 
 ### The input step
 
-1. If `git diff --quiet -- flake.lock` reports changes, stop with exit code 1.
+1. If `git diff --quiet -- flake.lock` reports changes, read the committed lock with `git show HEAD:flake.lock` to name the inputs already moved, and ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0. On yes the update runs on top of the working `flake.lock`, so those changes are kept and only what nixup moves is shown.
 2. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
 3. Run `nix flake update --flake <copy>`, with the input names you gave.
 4. Compare the old and new lock. For each direct input whose commit moved, print the upstream commits. Count the other nodes that moved.
@@ -98,13 +98,13 @@ Because the copy includes uncommitted and untracked files, the build tests your 
 For each package, in alphabetical order, or in the order you named them. `<pkg dir>` is the directory of the file that defines the package, read from its `meta.position` like `nix-update` does (`packages/prebuilt/kopuz` for a package in `packages/prebuilt/kopuz/package.nix`); for a package defined in a file at the top of the flake, such as `flake.nix`, it is that file alone, never the whole repository. If the file is not part of this flake, the package is refused before anything runs.
 
 1. Run the same check as `nixup check` for that package, with the review.
-2. If it is outdated, print the review and ask, unless `-y`.
-3. If `git diff --quiet -- <pkg dir>` reports changes, refuse this package with exit code 1 and go on.
-4. Run `nix-update --flake <name> --version=<reviewed version>` plus the extra arguments from the update script. If `nix-update` is not on `PATH`, use `nix run nixpkgs#nix-update --`.
+2. If it is outdated, print the review.
+3. If `git diff --quiet -- <pkg dir>` reports changes, ask whether to update on top of them, unless `--allow-dirty` or `-y`. A no skips this package with exit code 0. Then ask whether to update it, unless `-y`.
+4. Save every regular file under `<pkg dir>`. Run `nix-update --flake <name> --version=<reviewed version>` plus the extra arguments from the update script. If `nix-update` is not on `PATH`, use `nix run nixpkgs#nix-update --`.
 5. Run `nix build --no-link .#<name>`, unless `--no-build`.
-6. On failure in step 4 or 5, run `git checkout -- <pkg dir>`. On success, print `git diff -- <pkg dir>`.
+6. On failure in step 4 or 5, write the saved files back as they were and remove the files added since. On success, print `git diff -- <pkg dir>`.
 
-`nix-update` edits your repository directly here, not a copy. The `git checkout` in step 6 is what puts the files back.
+`nix-update` edits your repository directly here, not a copy. The files saved in step 4 are what puts the package back, uncommitted edits included. git is not used for it.
 
 ### The Flatpak step
 
@@ -135,7 +135,7 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `git ls-remote https://github.com/<repo> <ref>` | branch inputs |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), scratch copy |
 | `git diff --quiet -- <path>` | update (inputs and packages) |
-| `git checkout -- <pkg dir>` | update (packages), after a failure |
+| `git show HEAD:flake.lock` | update (inputs), to name what an uncommitted `flake.lock` already moved |
 | `git diff -- <pkg dir>` | update (packages), after a success |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
@@ -165,7 +165,7 @@ nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-upd
 Written:
 
 - By the input step of `update`: your `flake.lock`, after a yes or `-y`. A temporary scratch copy, deleted at the end.
-- By the package step of `update`: the files `nix-update` changes, usually under `<pkg dir>`. They are restored if the update or build fails.
+- By the package step of `update`: the files `nix-update` changes, usually under `<pkg dir>`. If the update or build fails, the files under `<pkg dir>` are put back as they were.
 - By `--report <file>`: Markdown appended to that file.
 - Builds land in the Nix store, as with any build.
 

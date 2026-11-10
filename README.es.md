@@ -63,8 +63,8 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 
 - `check` solo lee. No escribe nada en tu repositorio.
 - `update` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
-- Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, el directorio del paquete vuelve a su estado del último commit.
-- `update` no toca archivos con cambios sin commitear.
+- Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, los archivos del paquete vuelven a quedar como estaban, con los cambios sin commitear incluidos.
+- `update` pregunta antes de actualizar sobre cambios sin commitear en `flake.lock` o en un paquete, y los conserva.
 - Los pasos de inputs y de paquetes solo editan archivos del repositorio; los aplicas tú con nh. Los pasos de Flatpak y de `nix profile` instalan en el momento, así que su pregunta lo dice, y te indican cómo deshacerlo (`flatpak update --commit=...`, `nix profile rollback`). Una entrada de `nix profile` fijada a una revisión nunca se actualiza.
 - Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 - nixup nunca hace commit ni activa una generación de NixOS. Probar y hacer el switch sigue siendo cosa tuya.

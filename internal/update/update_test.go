@@ -122,16 +122,33 @@ func TestPkgNoBuild(t *testing.T) {
 	}
 }
 
+// edits makes nix-update write into the package before the scripted answer.
+func edits(f **fixture) func(run.Call) {
+	return func(run.Call) {
+		os.WriteFile(filepath.Join((*f).repo, "packages/padpoll/package.nix"), []byte("half-updated"), 0o644)
+		os.WriteFile(filepath.Join((*f).repo, "packages/padpoll/new.json"), []byte("added"), 0o644)
+	}
+}
+
+func (f *fixture) restored(t *testing.T) {
+	t.Helper()
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "packages/padpoll/package.nix")); string(b) != "{}" {
+		t.Errorf("packages/padpoll must be put back: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(f.repo, "packages/padpoll/new.json")); err == nil {
+		t.Error("files nix-update added must go")
+	}
+}
+
 func TestPkgNixUpdateFailureRestores(t *testing.T) {
-	f := pkgFixture(t, "", run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
+	var f *fixture
+	f = pkgFixture(t, "", run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1"), Do: edits(&f)})
 	report := filepath.Join(t.TempDir(), "r.md")
 	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, Report: report})
 	if code != exit.Error {
 		t.Errorf("code %d", code)
 	}
-	if !f.called("git checkout -- packages/padpoll") {
-		t.Errorf("packages/padpoll must be restored: %v", f.e.Run.Calls())
-	}
+	f.restored(t)
 	if f.called("nix build") {
 		t.Error("no build after a failed update")
 	}
@@ -141,12 +158,14 @@ func TestPkgNixUpdateFailureRestores(t *testing.T) {
 }
 
 func TestPkgBuildFailureRestores(t *testing.T) {
-	f := pkgFixture(t, "", run.Rule{Prefix: "nix build", Fail: errors.New("exit 1")})
+	var f *fixture
+	f = pkgFixture(t, "", run.Rule{Prefix: "nix-update", Do: edits(&f)}, run.Rule{Prefix: "nix build", Fail: errors.New("exit 1")})
 	report := filepath.Join(t.TempDir(), "r.md")
 	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, Report: report})
-	if code != exit.Error || !f.called("git checkout -- packages/padpoll") {
+	if code != exit.Error {
 		t.Errorf("code %d, calls %v", code, f.e.Run.Calls())
 	}
+	f.restored(t)
 	if !strings.Contains(f.out.String(), "build FAILED") || strings.Contains(f.out.String(), "updated (not committed)") {
 		t.Errorf("%s", f.out)
 	}
@@ -156,16 +175,35 @@ func TestPkgBuildFailureRestores(t *testing.T) {
 	}
 }
 
-func TestPkgRefusesDirtyPackageDir(t *testing.T) {
-	f := pkgFixture(t, "", run.Rule{Prefix: "git diff --quiet -- packages/padpoll", Fail: errors.New("exit 1")})
-	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true}); code != exit.Pending {
-		t.Errorf("code %d", code)
+func TestPkgDirtyPackageDir(t *testing.T) {
+	dirty := run.Rule{Prefix: "git diff --quiet -- packages/padpoll", Fail: errors.New("exit 1")}
+	f := pkgFixture(t, "n\n", dirty)
+	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo}); code != exit.OK || f.called("nix-update") {
+		t.Errorf("a no leaves it alone: code %d %v", code, f.e.Run.Calls())
 	}
-	if f.called("nix-update") || f.called("git checkout") {
-		t.Errorf("uncommitted work must never be touched or restored: %v", f.e.Run.Calls())
+	if s := f.out.String(); !strings.Contains(s, "packages/padpoll has uncommitted changes. Update on top of them? They are kept. [y/N]") ||
+		strings.Contains(s, "Update padpoll to 1.1.0?") {
+		t.Errorf("asked first, before the update question:\n%s", s)
 	}
-	if !strings.Contains(f.out.String(), "uncommitted changes") {
-		t.Errorf("%s", f.out)
+
+	g := pkgFixture(t, "y\ny\n", dirty)
+	if g.u.Pkg(update.PkgOpts{Repo: g.repo}); !g.called("nix-update") {
+		t.Errorf("two yeses update it: %s", g.out)
+	}
+	for _, o := range []update.PkgOpts{{AllowDirty: true}, {Yes: true}} {
+		var h *fixture
+		h = pkgFixture(t, "y\n", dirty, run.Rule{Prefix: "nix build", Fail: errors.New("exit 1")}, run.Rule{Prefix: "nix-update", Do: func(run.Call) {
+			os.WriteFile(filepath.Join(h.repo, "packages/padpoll/package.nix"), []byte("by nix-update"), 0o644)
+		}})
+		os.WriteFile(filepath.Join(h.repo, "packages/padpoll/package.nix"), []byte("my edit"), 0o644)
+		o.Repo = h.repo
+		h.u.Pkg(o)
+		if s := h.out.String(); strings.Contains(s, "Update on top") || !strings.Contains(s, "packages/padpoll has uncommitted changes: updating on top of them; they are kept.") {
+			t.Errorf("%+v does not ask about it, but says so:\n%s", o, s)
+		}
+		if b, _ := os.ReadFile(filepath.Join(h.repo, "packages/padpoll/package.nix")); string(b) != "my edit" {
+			t.Errorf("a failed build puts back the uncommitted edit, not the committed file: %q", b)
+		}
 	}
 }
 
@@ -427,13 +465,24 @@ func TestLockNothingChanged(t *testing.T) {
 	}
 }
 
-func TestLockRefusesDirtyLock(t *testing.T) {
-	f := lockFixture(t, "", run.Rule{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("exit 1")})
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true}); code != exit.Pending {
-		t.Errorf("code %d", code)
+func TestLockDirtyLock(t *testing.T) {
+	dirty := run.Rule{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("exit 1")}
+	head := run.Rule{Prefix: "git show HEAD:flake.lock", Out: lockJSON(strings.Repeat("0", 40))}
+	f := lockFixture(t, "n\n", dirty, head)
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo}); code != exit.OK || f.called("nix flake update") || f.lock() != lockJSON(oldRev) {
+		t.Errorf("a no leaves it alone, without even running the update: code %d", code)
 	}
-	if f.called("nix flake update") || f.lock() != lockJSON(oldRev) {
-		t.Error("a dirty lock must be left alone, without even running the update")
+	if !strings.Contains(f.out.String(), "flake.lock has uncommitted changes (nixpkgs). Update on top of them? They are kept. [y/N]") {
+		t.Errorf("names the inputs already moved:\n%s", f.out)
+	}
+	for _, o := range []update.LockOpts{{AllowDirty: true, NoBuild: true}, {Yes: true, NoBuild: true}} {
+		g := lockFixture(t, "y\n", dirty)
+		o.Repo = g.repo
+		g.u.Lock(o)
+		if s := g.out.String(); strings.Contains(s, "Update on top") || !strings.Contains(s, "flake.lock has uncommitted changes: updating on top of them; they are kept.") ||
+			!g.called("nix flake update") {
+			t.Errorf("%+v goes on and says so (no HEAD: no names):\n%s", o, s)
+		}
 	}
 }
 
@@ -495,13 +544,8 @@ func TestPkgWorksWhereThePackageIsDefined(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "nix build", Fail: errors.New("exit 1")})
 	f.e.Tags("o/kopuz", "v1.0.0", "v1.1.0")
 	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true})
-	for _, want := range []string{"git diff --quiet -- packages/prebuilt/kopuz", "git checkout -- packages/prebuilt/kopuz"} {
-		if !f.called(want) {
-			t.Errorf("did not run %q: %v", want, f.e.Run.Calls())
-		}
-	}
-	if f.called("git checkout -- packages/kopuz-bin") {
-		t.Error("the guessed packages/<name> path must not be used")
+	if !f.called("git diff --quiet -- packages/prebuilt/kopuz") || f.called("git diff --quiet -- packages/kopuz-bin") {
+		t.Errorf("the dirty check uses the real directory, not the guessed packages/<name>: %v", f.e.Run.Calls())
 	}
 }
 
@@ -608,10 +652,10 @@ func TestUpdateSourcesAndWorstCode(t *testing.T) {
 	g.e.Run.On(run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
 	g.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("dirty")}}, g.e.Run.Rules...)
 	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true}); code != exit.Error {
-		t.Errorf("a dirty lock (1) and a failed package (2): the worst wins, got %d", code)
+		t.Errorf("a failed package (2): the worst wins, got %d", code)
 	}
-	if !g.called("nix-update") {
-		t.Errorf("a refused flake.lock does not stop the packages: %v", g.e.Run.Calls())
+	if !g.called("nix-update") || !g.called("nix flake update") {
+		t.Errorf("-y goes on over a dirty flake.lock, then the packages: %v", g.e.Run.Calls())
 	}
 	h := updateFixture(t)
 	h.e.Run.Rules = append([]run.Rule{{Prefix: "nix flake update", Fail: errors.New("exit 1")}}, h.e.Run.Rules...)
@@ -842,5 +886,14 @@ func TestUpdateNamesAcrossSources(t *testing.T) {
 	if code := g.u.Update(update.Opts{Repo: g.repo, Names: []string{"both"}}); code != exit.Error ||
 		!strings.Contains(g.errb.String(), "both is an input, a package and a Flatpak app: pick one with --source input, --source package or --source flatpak") {
 		t.Errorf("three-way: code %d err %q", code, g.errb)
+	}
+}
+
+func TestUpdatePassesAllowDirtyToPackages(t *testing.T) {
+	f := updateFixture(t)
+	f.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- packages/padpoll", Fail: errors.New("dirty")}}, f.e.Run.Rules...)
+	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"padpoll"}, AllowDirty: true, NoBuild: true})
+	if s := f.out.String(); !strings.Contains(s, "packages/padpoll has uncommitted changes: updating on top of them") || strings.Contains(s, "Update on top") {
+		t.Errorf("--allow-dirty reaches the package step:\n%s", s)
 	}
 }

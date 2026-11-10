@@ -16,10 +16,10 @@ nixup is built so that a failed or unwanted update leaves your repository as it 
 - **The input step of `update` never edits your repository before the end.** The update and the builds run in a temporary copy. Your `flake.lock` is replaced only after every build passes and you answer yes, or you passed `-y`.
 - **A failed host build leaves `flake.lock` untouched.** nixup prints `build of <host> FAILED: flake.lock left untouched.` and exits with 2.
 - **Answering no to the new `flake.lock` changes nothing.** nixup prints `Discarded. Nothing changed.`
-- **`update` refuses to touch a dirty `flake.lock`.** If `flake.lock` has uncommitted changes, the input step stops before doing anything and the exit code is 1. The package step still runs.
+- **`update` asks before it updates over an uncommitted `flake.lock`, and keeps those changes.** The question names the inputs your working `flake.lock` already moved. A no prints `Skipped.` and the input step ends without running anything; the package step still runs. On yes the update starts from your working `flake.lock`, and the changes shown are only what nixup moved.
 - **`update` moves a package to the version you reviewed.** It passes `--version=<that version>` to `nix-update`, so a release published while you were reading is not picked up.
-- **A failed package update or build is rolled back.** nixup runs `git checkout -- <pkg dir>` and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.`
-- **`update` refuses a dirty package directory.** If `<pkg dir>` has uncommitted changes, that package is skipped with exit code 1, because the rollback would throw those changes away.
+- **A failed package update or build is rolled back.** Before `nix-update` runs, nixup saves every file under `<pkg dir>`. On a failure it writes them back as they were, uncommitted edits included, removes the files `nix-update` added and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.`
+- **`update` asks before it updates over an uncommitted package directory, and keeps those changes.** If `<pkg dir>` has uncommitted changes, nixup asks before the update question. A no prints `Skipped.` and moves on to the next package. `--allow-dirty` and `-y` skip this question.
 - **The Flatpak and `nix profile` steps ask before they install.** The question says it: `Update 2 Flatpak refs now? This installs them right away. [y/N]`. A no installs nothing.
 - **The Flatpak step updates only what it showed you.** It passes exactly the refs in its table to `flatpak update`. Before that it notes each ref's deployed commit, and afterwards prints `flatpak update --commit=<previous commit> <ref>` for each one, also after a failure.
 - **The `nix profile` step says how to undo it.** After an upgrade it prints `To undo it: nix profile rollback`.
@@ -31,9 +31,9 @@ nixup is built so that a failed or unwanted update leaves your repository as it 
 
 - **A build that passes is not a system that boots.** `nh os build` proves the configuration evaluates and builds. It does not prove the new generation works. Test it with `nh os test` before you switch.
 - **`--no-build` removes the build check.** With `update --no-build -y` the new lock is written without building any host, and a broken package is only noticed later.
-- **`-y` skips your review.** The review is still printed and, with `--report`, saved. Nobody reads it before the write.
-- **The package step edits the real checkout.** Unlike the input step, `nix-update` runs in your repository. The rollback only covers tracked files in the directory of the file that defines the package (from `meta.position`). Files `nix-update` might change elsewhere are neither checked nor restored. New untracked files are not removed.
-- **A failed rollback is reported, not retried.** If `git checkout` fails, nixup prints `nixup: restore failed:` with the reason and you have to clean up by hand.
+- **`-y` skips your review.** The review is still printed and, with `--report`, saved. Nobody reads it before the write. `-y` also updates over uncommitted changes, as `--allow-dirty` does.
+- **The package step edits the real checkout.** Unlike the input step, `nix-update` runs in your repository. The rollback covers every regular file in the directory of the file that defines the package (from `meta.position`), tracked or not. Files `nix-update` might change elsewhere are neither checked nor restored. Symlinks are not saved, and directories added by `nix-update` stay behind, empty.
+- **A failed rollback is reported, not retried.** If writing the files back fails, nixup prints `nixup: restore failed:` with the reason and you have to clean up by hand.
 - **The scratch copy is your working tree, not your last commit.** Uncommitted and untracked (but not ignored) files go into the host builds. Symlinks are not copied.
 - **The review depends on GitHub.** If the API is unreachable or rate-limited, you see `review unavailable` and can still accept the update.
 - **The breaking-change warning is a guess from version numbers.** A patch release can break things. Date-based versions (`20261106.1`, `2026.10.14`) are recognised and get no warning, since their numbers carry no compatibility meaning.
