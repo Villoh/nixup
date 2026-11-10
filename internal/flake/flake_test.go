@@ -133,7 +133,7 @@ func TestDirtyAndRestore(t *testing.T) {
 const pkgJSON = `{
  "padpoll": {"version":"1.1.0","urls":["https://github.com/PabloStarOk/padpoll/releases/download/v1.1.0/x.tar.gz"],"homepage":"","update":["/nix/store/x/bin/nix-update"]},
  "flectar-mail": {"version":"0.1.0-alpha.7","urls":[],"homepage":"https://github.com/flectar/mail","update":["/nix/store/x/bin/nix-update","--version=unstable","--use-github-releases"]},
- "tunnel": {"version":"1","urls":[],"homepage":"https://example.org","update":[]}
+ "tunnel": {"version":"1","urls":[],"homepage":"https://example.org","update":[],"pinned":"on purpose"}
 }`
 
 func TestPackages(t *testing.T) {
@@ -181,6 +181,9 @@ func TestPackageUpstreamAndArgs(t *testing.T) {
 	}
 	if got := byName["tunnel"].Upstream(); got != "" {
 		t.Errorf("no github url: %q", got)
+	}
+	if byName["tunnel"].Pinned != "on purpose" || byName["padpoll"].Pinned != "" {
+		t.Errorf("pinned is read from the evaluation: %+v", byName["tunnel"])
 	}
 	for _, update := range [][]string{
 		{"nix-update", "--url", "https://github.com/herdrdev/herdr-app"},

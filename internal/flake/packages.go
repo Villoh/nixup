@@ -21,6 +21,7 @@ type Package struct {
 	Homepage string   `json:"homepage"`
 	Update   []string `json:"update"`   // passthru.updateScript command line, if any
 	Position string   `json:"position"` // meta.position: "<store path>/<file>:<line>"
+	Pinned   string   `json:"pinned"`   // passthru.nixup.pinned: why it is kept where it is
 }
 
 const packagesQuery = `ps: builtins.mapAttrs (n: p: {
@@ -28,6 +29,7 @@ const packagesQuery = `ps: builtins.mapAttrs (n: p: {
   urls = p.src.urls or [];
   homepage = p.meta.homepage or "";
   position = p.meta.position or "";
+  pinned = p.passthru.nixup.pinned or "";
   update = if p ? passthru && p.passthru ? updateScript
     then map toString (if builtins.isList p.passthru.updateScript then p.passthru.updateScript else p.passthru.updateScript.command or [])
     else [];

@@ -125,7 +125,8 @@ const pkgsJSON = `{
  "flectar": {"version":"0.1.0-alpha.7","urls":[],"homepage":"https://github.com/flectar/mail","update":["nix-update","--version=unstable"]},
  "current": {"version":"2.0.0","urls":["https://github.com/o/current/archive/v2.0.0.tar.gz"],"homepage":"","update":["nix-update"]},
  "nogithub": {"version":"1","urls":[],"homepage":"https://example.org","update":["nix-update"]},
- "noscript": {"version":"1","urls":["https://github.com/o/noscript/x"],"homepage":"","update":[]}
+ "noscript": {"version":"1","urls":["https://github.com/o/noscript/x"],"homepage":"","update":[]},
+ "font": {"version":"0-unstable-1","urls":["https://example.org/f.ttf"],"homepage":"","update":[],"pinned":"changes with the plugin"}
 }`
 
 func TestPackages(t *testing.T) {
@@ -138,7 +139,7 @@ func TestPackages(t *testing.T) {
 	e.Releases("PabloStarOk/padpoll", testutil.Release{Tag: "v1.1.0", Body: "notes"})
 
 	rows := byName(checker(e).Packages("/repo", true))
-	if len(rows) != 5 {
+	if len(rows) != 6 {
 		t.Fatalf("rows: %+v", rows)
 	}
 	p := rows["padpoll"]
@@ -159,6 +160,9 @@ func TestPackages(t *testing.T) {
 	}
 	if r := rows["noscript"]; r.Status != check.Info || !strings.Contains(r.Note, "updateScript") {
 		t.Errorf("noscript: %+v", r)
+	}
+	if r := rows["font"]; r.Status != check.OK || r.Note != "pinned: changes with the plugin" {
+		t.Errorf("passthru.nixup.pinned: ok, with the reason, even without upstream or script: %+v", r)
 	}
 }
 

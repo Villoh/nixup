@@ -209,6 +209,9 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 	row := Row{Section: "packages", Name: p.Name, Current: p.Version}
 	id := p.Upstream()
 	switch {
+	case p.Pinned != "": // kept on purpose: nothing to look up
+		row.Status, row.Note = OK, "pinned: "+p.Pinned
+		return row
 	case id == "":
 		row.Status, row.Note = Info, "no GitHub upstream: check by hand"
 		return row

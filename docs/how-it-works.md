@@ -21,7 +21,7 @@ nixup reads `flake.lock` and looks at the direct inputs of your flake whose orig
 
 ### packages
 
-nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each package's `version`, `src.urls`, `meta.homepage` and `passthru.updateScript`.
+nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each package's `version`, `src.urls`, `meta.homepage`, `passthru.updateScript` and `passthru.nixup.pinned`.
 
 - The upstream repository is the first `github.com/<owner>/<repo>` found in the update script's `--url`, then in the source URLs, then in the homepage. `--url` is how nix-update finds the versions of a source hosted elsewhere, so a tarball from the project's own server can follow the tags of its GitHub repository:
 
@@ -33,6 +33,12 @@ nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each
 
   Without one, the package is reported as `info` with `no GitHub upstream: check by hand`.
 - Without `passthru.updateScript` the package is reported as `info` with `no passthru.updateScript`, because `nixup update` could not update it.
+- A package kept where it is on purpose can say so with `passthru.nixup.pinned`, a reason. nixup then looks nothing up: the row is `ok`, hidden without `--all`, and `ACTION` shows `pinned: <reason>`. It is the only nixup-specific attribute, for a source with no versions to follow, such as a single file from a repository commit:
+
+  ```nix
+  passthru.nixup.pinned = "a font file at a plugin commit; bump it when the font changes";
+  ```
+
 - If the update script passes `--use-github-releases`, nixup compares against published GitHub releases, ignoring drafts. Otherwise it compares against tags. The aim is to pick the same version `nix-update` would.
 - If the update script passes `--version-regex`, nixup reads versions the same way: only tags the regex matches from their start count, and the version is its non-empty groups joined with `.`. That is how a repository with several tag series (`desktop-v0.6.1` next to `desktop-minimal-v0.6.1`) is followed. Without it, only tags that start with a digit or `v` plus a digit count.
 - Prereleases count only when the update script passes `--version=unstable` or the current version is already a prerelease.
