@@ -59,6 +59,8 @@ El flake también tiene un overlay que añade `pkgs.nixup`:
 }
 ```
 
+El paquete también instala el autocompletado para bash, zsh y fish: en una shell nueva, `nixup update <TAB>` te ofrece tus inputs, paquetes y apps de Flatpak. Ver [completion](commands.md#completion).
+
 Comprueba que se ha instalado:
 
 ```bash

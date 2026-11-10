@@ -22,6 +22,14 @@
           subPackages = [ "cmd/nixup" ];
           vendorHash = null; # standard library only
           nativeCheckInputs = [ pkgs.git ]; # one test runs against a real repository
+          nativeBuildInputs = [ pkgs.installShellFiles ];
+          # Shell completions, printed by the binary itself (needs to run it: not when cross-compiling).
+          postInstall = pkgs.lib.optionalString (pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform) ''
+            installShellCompletion --cmd nixup \
+              --bash <($out/bin/nixup completion bash) \
+              --zsh <($out/bin/nixup completion zsh) \
+              --fish <($out/bin/nixup completion fish)
+          '';
           ldflags = [
             "-s"
             "-w"

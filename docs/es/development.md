@@ -13,7 +13,7 @@ lang: es
 ```text
 cmd/nixup/          main: conecta la terminal real, el ejecutor de procesos y el cliente de GitHub
 internal/
-  cli/              parseo de flags, subcomandos, códigos de salida
+  cli/              parseo de flags, subcomandos, códigos de salida, autocompletado
   check/            las comprobaciones de solo lectura: inputs, packages, flatpak, profile
   update/           el comando que escribe e instala: Lock (flake.lock), Pkg (packages/), Flatpak, Profile
   report/           salida en texto para la terminal y en Markdown

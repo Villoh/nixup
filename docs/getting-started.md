@@ -59,6 +59,8 @@ The flake also has an overlay that adds `pkgs.nixup`:
 }
 ```
 
+The package also installs completions for bash, zsh and fish: in a new shell, `nixup update <TAB>` offers your inputs, packages and Flatpak apps. See [completion](commands.md#completion).
+
 Check the install:
 
 ```bash

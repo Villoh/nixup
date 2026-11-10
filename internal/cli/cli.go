@@ -32,10 +32,11 @@ func versionString() string {
 
 const usage = `nixup — update checker and safe updater for flake-based NixOS
 
-  nixup [check]   what is outdated, read-only (inputs, packages, flatpak, profile)
-  nixup update    review and apply updates: inputs, own packages, Flatpak, nix profile
-  nixup list      everything it watches, with current versions, without network
-  nixup search    look a package name up in nixpkgs, your packages, your inputs and Flatpak
+  nixup [check]      what is outdated, read-only (inputs, packages, flatpak, profile)
+  nixup update       review and apply updates: inputs, own packages, Flatpak, nix profile
+  nixup list         everything it watches, with current versions, without network
+  nixup search       look a package name up in nixpkgs, your packages, your inputs and Flatpak
+  nixup completion   print the completion script for bash, zsh or fish
   nixup version
 
 Common flags: -C <dir> flake directory. Without it: the flake you are in (searching upwards),
@@ -51,7 +52,8 @@ type Deps struct {
 	// Env reads environment variables; nil means the process environment.
 	Env func(string) string
 
-	implicit bool // the subcommand was not typed: `check` was assumed
+	implicit bool                // the subcommand was not typed: `check` was assumed
+	inspect  func(*flag.FlagSet) // completion: hand over the command's flags instead of running
 }
 
 // Run executes one nixup invocation and returns its exit code.
@@ -84,6 +86,10 @@ func Run(args []string, d Deps) int {
 	case "help":
 		d.T.Println(usage)
 		return exit.OK
+	case "completion":
+		return runCompletion(args, d)
+	case "__complete":
+		return complete(args, d)
 	}
 	d.T.Errorln(d.T.Paint("nixup: unknown command "+strconv.Quote(cmd), 31) + "\n\n" + usage)
 	return exit.Error
@@ -122,6 +128,10 @@ func parse(fs *flag.FlagSet, args []string) (pos []string, help bool, err error)
 
 // setup parses flags and locates the flake. ok is false when the command should exit with code.
 func (d Deps) setup(fs *flag.FlagSet, dir *string, args []string) (pos []string, repo string, code int, ok bool) {
+	if d.inspect != nil {
+		d.inspect(fs)
+		return nil, "", exit.OK, false
+	}
 	pos, help, err := parse(fs, args)
 	switch {
 	case help:

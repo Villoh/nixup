@@ -139,7 +139,8 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git diff -- <dir del paquete>` | update (paquetes), tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs), autocompletado de `-H` |
+| `nix eval --json .#packages.<system> --apply builtins.attrNames` | autocompletado de nombres |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
 | `nix-update --flake <name> --version=<v> [args...]` | update (paquetes) |

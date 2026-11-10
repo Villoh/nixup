@@ -17,6 +17,7 @@ nixup list [flags]
 nixup search <name> [flags]
 nixup version
 nixup help
+nixup completion bash|zsh|fish
 ```
 
 Without a command nixup runs `check`, so `nixup`, `nixup --review` and `nixup check --review` do the same thing.
@@ -258,6 +259,24 @@ nixup help         # also: nixup --help, nixup -h
 ```
 
 `version` prints `nixup <version> (<commit>)` for builds from the flake, and `nixup dev` for a plain `go build`. `help` prints the command list on stdout. Both exit with 0.
+
+## completion
+
+```bash
+nixup completion zsh    # or bash, fish
+```
+
+Prints a completion script for the shell. The Nix package installs all three, so with nixup in `environment.systemPackages` they work in a new shell. Elsewhere, load one by hand:
+
+```bash
+source <(nixup completion bash)    # in ~/.bashrc
+source <(nixup completion zsh)     # in ~/.zshrc, after compinit
+nixup completion fish | source     # in ~/.config/fish/config.fish
+```
+
+TAB completes commands, flags with their description, the values of `--source` (also as a comma list), `-H` with the hosts of the flake and `-C` with directories. After `nixup update` it offers the names `update` takes: the flake's inputs and packages, the installed Flatpak apps and runtimes and the `nix profile` entries, each with where it comes from, limited by `--source` and without the names already typed. The flake is the one `-C` names on the line, else the usual one.
+
+The scripts only call `nixup __complete <words>`, which prints the candidates, so the three shells offer the same. Reading the names takes `nix eval .#packages.<system> --apply builtins.attrNames`, which nix answers from its evaluation cache, plus `flatpak list` and `nix profile list`.
 
 ## Errors on the command line
 
