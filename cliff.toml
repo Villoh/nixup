@@ -3,6 +3,15 @@
 #   git cliff --unreleased --tag v0.2.0 --strip header
 [changelog]
 body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking | length > 0 %}\
+### Breaking changes
+{% for commit in breaking %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+{{ commit.breaking_description | replace(from="\n", to=" ") | trim }} \
+([{{ commit.id | truncate(length=7, end="") }}](https://github.com/Villoh/nixup/commit/{{ commit.id }}))
+{% endfor %}
+{% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}\
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}\
@@ -22,6 +31,9 @@ tag_pattern = "v[0-9].*"
 sort_commits = "oldest"
 commit_parsers = [
   { message = "^chore\\(release\\)", skip = true },
+  # Fixes to the flake notice that the same release removed (v0.4.0).
+  { sha = "184c8b940ffe7f9cc7e9f8fb29db7df3b6f61a84", skip = true },
+  { sha = "3a4b7869764951992d1dd16bf52c906014b7168a", skip = true },
   { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^fix", group = "<!-- 1 -->Bug fixes" },
   { message = "^perf", group = "<!-- 2 -->Performance" },
