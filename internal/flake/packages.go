@@ -95,9 +95,19 @@ func (p Package) Path(repo string) string {
 	return rel
 }
 
-// Upstream is "owner/repo" taken from the source URL or the homepage, or "".
+// Upstream is "owner/repo" taken from the update script's --url (where nix-update looks
+// for versions when the source is hosted elsewhere), the source URL or the homepage, or "".
 func (p Package) Upstream() string {
-	for _, u := range append(append([]string{}, p.URLs...), p.Homepage) {
+	var urls []string
+	for i, a := range p.Update {
+		switch {
+		case a == "--url" && i+1 < len(p.Update):
+			urls = append(urls, p.Update[i+1])
+		case strings.HasPrefix(a, "--url="):
+			urls = append(urls, strings.TrimPrefix(a, "--url="))
+		}
+	}
+	for _, u := range append(append(urls, p.URLs...), p.Homepage) {
 		if r := gh.RepoFromURL(u); r != "" {
 			return r
 		}

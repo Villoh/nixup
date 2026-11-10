@@ -11,7 +11,7 @@ lang: en
 ## Only GitHub upstreams
 
 - Inputs: only direct inputs of type `github` are checked. `gitlab:`, `git+https:`, `path:`, tarball and other inputs do not appear in the report at all.
-- Packages: a package whose source URLs and homepage do not point to github.com is reported as `info` with `no GitHub upstream: check by hand`.
+- Packages: a package whose `--url`, source URLs and homepage do not point to github.com is reported as `info` with `no GitHub upstream: check by hand`.
 - Reviews (commits, compare links, release notes) come from the GitHub API only.
 
 ## Only what the flake exposes

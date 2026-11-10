@@ -11,7 +11,7 @@ lang: es
 ## Solo upstreams de GitHub
 
 - Inputs: solo se comprueban los inputs directos de tipo `github`. Los `gitlab:`, `git+https:`, `path:`, tarballs y demás no aparecen en el informe.
-- Paquetes: un paquete cuyas URLs de código fuente y homepage no apuntan a github.com sale como `info` con `no GitHub upstream: check by hand`.
+- Paquetes: un paquete cuyo `--url`, URLs de código fuente y homepage no apuntan a github.com sale como `info` con `no GitHub upstream: check by hand`.
 - Las revisiones (commits, enlaces de comparación, release notes) salen solo de la API de GitHub.
 
 ## Solo lo que expone el flake

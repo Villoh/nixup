@@ -23,7 +23,15 @@ nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original
 
 nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee de cada paquete `version`, `src.urls`, `meta.homepage` y `passthru.updateScript`.
 
-- El repositorio de origen es el primer `github.com/<owner>/<repo>` que aparezca en las URLs del código fuente y, si no, en la homepage. Si no hay ninguno, el paquete sale como `info` con `no GitHub upstream: check by hand`.
+- El repositorio de origen es el primer `github.com/<owner>/<repo>` que aparezca en el `--url` del script de actualización, después en las URLs del código fuente y, si no, en la homepage. `--url` es como nix-update encuentra las versiones de un código alojado en otro sitio, así que un tarball del servidor propio del proyecto puede seguir los tags de su repositorio de GitHub:
+
+  ```nix
+  passthru.updateScript = nix-update-script {
+    extraArgs = [ "--url" "https://github.com/owner/repo" ];
+  };
+  ```
+
+  Si no hay ninguno, el paquete sale como `info` con `no GitHub upstream: check by hand`.
 - Sin `passthru.updateScript`, el paquete sale como `info` con `no passthru.updateScript`, porque `nixup update` no podría actualizarlo.
 - Si el script de actualización pasa `--use-github-releases`, nixup compara con las releases publicadas en GitHub, sin contar los borradores. Si no, compara con los tags. La idea es elegir la misma versión que elegiría `nix-update`.
 - Si el script de actualización pasa `--version-regex`, nixup lee las versiones igual que nix-update: solo cuentan los tags en los que la regex encaja desde el principio, y la versión son sus grupos no vacíos unidos con `.`. Así se sigue un repositorio con varias series de tags (`desktop-v0.6.1` junto a `desktop-minimal-v0.6.1`). Sin ella, solo cuentan los tags que empiezan por un dígito o por `v` más un dígito.

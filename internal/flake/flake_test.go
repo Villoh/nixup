@@ -182,6 +182,18 @@ func TestPackageUpstreamAndArgs(t *testing.T) {
 	if got := byName["tunnel"].Upstream(); got != "" {
 		t.Errorf("no github url: %q", got)
 	}
+	for _, update := range [][]string{
+		{"nix-update", "--url", "https://github.com/herdrdev/herdr-app"},
+		{"nix-update", "--url=https://github.com/herdrdev/herdr-app"},
+	} {
+		hosted := flake.Package{URLs: []string{"https://releases.herdr.dev/app/1/x.tar.gz"}, Homepage: "https://github.com/o/other", Update: update}
+		if got := hosted.Upstream(); got != "herdrdev/herdr-app" {
+			t.Errorf("--url wins over the source and the homepage, as in nix-update: %v -> %q", update, got)
+		}
+		if args, _ := hosted.ExtraArgs(); len(args) == 0 || !strings.Contains(strings.Join(args, " "), "https://github.com/herdrdev/herdr-app") {
+			t.Errorf("--url is passed on to nix-update: %v", args)
+		}
+	}
 	args, pre := byName["flectar-mail"].ExtraArgs()
 	if !pre || !reflect.DeepEqual(args, []string{"--use-github-releases"}) {
 		t.Errorf("args=%v pre=%v: --version=unstable only allows prereleases", args, pre)
