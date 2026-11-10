@@ -48,13 +48,14 @@ func (u *Updater) Lock(o LockOpts) int {
 		return u.fail(err)
 	}
 
-	what := "(all inputs)"
+	what := "every input"
 	if len(o.Inputs) > 0 {
-		what = strings.Join(o.Inputs, " ")
+		what = strings.Join(o.Inputs, ", ")
 	}
-	t.Println(t.Bold("== nix flake update " + what))
-	if err := u.R.Stream("", "nix", append([]string{"flake", "update", "--flake", tmp}, o.Inputs...)...); err != nil {
-		return u.fail(err)
+	t.Println(t.Paint("Updating "+what+" in a scratch copy…", 2))
+	// Quiet: what moved is summarised below; nix's own lines only matter when it fails.
+	if _, errs, err := u.R.Capture("", "nix", append([]string{"flake", "update", "--flake", tmp}, o.Inputs...)...); err != nil {
+		return u.fail(fmt.Errorf("nix flake update failed:\n%s", strings.TrimSpace(errs)))
 	}
 	newData, err := os.ReadFile(filepath.Join(tmp, "flake.lock"))
 	if err != nil {
@@ -79,7 +80,7 @@ func (u *Updater) Lock(o LockOpts) int {
 			}
 		}
 		for _, h := range hosts {
-			t.Println(t.Bold("\n== nh os build -H " + h + " (scratch copy, nothing is activated)"))
+			t.Println(t.Bold("\nBuilding " + h + " in the scratch copy (nothing is activated)…"))
 			if err := u.R.Stream("", "nh", "os", "build", tmp, "-H", h, "-o", filepath.Join(tmp, "result")); err != nil {
 				t.Println(t.Paint("build of "+h+" FAILED: flake.lock left untouched.", 31))
 				u.appendReport(o.Report, md+fmt.Sprintf("\n**Build of `%s` failed.**\n", h))

@@ -100,7 +100,7 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		return exit.Error
 	}
 	if !o.NoBuild {
-		t.Println(t.Bold("== nix build .#" + p.Name))
+		t.Println(t.Bold("Building " + p.Name + "…"))
 		if err := u.R.Stream(o.Repo, "nix", "build", "--no-link", ".#"+p.Name); err != nil {
 			u.restore(restore)
 			t.Println(t.Paint("build FAILED; "+dir+" restored.", 31))

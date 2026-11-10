@@ -68,7 +68,7 @@ func TestPkgUpdatesAfterReview(t *testing.T) {
 		}
 	}
 	s := f.out.String()
-	for _, want := range []string{"padpoll  1.0.0 -> 1.1.0", "source   https://github.com/PabloStarOk/padpoll", "release notes", "Update padpoll to 1.1.0? [y/N]", "+version = 1.1.0", "padpoll updated."} {
+	for _, want := range []string{"padpoll  1.0.0 -> 1.1.0", "source   https://github.com/PabloStarOk/padpoll", "release notes", "Update padpoll to 1.1.0? [y/N]", "+version = 1.1.0", "Building padpoll…", "padpoll updated."} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in:\n%s", want, s)
 		}
@@ -487,9 +487,28 @@ func TestLockDirtyLock(t *testing.T) {
 }
 
 func TestLockUpdateFailure(t *testing.T) {
-	f := lockFixture(t, "", run.Rule{Prefix: "nix flake update", Fail: errors.New("exit 1")})
+	f := lockFixture(t, "", run.Rule{Prefix: "nix flake update", Fail: errors.New("exit 1"), Err: "error: cannot fetch input 'nixpkgs'\n"})
 	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true}); code != exit.Error || f.lock() != lockJSON(oldRev) {
 		t.Errorf("code %d", code)
+	}
+	if !strings.Contains(f.errb.String(), "nix flake update failed:\nerror: cannot fetch input 'nixpkgs'") {
+		t.Errorf("a failure shows what nix said: %q", f.errb)
+	}
+}
+
+func TestLockOutputIsQuietAndPlain(t *testing.T) {
+	f := lockFixture(t, "", run.Rule{Prefix: "nix flake update", Err: "warning: updating lock file \"/tmp/nixup-1/flake.lock\"\n", Do: func(c run.Call) {
+		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(lockJSON(newRev)), 0o644)
+	}})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"nixpkgs"}, Hosts: []string{"desktop"}, Yes: true})
+	s := f.out.String() + f.errb.String()
+	if strings.Contains(s, "/tmp/nixup-1") || strings.Contains(s, "== ") {
+		t.Errorf("nix's own lines stay out on success, and no raw command headers:\n%s", s)
+	}
+	for _, want := range []string{"Updating nixpkgs in a scratch copy…", "Building desktop in the scratch copy (nothing is activated)…"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
 	}
 }
 
