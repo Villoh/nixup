@@ -50,7 +50,7 @@ nixup check --markdown --review
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `--source <list>` | Comma-separated sources to check: `input`, `package`, `profile`, `flatpak` (plurals work too). Default: all. An unknown name is an error. |
+| `--source <list>` | Comma-separated sources to check: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. An unknown name is an error. |
 | `--all` | Also list up-to-date entries in the text output. Without it they are only counted. |
 | `--review` | Add the upstream review (commits, compare link, release notes) to every outdated entry. |
 | `--json` | Print every row as JSON, up-to-date ones included. Takes precedence over `--markdown`. |
@@ -188,7 +188,7 @@ nixup list --json
 | Flag | Description |
 |---|---|
 | `-C <dir>` | Flake directory. |
-| `--source <list>` | Comma-separated sources: `input`, `package`, `profile`, `flatpak`. Default: all. |
+| `--source <list>` | Comma-separated sources: `input`, `package`, `flatpak`, `profile`. Default: all. |
 | `--json` | A JSON array of sources, each with `source`, `items` (`name`, `version`, `note`, the origin) and, if it failed, `error`. |
 
 The output is one table, `SOURCE`, `NAME`, `VERSION` and `ORIGIN`, and a count per source:

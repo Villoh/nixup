@@ -178,7 +178,7 @@ func TestCheckMarkdown(t *testing.T) {
 func TestCheckUnknownSection(t *testing.T) {
 	f := newFixture(t, nil)
 	if code := f.run("check", "-C", f.repo, "--source", "inputs,bogus"); code != exit.Error ||
-		!strings.Contains(f.errb.String(), `unknown source "bogus" (one of: input, package, profile, flatpak)`) {
+		!strings.Contains(f.errb.String(), `unknown source "bogus" (one of: input, package, flatpak, profile)`) {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 	if f.e.Run.Count("git") != 0 {

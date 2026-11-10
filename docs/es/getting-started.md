@@ -88,7 +88,7 @@ package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `profile`, `flatpak`), su nombre, la versión actual y la más nueva, un estado y el comando que aplica la actualización. La última línea lo resume todo.
+Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `flatpak`, `profile`), su nombre, la versión actual y la más nueva, un estado y el comando que aplica la actualización. La última línea lo resume todo.
 
 `STATUS` puede ser:
 

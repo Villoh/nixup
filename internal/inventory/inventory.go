@@ -38,7 +38,7 @@ type Group struct {
 
 // ListSources and SearchSources are the values --source accepts, in display order.
 var (
-	ListSources   = []string{"input", "package", "profile", "flatpak"}
+	ListSources   = []string{"input", "package", "flatpak", "profile"}
 	SearchSources = []string{"nixpkgs", "package", "input", "flatpak"}
 )
 

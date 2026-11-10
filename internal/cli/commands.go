@@ -15,7 +15,7 @@ import (
 
 func runCheck(args []string, d Deps) int {
 	fs, dir := d.flags("check")
-	only := fs.String("source", "", "comma list of: input, package, profile, flatpak (default: all)")
+	only := fs.String("source", "", "comma list of: input, package, flatpak, profile (default: all)")
 	all := fs.Bool("all", false, "also list up-to-date entries")
 	asJSON := fs.Bool("json", false, "machine-readable output")
 	md := fs.Bool("markdown", false, "Markdown output (PR body, CI summary)")
@@ -25,7 +25,7 @@ func runCheck(args []string, d Deps) int {
 		return code
 	}
 
-	sources, err := parseSources(*only, []string{"input", "package", "profile", "flatpak"})
+	sources, err := parseSources(*only, check.Sources())
 	if err != nil {
 		return d.fail(err)
 	}

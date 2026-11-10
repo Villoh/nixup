@@ -50,7 +50,7 @@ nixup check --markdown --review
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `--source <lista>` | Orígenes a comprobar, separados por comas: `input`, `package`, `profile`, `flatpak` (también en plural). Por defecto, todos. Un nombre desconocido es un error. |
+| `--source <lista>` | Orígenes a comprobar, separados por comas: `input`, `package`, `flatpak`, `profile` (también en plural). Por defecto, todos. Un nombre desconocido es un error. |
 | `--all` | Lista también las entradas al día en la salida de texto. Sin él solo se cuentan. |
 | `--review` | Añade la revisión de upstream (commits, enlace de comparación, release notes) a cada entrada desactualizada. |
 | `--json` | Imprime todas las filas en JSON, incluidas las que están al día. Tiene prioridad sobre `--markdown`. |
@@ -188,7 +188,7 @@ nixup list --json
 | Flag | Descripción |
 |---|---|
 | `-C <dir>` | Directorio del flake. |
-| `--source <lista>` | Orígenes separados por comas: `input`, `package`, `profile`, `flatpak`. Por defecto, todos. |
+| `--source <lista>` | Orígenes separados por comas: `input`, `package`, `flatpak`, `profile`. Por defecto, todos. |
 | `--json` | Un array JSON de fuentes, cada una con `source`, `items` (`name`, `version`, `note`, el origen) y, si ha fallado, `error`. |
 
 La salida es una tabla, `SOURCE`, `NAME`, `VERSION` y `ORIGIN`, y un recuento por origen:

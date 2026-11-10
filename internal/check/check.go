@@ -27,11 +27,20 @@ const (
 	Error    = "error"
 )
 
-// Sections in display order.
-var Sections = []string{"inputs", "packages", "profile", "flatpak"}
+// Sources are the singular --source names of Sections, in the same order.
+func Sources() []string {
+	out := make([]string, len(Sections))
+	for i, s := range Sections {
+		out[i] = Source(s)
+	}
+	return out
+}
+
+// Sections in display order, the order update runs them in.
+var Sections = []string{"inputs", "packages", "flatpak", "profile"}
 
 // Source is the singular name of a section, as shown in the SOURCE column and accepted
-// by --source: input, package, profile, flatpak.
+// by --source: input, package, flatpak, profile.
 func Source(section string) string { return strings.TrimSuffix(section, "s") }
 
 type Row struct {

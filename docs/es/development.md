@@ -14,7 +14,7 @@ lang: es
 cmd/nixup/          main: conecta la terminal real, el ejecutor de procesos y el cliente de GitHub
 internal/
   cli/              parseo de flags, subcomandos, códigos de salida
-  check/            las comprobaciones de solo lectura: inputs, packages, profile, flatpak
+  check/            las comprobaciones de solo lectura: inputs, packages, flatpak, profile
   update/           el comando que escribe e instala: Lock (flake.lock), Pkg (packages/), Flatpak, Profile
   report/           salida en texto para la terminal y en Markdown
   flake/            flake.lock, localizar el flake, hosts, paquetes propios, copia temporal

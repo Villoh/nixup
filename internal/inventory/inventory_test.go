@@ -40,7 +40,7 @@ func TestList(t *testing.T) {
 	for _, g := range groups {
 		order = append(order, g.Source)
 	}
-	if strings.Join(order, ",") != "input,package,profile,flatpak" {
+	if strings.Join(order, ",") != "input,package,flatpak,profile" {
 		t.Errorf("sources in order, empty ones left out: %v", order)
 	}
 	g := bySource(groups)
@@ -64,7 +64,7 @@ func TestList(t *testing.T) {
 	}
 
 	only := inventory.List(f, repo(t), []string{"profile", "flatpak"})
-	if len(only) != 2 || only[0].Source != "profile" || only[1].Source != "flatpak" {
+	if len(only) != 2 || only[0].Source != "flatpak" || only[1].Source != "profile" {
 		t.Errorf("--source picks sources, in display order: %+v", only)
 	}
 	for _, c := range f.Calls() {
