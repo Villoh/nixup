@@ -47,7 +47,7 @@ jobs:
       NIXUP: github:Villoh/nixup
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       - name: pending updates
         run: |
