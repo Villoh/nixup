@@ -118,6 +118,8 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 | `--allow-dirty` | Update over uncommitted changes in `flake.lock` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
 
+Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is asked again. What was typed while nixup was busy, such as an Enter pressed during a build, is dropped before each question.
+
 ### Inputs
 
 The input step, in order:

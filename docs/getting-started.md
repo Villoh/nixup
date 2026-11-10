@@ -122,12 +122,13 @@ For the inputs, `update` shows the upstream commits for every input that moved, 
 
 Last come Flatpak and `nix profile`. Each shows what it would update and asks once, and the question says `This installs them right away.` On yes they install, then print how to go back: one `flatpak update --commit=<previous commit> <ref>` line per Flatpak ref, or `nix profile rollback`. Use `--source input,package` to leave the machine alone.
 
-When `flake.lock` has been written, the input step prints the next steps:
+When `flake.lock` or a package was written, `update` ends with one line on how to apply it. The path is `.` from inside the repository, and the host is filled in when the flake has only one or you passed `-H`:
 
 ```text
-flake.lock updated (not committed, nothing activated).
-Next: git diff flake.lock && nix flake check && nh os test . -H <host>
+Next: review with git diff, then nh os test . -H desktop (nothing is committed or activated)
 ```
+
+Flatpak and `nix profile` updates are already installed, so they print no such line.
 
 Pinned tags (`lanzaboote` above) are not moved by `nix flake update`. Change the tag in `flake.nix` yourself, then run `nixup update lanzaboote`.
 

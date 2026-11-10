@@ -118,6 +118,8 @@ Un nombre que no lleva a un único paso es un error, y no se ejecuta nada:
 | `--allow-dirty` | Actualiza sobre cambios sin commitear en `flake.lock` o en un paquete sin preguntar. Esos cambios se conservan. |
 | `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado, la tabla de Flatpak con los comandos para volver atrás, las entradas de `nix profile` actualizadas). Si no existe, lo crea. |
 
+Las preguntas aceptan `y` o `yes`, `n` o `no`; Enter es no, y cualquier otra cosa se vuelve a preguntar. Lo que se haya tecleado mientras nixup estaba ocupado, como un Enter pulsado durante un build, se descarta antes de cada pregunta.
+
 ### Inputs
 
 El paso de inputs, en orden:

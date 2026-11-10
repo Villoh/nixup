@@ -24,6 +24,8 @@ type Updater struct {
 	GH    *gh.Client
 	Check *check.Checker
 	T     *ui.Term
+
+	edited bool // flake.lock or a package was written: there is something to apply with nh
 }
 
 func (u *Updater) fail(err error) int {
@@ -134,7 +136,29 @@ func (u *Updater) Update(o Opts) int {
 			code = max(code, u.Profile(ProfileOpts{Names: named[s], Yes: o.Yes, Report: o.Report}))
 		}
 	}
+	if u.edited {
+		u.T.Println("\nNext: review with git diff, then nh os test " + u.target(o) + " (nothing is committed or activated)")
+	}
 	return code
+}
+
+// target is how nh os test reaches the configuration just edited: "." from inside the
+// repository, else its path, and the host when there is only one.
+func (u *Updater) target(o Opts) string {
+	dir := o.Repo
+	if wd, err := os.Getwd(); err == nil && wd == o.Repo {
+		dir = "."
+	} else if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(dir, home+"/") {
+		dir = "~" + strings.TrimPrefix(dir, home)
+	}
+	hosts := o.Hosts
+	if len(hosts) == 0 {
+		hosts, _ = flake.Hosts(u.R, o.Repo)
+	}
+	if len(hosts) == 1 {
+		return dir + " -H " + hosts[0]
+	}
+	return dir + " -H <host>"
 }
 
 // known is every name each source has. Packages are only evaluated when their step is

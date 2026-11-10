@@ -97,8 +97,8 @@ func (u *Updater) Lock(o LockOpts) int {
 	if err := os.WriteFile(lockPath, newData, 0o644); err != nil {
 		return u.fail(err)
 	}
-	t.Println(t.Paint("flake.lock updated (not committed, nothing activated).", 32))
-	t.Println("Next: git diff flake.lock && nix flake check && nh os test . -H <host>")
+	t.Println(t.Paint("flake.lock updated.", 32))
+	u.edited = true
 	return exit.OK
 }
 
@@ -144,7 +144,9 @@ func (u *Updater) showChanges(old, cur *flake.Lock) string {
 			md.WriteString(report.ReviewMarkdown(r) + "\n")
 		}
 	}
-	t.Printf("\n(+ %d transitive inputs changed)\n", transitive)
+	if transitive > 0 {
+		t.Printf("\n(+ %d transitive inputs changed)\n", transitive)
+	}
 	fmt.Fprintf(&md, "%d inputs changed, %d transitive.\n", len(changes), transitive)
 	return md.String()
 }

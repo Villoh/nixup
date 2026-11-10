@@ -122,12 +122,13 @@ Con los inputs, `update` te enseña los commits de upstream de cada input que se
 
 Al final van Flatpak y `nix profile`. Cada uno enseña qué actualizaría y pregunta una vez, y la pregunta dice `This installs them right away.` Si dices que sí, instalan y después te dicen cómo volver atrás: una línea `flatpak update --commit=<commit anterior> <ref>` por cada ref de Flatpak, o `nix profile rollback`. Usa `--source input,package` para no tocar la máquina.
 
-Cuando ha escrito `flake.lock`, el paso de inputs te dice los siguientes pasos:
+Cuando ha escrito `flake.lock` o algún paquete, `update` termina con una línea que dice cómo aplicarlo. La ruta es `.` si estás dentro del repositorio, y el host aparece cuando el flake solo tiene uno o lo pasaste con `-H`:
 
 ```text
-flake.lock updated (not committed, nothing activated).
-Next: git diff flake.lock && nix flake check && nh os test . -H <host>
+Next: review with git diff, then nh os test . -H desktop (nothing is committed or activated)
 ```
+
+Las actualizaciones de Flatpak y de `nix profile` ya quedan instaladas, así que no imprimen esa línea.
 
 Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`. Cambia el tag en `flake.nix` a mano y después ejecuta `nixup update lanzaboote`.
 
