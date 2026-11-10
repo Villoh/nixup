@@ -16,6 +16,8 @@ Actualizaciones seguras para NixOS con flakes. Primero revisas, luego decides.
 
 </div>
 
+---
+
 nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias, y hace el build en una copia temporal antes de escribir nada. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte. Nunca activa una generación de NixOS: ni `switch`, ni `boot`, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
 
 ## Ejemplo

@@ -16,6 +16,8 @@ Safe updates for flake-based NixOS. Review first, then decide.
 
 </div>
 
+---
+
 nixup checks a flake-based NixOS configuration for updates and applies them only after you have read what changed upstream. It compares your flake inputs, the packages your flake defines, `nix profile` entries and Flatpak apps with their upstream. For each pending update it shows the commits and release notes in between, then builds in a scratch copy before it writes anything. It can also install pending Flatpak updates and upgrade `nix profile` entries, after asking. It never activates a NixOS generation: no `switch`, no `boot`, no `sudo`, no daemon. Written in Go, standard library only.
 
 ## Example
