@@ -24,11 +24,11 @@ nixup busca actualizaciones para una configuración de NixOS basada en flakes y 
 
 ```text
 $ nixup check --source input,package
-SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
-input    lanzaboote    v0.4.1         v1.2.0   major   nixup update lanzaboote
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
+SOURCE   NAME          CURRENT        LATEST   STATUS
+input    home-manager  4839ed6 · 20d  2c0c1f0  update
+input    lanzaboote    v0.4.1         v1.2.0   major
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update
+package  ripgrep       14.0.0         15.2.0   major
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```

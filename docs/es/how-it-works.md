@@ -33,7 +33,7 @@ nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee 
 
   Si no hay ninguno, el paquete sale como `info` con `no GitHub upstream: check by hand`.
 - Sin `passthru.updateScript`, el paquete sale como `info` con `no passthru.updateScript`, porque `nixup update` no podría actualizarlo.
-- Un paquete que se queda donde está a propósito puede decirlo con `passthru.nixup.pinned`, un motivo. Entonces nixup no consulta nada: la fila es `ok`, se oculta sin `--all` y `ACTION` muestra `pinned: <motivo>`. Es el único atributo propio de nixup, pensado para un código sin versiones que seguir, como un único fichero de un commit de un repositorio:
+- Un paquete que se queda donde está a propósito puede decirlo con `passthru.nixup.pinned`, un motivo. Entonces nixup no consulta nada: la fila es `ok`, se oculta sin `--all` y `NOTE` muestra `pinned: <motivo>`. Es el único atributo propio de nixup, pensado para un código sin versiones que seguir, como un único fichero de un commit de un repositorio:
 
   ```nix
   passthru.nixup.pinned = "a font file at a plugin commit; bump it when the font changes";

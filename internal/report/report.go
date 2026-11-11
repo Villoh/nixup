@@ -66,15 +66,27 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 		shown = append(shown, r)
 	}
 	if len(shown) > 0 {
+		header := []string{"SOURCE", "NAME", "CURRENT", "LATEST", "STATUS", "NOTE"}
 		cells := make([][]string, len(shown))
+		anyNote := false
 		for i, r := range shown {
-			action := r.Note
-			if r.Hint != "" {
-				action = strings.TrimPrefix(action+" · "+r.Hint, " · ")
+			note := r.Note
+			if note == "nixup update "+r.Name { // what every update says: no news
+				note = ""
 			}
-			cells[i] = []string{check.Source(r.Section), r.Name, r.Current, r.Latest, status(r), action}
+			if r.Hint != "" {
+				note = strings.TrimPrefix(note+" · "+r.Hint, " · ")
+			}
+			anyNote = anyNote || note != ""
+			cells[i] = []string{check.Source(r.Section), r.Name, r.Current, r.Latest, status(r), note}
 		}
-		Table(t, []string{"SOURCE", "NAME", "CURRENT", "LATEST", "STATUS", "ACTION"}, cells,
+		if !anyNote { // no column of blanks
+			header = header[:5]
+			for i := range cells {
+				cells[i] = cells[i][:5]
+			}
+		}
+		Table(t, header, cells,
 			func(row, col int) int {
 				if col == 4 {
 					return statusColor[cells[row][4]]

@@ -81,24 +81,24 @@ No hace falta estar dentro del flake. `nixup -C ~/nixos-config` funciona desde c
 ## Cómo leer el informe
 
 ```text
-SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
-input    lanzaboote    v0.4.1         v1.2.0   major   nixup update lanzaboote
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
+SOURCE   NAME          CURRENT        LATEST   STATUS
+input    home-manager  4839ed6 · 20d  2c0c1f0  update
+input    lanzaboote    v0.4.1         v1.2.0   major
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update
+package  ripgrep       14.0.0         15.2.0   major
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `flatpak`, `profile`), su nombre, la versión actual y la más nueva, un estado y el comando que aplica la actualización. La última línea lo resume todo.
+Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `flatpak`, `profile`), su nombre, la versión actual y la más nueva, y un estado. Toda actualización se aplica con `nixup update <nombre>` (o `nixup update` para todo), así que la tabla no lo repite; la columna `NOTE` solo aparece en las filas que necesitan otra cosa. La última línea lo resume todo.
 
 `STATUS` puede ser:
 
 - `update`: hay una versión más nueva.
 - `major` o `0.x-minor`: hay una versión más nueva y el salto pinta a cambio incompatible, una versión mayor nueva o una versión menor nueva cuando todavía estás en `0.x`. Lee primero el changelog.
 - `ok`: está al día. Estas filas solo se cuentan; con `--all` se listan.
-- `info`: nixup no puede comprobar esta entrada, y `ACTION` dice por qué (por ejemplo `no GitHub upstream: check by hand`).
-- `error`: la comprobación ha fallado, y `ACTION` trae el motivo.
+- `info`: nixup no puede comprobar esta entrada, y `NOTE` dice por qué (por ejemplo `no GitHub upstream: check by hand`).
+- `error`: la comprobación ha fallado, y `NOTE` trae el motivo.
 
 En los inputs de rama, `CURRENT` muestra el commit bloqueado y cuántos días tiene: `4839ed6 · 20d` se hizo upstream hace 20 días.
 

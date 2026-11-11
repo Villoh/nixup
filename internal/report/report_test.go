@@ -49,11 +49,11 @@ func TestTextIsOneTable(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, rows(), false, false)
 	l := lines(out.String())
-	if l[0] != "SOURCE   NAME    CURRENT  LATEST  STATUS  ACTION" {
+	if l[0] != "SOURCE   NAME    CURRENT  LATEST  STATUS  NOTE" {
 		t.Errorf("header: %q", l[0])
 	}
 	want := []string{
-		"input    dms     v1.6.2   v2.0.0  major   nixup update dms",
+		"input    dms     v1.6.2   v2.0.0  major", // "nixup update dms" is what every update says
 		"package  strata  0.21.0           info    no updateScript",
 		"flatpak  broken                   error   no remotes",
 		"",
@@ -89,7 +89,7 @@ func TestTextStatusKinds(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{
 		{Section: "packages", Name: "a", Current: "0.6.1", Latest: "0.7.0", Status: check.Outdated, Warn: ver.ZeroMinor.Warning()},
-		{Section: "packages", Name: "b", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "nixup pkg b",
+		{Section: "packages", Name: "b", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "nixup update b",
 			Hint: "nixpkgs has b 1.1: pkgs.b could replace this package"},
 		{Section: "packages", Name: "c", Current: "1", Status: check.Info, Hint: "nixpkgs has c 2: pkgs.c could replace this package"},
 	}, false, false)
@@ -97,9 +97,21 @@ func TestTextStatusKinds(t *testing.T) {
 	if !strings.Contains(l[1], "0.x-minor") || !strings.Contains(l[2], " update ") {
 		t.Errorf("status names the kind of jump:\n%s", out)
 	}
-	if !strings.HasSuffix(l[2], "nixup pkg b · nixpkgs has b 1.1: pkgs.b could replace this package") ||
+	if !strings.HasSuffix(l[2], "update     nixpkgs has b 1.1: pkgs.b could replace this package") ||
 		!strings.HasSuffix(l[3], "info       nixpkgs has c 2: pkgs.c could replace this package") {
-		t.Errorf("the nixpkgs hint goes in ACTION, after the note if any:\n%s", out)
+		t.Errorf("the nixpkgs hint goes in NOTE, without the usual nixup update:\n%s", out)
+	}
+}
+
+func TestTextNoNoteColumnWhenEmpty(t *testing.T) {
+	term, out, _ := testutil.Term("")
+	report.Text(term, []check.Row{
+		{Section: "inputs", Name: "a", Current: "1", Latest: "2", Status: check.Outdated, Note: "nixup update a"},
+		{Section: "inputs", Name: "bb", Current: "1", Latest: "2", Status: check.Outdated, Note: "nixup update bb"},
+	}, false, false)
+	l := lines(out.String())
+	if l[0] != "SOURCE  NAME  CURRENT  LATEST  STATUS" || l[1] != "input   a     1        2       update" {
+		t.Errorf("only updates: no NOTE column at all:\n%s", out)
 	}
 }
 

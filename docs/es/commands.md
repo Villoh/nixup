@@ -59,7 +59,7 @@ nixup check --markdown --review
 
 `check` no recibe nombres; lo que escribas detrás se ignora.
 
-La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` y `ACTION`, seguida de una línea de resumen y, con `--review`, un bloque de cambios de upstream por cada actualización. `STATUS` es `update`, `major` o `0.x-minor` (probablemente incompatible), `ok`, `info` o `error`; ver [Primeros pasos](getting-started.md#cómo-leer-el-informe). Una fila `ok` repite su versión en `LATEST`, y el resumen cuenta las filas `ok` aunque estén ocultas. En JSON los estados son `outdated`, `ok`, `info` y `error`, y un salto probablemente incompatible lleva `warning`:
+La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` y, cuando alguna fila la tiene, `NOTE`, seguida de una línea de resumen y, con `--review`, un bloque de cambios de upstream por cada actualización. `STATUS` es `update`, `major` o `0.x-minor` (probablemente incompatible), `ok`, `info` o `error`; ver [Primeros pasos](getting-started.md#cómo-leer-el-informe). Una fila `ok` repite su versión en `LATEST`, y el resumen cuenta las filas `ok` aunque estén ocultas. En JSON los estados son `outdated`, `ok`, `info` y `error`, y un salto probablemente incompatible lleva `warning`:
 
 ```json
 [

@@ -81,24 +81,24 @@ You do not have to be inside the flake. `nixup -C ~/nixos-config` works from any
 ## Reading the report
 
 ```text
-SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
-input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
-input    lanzaboote    v0.4.1         v1.2.0   major   nixup update lanzaboote
-input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
-package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
+SOURCE   NAME          CURRENT        LATEST   STATUS
+input    home-manager  4839ed6 · 20d  2c0c1f0  update
+input    lanzaboote    v0.4.1         v1.2.0   major
+input    nixpkgs       0bb2eed · 8d   f4a03c0  update
+package  ripgrep       14.0.0         15.2.0   major
 
 4 to update (2 likely breaking) · 1 up to date (--all to show them)
 ```
 
-One row per entry: where it comes from (`SOURCE`: `input`, `package`, `flatpak`, `profile`), its name, the current and newest version, a status, and the command that applies the update. The last line counts it all.
+One row per entry: where it comes from (`SOURCE`: `input`, `package`, `flatpak`, `profile`), its name, the current and newest version, and a status. Every update is applied with `nixup update <name>` (or `nixup update` for all), so the table does not repeat it; a `NOTE` column appears only for rows that need something else. The last line counts it all.
 
 `STATUS` is one of:
 
 - `update`: a newer version exists.
 - `major` or `0.x-minor`: a newer version exists and the jump looks breaking, a new major version or a new minor version while still at `0.x`. Read the changelog first.
 - `ok`: up to date. These rows are only counted; `--all` lists them.
-- `info`: nixup cannot check this entry, and `ACTION` says why (for example `no GitHub upstream: check by hand`).
-- `error`: the check failed, and `ACTION` has the reason.
+- `info`: nixup cannot check this entry, and `NOTE` says why (for example `no GitHub upstream: check by hand`).
+- `error`: the check failed, and `NOTE` has the reason.
 
 For branch inputs `CURRENT` shows the locked commit and how many days old it is: `4839ed6 · 20d` was committed upstream 20 days ago.
 
