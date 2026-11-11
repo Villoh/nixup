@@ -91,7 +91,7 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 | [Configuración](docs/es/configuration.md) | Qué flake usa, variables de entorno, token de GitHub |
 | [Cómo funciona](docs/es/how-it-works.md) | Qué comprueba cada sección y qué se escribe |
 | [Seguridad](docs/es/safety.md) | Las garantías y hasta dónde llegan |
-| [CI](docs/es/ci.md) | Comprobaciones programadas y pull requests de actualización |
+| [CI](docs/es/ci.md) | Una issue semanal con lo pendiente, o pull requests de actualización |
 | [Limitaciones](docs/es/limitations.md) | Lo que nixup no ve |
 | [Desarrollo](docs/es/development.md) | Estructura del código y tests, para quien contribuye |
 | [Releases](docs/es/releases.md) | Cómo se publica una versión, para mantenedores |

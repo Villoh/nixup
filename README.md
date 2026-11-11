@@ -91,7 +91,7 @@ It works on the flake you are in; anywhere else it reads `NIXUP_FLAKE`, `NH_OS_F
 | [Configuration](docs/configuration.md) | Which flake, environment variables, GitHub token |
 | [How it works](docs/how-it-works.md) | What each section checks and what gets written |
 | [Safety](docs/safety.md) | The guarantees and where they end |
-| [CI](docs/ci.md) | Scheduled checks and update pull requests |
+| [CI](docs/ci.md) | A weekly issue with pending updates, or update pull requests |
 | [Limitations](docs/limitations.md) | What nixup does not see |
 | [Development](docs/development.md) | Code layout and tests, for contributors |
 | [Releases](docs/releases.md) | How a release is cut, for maintainers |

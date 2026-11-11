@@ -1,6 +1,6 @@
 ---
 title: CI
-description: Ejecuta nixup desde un workflow programado de GitHub Actions para ver las actualizaciones pendientes y abrir una pull request de actualización.
+description: Ejecuta nixup desde un workflow programado de GitHub Actions para mantener una issue con las actualizaciones pendientes, o para abrir una pull request de actualización.
 lang: es
 ---
 
@@ -22,6 +22,136 @@ nixup no trae un workflow para tu configuración. Aquí tienes cómo montarlo co
 ```bash
 nixup check --markdown --review >> "$GITHUB_STEP_SUMMARY" || [ $? -eq 1 ]
 ```
+
+## Una issue semanal
+
+Si actualizas en tu propia máquina, donde se pueden compilar los hosts, basta con un recordatorio. Este workflow mantiene las actualizaciones pendientes en una issue y no cambia nada del repositorio:
+
+```yaml
+name: updates
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency: updates
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }} # gh, and nixup's GitHub API calls
+      TITLE: Pending updates
+      LABEL: updates
+      NIXUP: github:Villoh/nixup/v0.8.0 # or the rev your flake.lock pins
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v23
+
+      - name: update the issue
+        run: |
+          set -euo pipefail
+          nixup=$NIXUP
+          sources=input,package
+
+          code=0
+          nix run "$nixup" -- check --source "$sources" --json > rows.json ||
+            code=$?
+          if [ "$code" -ge 2 ]; then # a check failed: red run
+            cat rows.json
+            exit 1
+          fi
+
+          read -r num state < <(
+            gh issue list --label "$LABEL" --state all --limit 1 \
+              --json number,state --jq '.[0] | "\(.number) \(.state)"'
+          ) || true
+          open=""
+          if [ "${state:-}" = OPEN ]; then open=$num; fi
+
+          if [ "$code" -eq 0 ]; then # everything is up to date
+            if [ -n "$open" ]; then
+              gh issue close "$open" --comment "Everything is up to date."
+            fi
+            exit 0
+          fi
+
+          # What "something new" means: a name that was not pending before.
+          # Versions are left out: a branch or a nightly moves every day, and
+          # an entry already pending is already known.
+          pending=$(jq -r '[.[] | select(.status == "outdated") | .name]
+            | sort | join(" ")' rows.json)
+          nix run "$nixup" -- check --source "$sources" --markdown \
+            --review > review.md || [ $? -eq 1 ]
+          {
+            echo "Pending updates as of $(date -u +%F)."
+            echo "Apply them locally with \`nixup update\`."
+            echo
+            # The ACTION column is left out: it is "nixup update <name>"
+            # but for the rows that need something else, kept as Notes.
+            jq -r '
+              def kind: {inputs: "input", packages: "package"}[.] // .;
+              def status: if .status != "outdated" then .status
+                elif (.warning // "") | test("MAJOR") then "**major**"
+                elif (.warning // "") != "" then "**0.x-minor**"
+                else "update" end;
+              def notes: [(.note // "" | select(startswith("nixup update")
+                | not)), (.hint // empty)] | map(select(. != ""))
+                | join("; ");
+              "| Source | Name | Current | Latest | Status | Notes |",
+              "|---|---|---|---|---|---|",
+              (.[] | select(.status != "ok")
+                | "| \(.section | kind) | \(.name) | `\(.current)` " +
+                  "| `\(.latest // "")` | \(status) | \(notes) |")
+            ' rows.json
+          } > body.md
+          # Issue bodies stop at 65536 characters: drop the details if
+          # they do not fit.
+          size=$(($(wc -c < body.md) + $(wc -c < review.md)))
+          if [ "$size" -lt 60000 ]; then
+            {
+              printf '\n<details><summary>What changed upstream</summary>\n\n'
+              cat review.md
+              printf '\n</details>\n'
+            } >> body.md
+          fi
+
+          printf '\n<!-- nixup: %s -->\n' "$pending" >> body.md
+
+          if [ -n "$open" ]; then
+            before=$(gh issue view "$open" --json body --jq .body |
+              sed -n 's/^<!-- nixup: \(.*\) -->$/\1/p')
+            new=$(comm -23 <(tr ' ' '\n' <<< "$pending" | sort) \
+              <(tr ' ' '\n' <<< "$before" | sort))
+            if [ -z "$new" ]; then # nothing new: refresh it quietly
+              gh issue edit "$open" --body-file body.md
+              exit 0
+            fi
+          fi
+
+          gh label create "$LABEL" --color 4A6FC4 --force \
+            --description "Pending flake updates (nixup)"
+          url=$(gh issue create --title "$TITLE ($(date -u +%F))" \
+            --label "$LABEL" --body-file body.md)
+          if [ -n "$open" ]; then
+            gh issue close "$open" --comment "Superseded by #${url##*/}."
+          fi
+```
+
+Notas sobre este workflow:
+
+- Como mucho hay una issue abierta. Una issue nueva, que te notifica, sustituye a la abierta solo cuando aparece un input o paquete que antes no estaba pendiente; si no, la abierta se actualiza sin avisar. Cuando no queda nada pendiente, se cierra.
+- "Nuevo" compara nombres, no versiones: un input de rama o una nightly se mueve cada día, y lo que ya estaba pendiente ya lo conoces. Los nombres se guardan en un comentario HTML al final de la issue.
+- La tabla sale de `check --json`. No tiene columna de comando: todas las filas se aplican con `nixup update <nombre>`.
+- `--review` añade los commits y las release notes de upstream en una sección plegada, que se omite si el cuerpo pasaría del límite de 65536 caracteres de GitHub.
+- `GH_TOKEN` sirve tanto para `gh` como para las llamadas de nixup a la API de GitHub. Sin token, nixup tiene un límite de 60 llamadas a la hora y las revisiones fallan.
+- Si un check falla (código de salida 2), la ejecución sale en rojo y GitHub te avisa por correo.
+- Si tu flake tiene nixup como input, coge la versión del `flake.lock`, así la issue coincide con lo que dice `nixup check` en tu máquina: `nixup="github:Villoh/nixup/$(jq -r .nodes.nixup.locked.rev flake.lock)"`.
 
 ## Una pull request de actualización semanal
 
@@ -46,7 +176,7 @@ jobs:
       GH_TOKEN: ${{ github.token }} # para las llamadas a la API de GitHub de las revisiones
       NIXUP: github:Villoh/nixup
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v23
 
       - name: pending updates
@@ -76,7 +206,7 @@ Detalles de este workflow:
 - Los dos pasos van en comandos separados para que solo el de inputs se salte el build.
 - El runner no tiene `nix-update`, así que `update` lo ejecuta con `nix run nixpkgs#nix-update`.
 - `update --source package -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, nixup sale con 2 y el job para antes de la pull request.
-- Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.2.0`.
+- Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.8.0`.
 - El commit y la pull request los hace `create-pull-request`. nixup nunca hace commit.
 
 ## Builds del sistema completo
