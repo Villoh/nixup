@@ -176,11 +176,17 @@ func (p Package) TagVersion() (gh.Extract, error) {
 // ExtraArgs are the nix-update flags the package declares. --version=* is dropped, since
 // nixup always pins the version it just reviewed; --version=unstable only sets allowPre.
 func (p Package) ExtraArgs() (args []string, allowPre bool) {
+	skip := false
 	for i, a := range p.Update {
 		switch {
-		case i == 0: // the nix-update binary
+		case i == 0 || skip: // the nix-update binary, or the value of a flag dropped below
+			skip = false
 		case a == "--version=unstable":
 			allowPre = true
+		case a == "--version" || a == "--version-regex" || a == "-vr":
+			// nixup passes the exact --version; a value given as the next word goes too.
+			skip = i+1 < len(p.Update) && !strings.HasPrefix(p.Update[i+1], "-")
+			allowPre = allowPre || skip && a == "--version" && p.Update[i+1] == "unstable"
 		case strings.HasPrefix(a, "--version"):
 		default:
 			args = append(args, a)

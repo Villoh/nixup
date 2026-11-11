@@ -239,6 +239,15 @@ func TestPackageUpstreamAndArgs(t *testing.T) {
 	if args, pre := byName["padpoll"].ExtraArgs(); pre || len(args) != 0 {
 		t.Errorf("args=%v pre=%v", args, pre)
 	}
+	// The value of a version flag given as its own word goes with it (meiro passes
+	// "--version-regex" "desktop-v(.*)", which once reached nix-update as an attribute).
+	split := flake.Package{Update: []string{"nix-update", "--version-regex", "desktop-v(.*)", "-vr", "x(.*)", "--version", "unstable", "--build"}}
+	if args, pre := split.ExtraArgs(); !reflect.DeepEqual(args, []string{"--build"}) || !pre {
+		t.Errorf("split version flags: %q pre=%v", args, pre)
+	}
+	if args, _ := (flake.Package{Update: []string{"nix-update", "--version-regex=v(.*)", "--version", "--build"}}).ExtraArgs(); !reflect.DeepEqual(args, []string{"--build"}) {
+		t.Errorf("a bare --version must not swallow the next flag: %q", args)
+	}
 	if args, _ := (flake.Package{Update: []string{"nix-update", "--version=skip", "--build"}}).ExtraArgs(); !reflect.DeepEqual(args, []string{"--build"}) {
 		t.Errorf("--version=* must never be forwarded: %v", args)
 	}
