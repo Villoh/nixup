@@ -30,7 +30,8 @@ El paso de inputs de `update` hace el build de cada entrada de `nixosConfigurati
 - Entradas de `nix profile` fijadas: una entrada fijada a una revisión (`github:NixOS/nixpkgs/<rev>`) no la puede mover `nix profile upgrade`, así que `update` nunca la actualiza. Ejecuta `nix profile remove <nombre>` y vuelve a instalarla. `check` compara esas revisiones solo con el input de tu flake llamado `nixpkgs`.
 - Flatpak no tiene revisión del changelog: el paso de Flatpak enseña versiones, no commits ni release notes. `LATEST` dice `unknown` cuando el remoto no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref`.
 - Una app instalada desde un bundle cuyo remoto está desactivado, como un bundle `.flatpak` que construye tu propio paquete, nunca tiene actualizaciones en Flatpak. Actualízala a través de su paquete.
-- Inputs fijados a un tag: `nix flake update` no mueve un tag, así que `update` tampoco. Cambia el tag en `flake.nix`.
+- Inputs fijados a un tag: `update` mueve un tag cambiándolo como texto en `flake.nix`. El tag tiene que aparecer ahí exactamente una vez como palabra completa. Un tag escrito dos veces, construido con una variable (`${version}`) o escrito en otro archivo se rechaza con código de salida 2; cámbialo a mano. Solo se mueven los inputs de tipo `github`.
+- Sin nombres, `update` deja donde está un salto de tag que pinta a cambio incompatible y solo lo avisa. Nombra el input (`nixup update dms`) para moverlo.
 
 ## Heurísticas de versiones
 

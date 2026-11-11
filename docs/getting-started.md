@@ -83,7 +83,7 @@ You do not have to be inside the flake. `nixup -C ~/nixos-config` works from any
 ```text
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
 input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
-input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
+input    lanzaboote    v0.4.1         v1.2.0   major   nixup update lanzaboote
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
 package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
@@ -132,6 +132,6 @@ Next: review with git diff, then nh os test . -H desktop (nothing is committed o
 
 Flatpak and `nix profile` updates are already installed, so they print no such line.
 
-Pinned tags (`lanzaboote` above) are not moved by `nix flake update`. Change the tag in `flake.nix` yourself, then run `nixup update lanzaboote`.
+Pinned tags (`lanzaboote` above) are not moved by `nix flake update`, so nixup moves them itself. In the scratch copy it replaces the tag in `flake.nix` with the newest release, and after your yes it writes `flake.nix` together with `flake.lock`. A plain `nixup update` leaves a likely breaking jump, such as `v0.4.1` to `v1.2.0`, where it is and says so. `nixup update lanzaboote` moves it.
 
 Next: [Commands](commands.md) for every flag, or [How it works](how-it-works.md) for what happens underneath.

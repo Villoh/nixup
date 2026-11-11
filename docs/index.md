@@ -16,7 +16,7 @@ It does not activate a NixOS generation. There is no `switch`, `boot` or `sudo` 
 
 | Section | What it compares | How you update it |
 |---|---|---|
-| `inputs` | Branch inputs against the remote branch head; inputs pinned to a release tag against the newest tag | `nixup update`, or edit `flake.nix` for a pinned tag |
+| `inputs` | Branch inputs against the remote branch head; inputs pinned to a release tag against the newest tag | `nixup update`, which also moves a pinned tag in `flake.nix` |
 | `packages` | Each package in your flake's own `packages.<system>` output against its newest GitHub tag or release | `nixup update` (runs `nix-update`) |
 | `profile` | `nix profile` entries pinned to a nixpkgs revision other than your flake's `nixpkgs` input; entries pinned to another repository are only listed | `nixup update` for entries that follow a moving reference; a pinned entry needs `nix profile remove`, then install it again |
 | `flatpak` | Applications and runtimes with a pending update | `nixup update` |

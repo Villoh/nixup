@@ -83,7 +83,7 @@ No hace falta estar dentro del flake. `nixup -C ~/nixos-config` funciona desde c
 ```text
 SOURCE   NAME          CURRENT        LATEST   STATUS  ACTION
 input    home-manager  4839ed6 · 20d  2c0c1f0  update  nixup update home-manager
-input    lanzaboote    v0.4.1         v1.2.0   major   pinned tag: edit flake.nix
+input    lanzaboote    v0.4.1         v1.2.0   major   nixup update lanzaboote
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update  nixup update nixpkgs
 package  ripgrep       14.0.0         15.2.0   major   nixup update ripgrep
 
@@ -132,6 +132,6 @@ Next: review with git diff, then nh os test . -H desktop (nothing is committed o
 
 Las actualizaciones de Flatpak y de `nix profile` ya quedan instaladas, así que no imprimen esa línea.
 
-Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`. Cambia el tag en `flake.nix` a mano y después ejecuta `nixup update lanzaboote`.
+Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`, así que los mueve nixup. En la copia temporal cambia el tag de `flake.nix` por la release más nueva, y si dices que sí escribe `flake.nix` junto con `flake.lock`. Un `nixup update` sin nombres deja donde está un salto que pinta a cambio incompatible, como `v0.4.1` a `v1.2.0`, y lo avisa. `nixup update lanzaboote` lo mueve.
 
 Siguiente: [Comandos](commands.md) para ver todos los flags, o [Cómo funciona](how-it-works.md) para saber qué pasa por debajo.

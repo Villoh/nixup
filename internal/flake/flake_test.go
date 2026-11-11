@@ -572,3 +572,41 @@ func TestPackagePath(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceTag(t *testing.T) {
+	write := func(s string) string {
+		p := filepath.Join(t.TempDir(), "flake.nix")
+		os.WriteFile(p, []byte(s), 0o644)
+		return p
+	}
+	for _, c := range []struct{ old, new, in, want string }{
+		{"v1.6.2", "v2.1.2", `dms.url = "github:AvengeMedia/dms/v1.6.2";`, `dms.url = "github:AvengeMedia/dms/v2.1.2";`},
+		{"v1.6.2", "v1.7.0", `url = "github:o/r?ref=v1.6.2";`, `url = "github:o/r?ref=v1.7.0";`},
+		{"1.2.0", "1.3.0", "ref = \"1.2.0\";\n", "ref = \"1.3.0\";\n"},
+		{"dms/1.11.6", "dms/1.12.0", `url = "github:o/r/dms/1.11.6";`, `url = "github:o/r/dms/1.12.0";`},
+		{"v1.2.0", "v1.3.0", "a = \"github:o/a/v1.2.0\"; b = \"github:o/b/v1.2.0-rc1\"; c = \"github:o/c/v11.2.0\";",
+			"a = \"github:o/a/v1.3.0\"; b = \"github:o/b/v1.2.0-rc1\"; c = \"github:o/c/v11.2.0\";"},
+	} {
+		p := write(c.in)
+		if err := flake.ReplaceTag(p, c.old, c.new); err != nil {
+			t.Errorf("%q: %v", c.in, err)
+		}
+		if b, _ := os.ReadFile(p); string(b) != c.want {
+			t.Errorf("got %q, want %q", b, c.want)
+		}
+	}
+	for in, msg := range map[string]string{
+		"a = \"github:o/a/v1.2.0\";\nb = \"github:o/b/v1.2.0\";": "appears 2 times",
+		"# v1.2.0 here\na = \"github:o/a/v1.2.0\";":              "appears 2 times",
+		"url = \"github:o/a/${version}\";":                       "not written in flake.nix",
+		"url = \"github:o/a/v1.2.0.1\";":                         "not written in flake.nix",
+	} {
+		p := write(in)
+		if err := flake.ReplaceTag(p, "v1.2.0", "v1.3.0"); err == nil || !strings.Contains(err.Error(), msg) {
+			t.Errorf("%q: err %v, want %q", in, err, msg)
+		}
+		if b, _ := os.ReadFile(p); string(b) != in {
+			t.Errorf("a refusal leaves the file alone: %q", b)
+		}
+	}
+}

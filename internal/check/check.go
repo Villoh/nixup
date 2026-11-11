@@ -133,21 +133,38 @@ func (c *Checker) Inputs(repo string, review bool) []Row {
 	})
 }
 
+// PinnedTag reports whether a GitHub input is pinned to a release tag, which
+// `nix flake update` never moves: nixup update rewrites it in flake.nix instead.
+func PinnedTag(node flake.Node) bool {
+	return node.Original.Type == "github" && node.Original.Ref != "" && ver.Looks(node.Original.Ref)
+}
+
+// NewerTag is the highest tag of a pinned input's repository with the same prefix, if it
+// is newer than the pinned one, else "".
+func (c *Checker) NewerTag(node flake.Node) (string, error) {
+	ref := node.Original.Ref
+	top, err := c.GH.LatestTag(node.Original.Owner+"/"+node.Original.Repo, ver.Prefix(ref), ver.IsPre(ref))
+	if err != nil || !ver.Newer(top, ref) {
+		return "", err
+	}
+	return top, nil
+}
+
 func (c *Checker) input(name string, node flake.Node, review bool) Row {
 	id := node.Original.Owner + "/" + node.Original.Repo
 	ref, rev := node.Original.Ref, node.Locked.Rev
 	age := int(time.Since(time.Unix(node.Locked.LastModified, 0)).Hours() / 24)
 
-	if ref != "" && ver.Looks(ref) { // release tag: `nix flake update` never moves it
-		top, err := c.GH.LatestTag(id, ver.Prefix(ref), ver.IsPre(ref))
+	if PinnedTag(node) {
+		top, err := c.NewerTag(node)
 		if err != nil {
 			return errRow("inputs", name, err)
 		}
-		if !ver.Newer(top, ref) {
+		if top == "" {
 			return Row{Section: "inputs", Name: name, Current: ref, Status: OK, Note: "pinned tag"}
 		}
 		row := Row{Section: "inputs", Name: name, Current: ref, Latest: top, Status: Outdated,
-			Note: "pinned tag: edit flake.nix", Warn: ver.Bump(ref, top).Warning()}
+			Note: "nixup update " + name, Warn: ver.Bump(ref, top).Warning()}
 		if review {
 			row.Review = c.GH.Review(id, ref, top, true)
 		}

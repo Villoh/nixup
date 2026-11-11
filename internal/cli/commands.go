@@ -92,7 +92,7 @@ func runUpdate(args []string, d Deps) int {
 	fs.Var(&hosts, "H", "host to build for inputs (repeatable; default: all nixosConfigurations)")
 	noBuild := fs.Bool("no-build", false, "do not build: only update and show the changes")
 	yes := fs.Bool("y", false, "apply without asking (CI)")
-	allowDirty := fs.Bool("allow-dirty", false, "update over uncommitted changes in flake.lock or a package without asking (they are kept)")
+	allowDirty := fs.Bool("allow-dirty", false, "update over uncommitted changes in flake.lock, flake.nix or a package without asking (they are kept)")
 	reportFile := fs.String("report", "", "append a Markdown report to this file")
 	names, repo, code, ok := d.setup(fs, dir, args)
 	if !ok {

@@ -30,7 +30,8 @@ The input step of `update` builds each entry in `nixosConfigurations` with `nh o
 - Pinned `nix profile` entries: an entry pinned to a revision (`github:NixOS/nixpkgs/<rev>`) cannot be moved by `nix profile upgrade`, so `update` never upgrades it. Run `nix profile remove <name>` and install it again. `check` compares those revisions only with your flake's input named `nixpkgs`.
 - Flatpak has no changelog review: the Flatpak step shows versions, not commits or release notes. `LATEST` says `unknown` when the remote publishes no versions, as with a remote added from a `.flatpakref` file.
 - An app installed from a bundle whose remote is disabled, such as a `.flatpak` bundle built by your own package, never has an update in Flatpak. Update it through its package.
-- Pinned tag inputs: `nix flake update` does not move a tag, so `update` does not either. Edit the tag in `flake.nix`.
+- Pinned tag inputs: `update` moves a tag by replacing it as text in `flake.nix`. The tag must appear there exactly once as a whole word. A tag written twice, built from a variable (`${version}`) or written in another file is refused with exit code 2; change it by hand. Only inputs of type `github` are moved.
+- Without names, `update` leaves a likely breaking tag jump alone and only reports it. Name the input (`nixup update dms`) to move it.
 
 ## Version heuristics
 

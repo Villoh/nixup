@@ -16,7 +16,7 @@ No activa ninguna generación de NixOS. En el código no hay ningún `switch`, `
 
 | Sección | Qué compara | Cómo se actualiza |
 |---|---|---|
-| `inputs` | Los inputs de rama con el último commit de la rama remota; los fijados a un tag de release con el tag más nuevo | `nixup update`, o editando `flake.nix` si es un tag fijado |
+| `inputs` | Los inputs de rama con el último commit de la rama remota; los fijados a un tag de release con el tag más nuevo | `nixup update`, que también mueve un tag fijado en `flake.nix` |
 | `packages` | Cada paquete de la salida `packages.<system>` de tu flake con su tag o release más reciente en GitHub | `nixup update` (ejecuta `nix-update`) |
 | `profile` | Entradas de `nix profile` fijadas a una revisión de nixpkgs distinta de la del input `nixpkgs` de tu flake; las fijadas a otro repositorio solo se listan | `nixup update` para las entradas que siguen una referencia móvil; una entrada fijada necesita `nix profile remove` y volver a instalarla |
 | `flatpak` | Aplicaciones y runtimes con una actualización pendiente | `nixup update` |

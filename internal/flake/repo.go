@@ -202,3 +202,24 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	}
 	return out.Close()
 }
+
+// ReplaceTag rewrites a pinned tag in flake.nix: old must appear there exactly once as a
+// whole word (not inside a longer version), whatever form the URL takes
+// (github:o/r/v1.2.0, ?ref=v1.2.0, ref = "v1.2.0";). Anything else is refused.
+func ReplaceTag(path, old, new string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	word := regexp.MustCompile(`(^|[^A-Za-z0-9._+-])` + regexp.QuoteMeta(old) + `($|[^A-Za-z0-9._+-])`)
+	switch n := len(word.FindAllIndex(data, -1)); n {
+	case 1:
+	case 0:
+		return fmt.Errorf("the tag %s is not written in flake.nix as such", old)
+	default:
+		return fmt.Errorf("the tag %s appears %d times in flake.nix", old, n)
+	}
+	m := word.FindSubmatchIndex(data)
+	out := append(append(append([]byte{}, data[:m[3]]...), new...), data[m[3]+len(old):]...)
+	return os.WriteFile(path, out, 0o644)
+}

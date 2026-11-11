@@ -16,7 +16,7 @@ lang: en
 
 nixup reads `flake.lock` and looks at the direct inputs of your flake whose original type is `github`. Inputs that only `follows` another one are skipped, and so are inputs of any other type.
 
-- **Inputs pinned to a release tag.** If the input's `ref` looks like a version (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lists the repository's tags with `git ls-remote --tags` and takes the highest one with the same prefix. Prereleases are only considered when the current tag is a prerelease. `nix flake update` never moves a tag, so the note says `pinned tag: edit flake.nix`.
+- **Inputs pinned to a release tag.** If the input's `ref` looks like a version (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lists the repository's tags with `git ls-remote --tags` and takes the highest one with the same prefix. Prereleases are only considered when the current tag is a prerelease. `nix flake update` never moves a tag, so `nixup update` rewrites it in `flake.nix` (see [The input step](#the-input-step)). An outdated tag has `nixup update <name>` as its action; an up-to-date one says `pinned tag`.
 - **Branch inputs.** Any other `ref`, or none, is a branch. nixup asks `git ls-remote` for the head of that branch (or `HEAD` when there is no `ref`) and compares it with the locked commit. The current column shows the locked commit and its age in days.
 
 ### packages
@@ -82,14 +82,18 @@ The input and package steps only edit files in your repository; nothing reaches 
 ### The input step
 
 1. If `git diff --quiet -- flake.lock` reports changes, read the committed lock with `git show HEAD:flake.lock` to name the inputs already moved, and ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0. On yes the update runs on top of the working `flake.lock`, so those changes are kept and only what nixup moves is shown.
-2. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
-3. Run `nix flake update --flake <copy>`, with the input names you gave.
-4. Compare the old and new lock. For each direct input whose commit moved, print the upstream commits. Count the other nodes that moved.
-5. Unless `--no-build`, take the hosts from `-H`, or list them with `nix eval <copy>#nixosConfigurations --apply builtins.attrNames`.
-6. Unless `--no-build`, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the input step with exit code 2 and your `flake.lock` stays as it was.
-7. Append the Markdown report if `--report` was given. This happens before the question, so the report is written even if you answer no.
-8. Ask, unless `-y`. On yes, write the new `flake.lock` into your repository.
-9. Delete the scratch copy.
+2. For each input in scope (the names you gave, or every input) pinned to a release tag, list its tags as `check` does. If a newer tag exists, the input's tag will move. If the tags cannot be listed, the tag stays and nixup says so. Without names, a likely breaking jump is left alone and reported; with the input's name it moves, with the warning.
+3. If a tag will move and `git diff --quiet -- flake.nix` reports changes, ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0.
+4. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
+5. For each tag that moves, replace the old tag with the new one in the copy's `flake.nix`. The old tag is read from `original.ref` in `flake.lock` and the new one from the tag list, both as written. The old tag must appear exactly once in `flake.nix` as a whole word, not inside a longer version; otherwise the step stops with exit code 2 before `nix flake update` runs.
+6. Run `nix flake update --flake <copy>`, with the input names you gave.
+7. For each tag that moved, check that the new lock pins the input (`original.ref`) to the new tag. If not, stop with exit code 2 and write nothing.
+8. Compare the old and new lock. For each direct input whose commit moved, print the upstream commits. Count the other nodes that moved.
+9. Unless `--no-build`, take the hosts from `-H`, or list them with `nix eval <copy>#nixosConfigurations --apply builtins.attrNames`.
+10. Unless `--no-build`, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the input step with exit code 2 and your `flake.lock` and `flake.nix` stay as they were.
+11. Append the Markdown report if `--report` was given. This happens before the question, so the report is written even if you answer no.
+12. Ask, unless `-y`. On yes, write the new `flake.lock` into your repository, and the copy's `flake.nix` if a tag moved.
+13. Delete the scratch copy.
 
 Because the copy includes uncommitted and untracked files, the build tests your working tree as it is now, not the last commit.
 
@@ -131,7 +135,7 @@ This is the complete list. Everything goes through one package (`internal/run`),
 
 | Command | Where |
 |---|---|
-| `git ls-remote --tags --refs https://github.com/<repo>` | inputs, packages, reviews |
+| `git ls-remote --tags --refs https://github.com/<repo>` | inputs, packages, reviews, update (inputs pinned to a tag) |
 | `git ls-remote https://github.com/<repo> <ref>` | branch inputs |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), scratch copy |
 | `git diff --quiet -- <path>` | update (inputs and packages) |
@@ -165,7 +169,7 @@ nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-upd
 
 Written:
 
-- By the input step of `update`: your `flake.lock`, after a yes or `-y`. A temporary scratch copy, deleted at the end.
+- By the input step of `update`: your `flake.lock`, after a yes or `-y`, and your `flake.nix` too when a pinned tag moved. A temporary scratch copy, deleted at the end.
 - By the package step of `update`: the files `nix-update` changes, usually under `<pkg dir>`. If the update or build fails, the files under `<pkg dir>` are put back as they were.
 - By `--report <file>`: Markdown appended to that file.
 - Builds land in the Nix store, as with any build.

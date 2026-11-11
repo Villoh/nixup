@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Villoh/nixup/internal/check"
 	"github.com/Villoh/nixup/internal/exit"
 	"github.com/Villoh/nixup/internal/flake"
 	"github.com/Villoh/nixup/internal/gh"
 	"github.com/Villoh/nixup/internal/par"
 	"github.com/Villoh/nixup/internal/report"
+	"github.com/Villoh/nixup/internal/ver"
 )
 
 type LockOpts struct {
@@ -24,7 +26,8 @@ type LockOpts struct {
 }
 
 // Lock updates flake.lock in a scratch copy, shows what moved, builds every host there and
-// only then, after a yes, writes the new lock into the repo.
+// only then, after a yes, writes the new lock into the repo. Inputs pinned to a release
+// tag are moved by rewriting the tag in flake.nix, which is then written too.
 func (u *Updater) Lock(o LockOpts) int {
 	t := u.T
 	lockPath := filepath.Join(o.Repo, "flake.lock")
@@ -39,6 +42,10 @@ func (u *Updater) Lock(o LockOpts) int {
 	if flake.Dirty(u.R, o.Repo, "flake.lock") && !u.onDirty("flake.lock", u.uncommittedInputs(o.Repo, old), o.AllowDirty || o.Yes) {
 		return exit.OK
 	}
+	bumps := u.tagBumps(old, o.Inputs)
+	if len(bumps) > 0 && flake.Dirty(u.R, o.Repo, "flake.nix") && !u.onDirty("flake.nix", "", o.AllowDirty || o.Yes) {
+		return exit.OK
+	}
 	tmp, err := os.MkdirTemp("", "nixup-")
 	if err != nil {
 		return u.fail(err)
@@ -46,6 +53,15 @@ func (u *Updater) Lock(o LockOpts) int {
 	defer os.RemoveAll(tmp)
 	if err := flake.ScratchCopy(u.R, o.Repo, tmp); err != nil {
 		return u.fail(err)
+	}
+	for _, b := range bumps {
+		if err := flake.ReplaceTag(filepath.Join(tmp, "flake.nix"), b.old, b.new); err != nil {
+			return u.fail(fmt.Errorf("%s: %w; change it in flake.nix by hand", b.input, err))
+		}
+		t.Printf("Moving the %s tag in flake.nix: %s -> %s\n", b.input, b.old, b.new)
+		if b.warn != "" {
+			t.Println("  " + t.Paint("⚠ "+b.warn, 33))
+		}
 	}
 
 	what := "every input"
@@ -69,8 +85,16 @@ func (u *Updater) Lock(o LockOpts) int {
 	if err != nil {
 		return u.fail(err)
 	}
+	for _, b := range bumps { // nix, not the text edit, has the last word on what is pinned
+		if node, _ := cur.Input(b.input); node.Original.Ref != b.new {
+			return u.fail(fmt.Errorf("after the edit, flake.lock pins %s to %q, not %s: nothing written", b.input, node.Original.Ref, b.new))
+		}
+	}
 
 	md := u.showChanges(old, cur)
+	for _, b := range bumps {
+		md += fmt.Sprintf("\nTag of `%s` moved in flake.nix: `%s` → `%s`.\n", b.input, b.old, b.new)
+	}
 
 	if !o.NoBuild {
 		hosts := o.Hosts
@@ -91,16 +115,63 @@ func (u *Updater) Lock(o LockOpts) int {
 	}
 	u.appendReport(o.Report, md)
 
-	if !o.Yes && !t.Confirm("\nWrite this flake.lock to the repo?") {
+	files := "flake.lock"
+	if len(bumps) > 0 {
+		files = "flake.lock and flake.nix"
+	}
+	if !o.Yes && !t.Confirm("\nWrite this "+files+" to the repo?") {
 		t.Println("Discarded. Nothing changed.")
 		return exit.OK
+	}
+	if len(bumps) > 0 {
+		nix, err := os.ReadFile(filepath.Join(tmp, "flake.nix"))
+		if err == nil {
+			err = os.WriteFile(filepath.Join(o.Repo, "flake.nix"), nix, 0o644)
+		}
+		if err != nil {
+			return u.fail(err)
+		}
 	}
 	if err := os.WriteFile(lockPath, newData, 0o644); err != nil {
 		return u.fail(err)
 	}
-	t.Println(t.Paint("flake.lock updated.", 32))
+	t.Println(t.Paint(files+" updated.", 32))
 	u.edited = true
 	return exit.OK
+}
+
+// tagBump is an input pinned to a release tag that Lock moves by rewriting flake.nix.
+type tagBump struct{ input, old, new, warn string }
+
+// tagBumps are the pinned tags with a newer release. Without names a likely breaking jump
+// is left alone and only reported: it moves when you name the input.
+func (u *Updater) tagBumps(lock *flake.Lock, names []string) []tagBump {
+	scope := names
+	if len(scope) == 0 {
+		scope = lock.Names()
+	}
+	var bumps []tagBump
+	for _, name := range scope {
+		node, ok := lock.Input(name)
+		if !ok || !check.PinnedTag(node) {
+			continue
+		}
+		top, err := u.Check.NewerTag(node)
+		if err != nil {
+			u.T.Printf("%s: cannot list its tags (%v): its tag stays.\n", name, err)
+			continue
+		}
+		if top == "" {
+			continue
+		}
+		b := tagBump{name, node.Original.Ref, top, ver.Bump(node.Original.Ref, top).Warning()}
+		if b.warn != "" && len(names) == 0 {
+			u.T.Printf("%s %s -> %s is a likely breaking jump: left alone. Run nixup update %s to move it.\n", name, b.old, b.new, name)
+			continue
+		}
+		bumps = append(bumps, b)
+	}
+	return bumps
 }
 
 // uncommittedInputs names the inputs the working flake.lock moved since the last commit,

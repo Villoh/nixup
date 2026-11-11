@@ -27,7 +27,7 @@ func rows() []check.Row {
 	return []check.Row{
 		{Section: "inputs", Name: "nixpkgs", Current: "aaa1111", Status: check.OK},
 		{Section: "inputs", Name: "dms", Current: "v1.6.2", Latest: "v2.0.0", Status: check.Outdated,
-			Note: "pinned tag: edit flake.nix", Warn: ver.Major.Warning(), Review: sampleReview()},
+			Note: "nixup update dms", Warn: ver.Major.Warning(), Review: sampleReview()},
 		{Section: "packages", Name: "strata", Current: "0.21.0", Status: check.Info, Note: "no updateScript"},
 		{Section: "flatpak", Name: "broken", Status: check.Error, Note: "no remotes"},
 	}
@@ -53,7 +53,7 @@ func TestTextIsOneTable(t *testing.T) {
 		t.Errorf("header: %q", l[0])
 	}
 	want := []string{
-		"input    dms     v1.6.2   v2.0.0  major   pinned tag: edit flake.nix",
+		"input    dms     v1.6.2   v2.0.0  major   nixup update dms",
 		"package  strata  0.21.0           info    no updateScript",
 		"flatpak  broken                   error   no remotes",
 		"",

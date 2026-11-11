@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -982,5 +983,95 @@ func TestUpdateNextTarget(t *testing.T) {
 	t.Setenv("HOME", filepath.Dir(h.repo))
 	if s := inputs(h); !strings.Contains(s, "nh os test ~/"+filepath.Base(h.repo)+" -H <host>") {
 		t.Errorf("under the home directory, with ~:\n%s", s)
+	}
+}
+
+// tagFixture: dms pinned to v1.0.0 in flake.nix and flake.lock, upstream at the given tags.
+// nix flake update re-locks it to whatever tag flake.nix names in the scratch copy.
+func tagFixture(t *testing.T, answers, flakeNix string, tags ...string) *fixture {
+	pinned := func(tag string) string {
+		return testutil.LockJSON(map[string]string{"dms": "o/dms@" + tag + "#" + strings.Repeat(tag[1:2], 40), "nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("a", 40)})
+	}
+	f := newFixture(t, answers, map[string]string{"flake.nix": flakeNix, "flake.lock": pinned("v1.0.0")})
+	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
+	f.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
+		nix, _ := os.ReadFile(filepath.Join(c.Args[3], "flake.nix"))
+		tag := regexp.MustCompile(`v\d+\.\d+\.\d+`).FindString(string(nix))
+		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(pinned(tag)), 0o644)
+	}})
+	f.e.Tags("o/dms", tags...)
+	return f
+}
+
+const dmsNix = `{ inputs.dms.url = "github:o/dms/v1.0.0"; }`
+
+func TestLockMovesAPinnedTag(t *testing.T) {
+	f := tagFixture(t, "y\n", dmsNix, "v1.0.0", "v1.1.0")
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true}); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != `{ inputs.dms.url = "github:o/dms/v1.1.0"; }` {
+		t.Errorf("flake.nix: %s", b)
+	}
+	if lock, _ := os.ReadFile(filepath.Join(f.repo, "flake.lock")); !strings.Contains(string(lock), `"ref":"v1.1.0"`) {
+		t.Errorf("flake.lock: %s", lock)
+	}
+	s := f.out.String()
+	for _, want := range []string{"Moving the dms tag in flake.nix: v1.0.0 -> v1.1.0", "Write this flake.lock and flake.nix to the repo? [y/N]", "flake.lock and flake.nix updated."} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+}
+
+func TestLockLeavesAMajorTagUnlessNamed(t *testing.T) {
+	f := tagFixture(t, "", dmsNix, "v1.0.0", "v2.0.0")
+	f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true, Yes: true})
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != dmsNix {
+		t.Errorf("without names a major jump stays: %s", b)
+	}
+	if !strings.Contains(f.out.String(), "dms v1.0.0 -> v2.0.0 is a likely breaking jump: left alone. Run nixup update dms to move it.") {
+		t.Errorf("and says how to move it:\n%s", f.out)
+	}
+
+	g := tagFixture(t, "", dmsNix, "v1.0.0", "v2.0.0")
+	g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: []string{"dms"}, NoBuild: true, Yes: true})
+	if b, _ := os.ReadFile(filepath.Join(g.repo, "flake.nix")); !strings.Contains(string(b), "v2.0.0") || !strings.Contains(g.out.String(), "⚠ MAJOR") {
+		t.Errorf("named, it moves, with the warning: %s\n%s", b, g.out)
+	}
+}
+
+func TestLockRefusesATagItCannotPlace(t *testing.T) {
+	twice := `{ inputs.dms.url = "github:o/dms/v1.0.0"; inputs.x.url = "github:o/x/v1.0.0"; }`
+	f := tagFixture(t, "", twice, "v1.0.0", "v1.1.0")
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"dms"}, NoBuild: true, Yes: true}); code != exit.Error ||
+		!strings.Contains(f.errb.String(), "dms: the tag v1.0.0 appears 2 times in flake.nix; change it in flake.nix by hand") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != twice || f.called("nix flake update") {
+		t.Errorf("nothing changed, nothing run: %s", b)
+	}
+}
+
+func TestLockChecksTheTagWithNix(t *testing.T) {
+	f := tagFixture(t, "", dmsNix, "v1.0.0", "v1.1.0")
+	f.e.Run.Rules = append([]run.Rule{{Prefix: "nix flake update", Do: func(c run.Call) {
+		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"dms": "o/dms@v1.0.0#" + strings.Repeat("9", 40)})), 0o644)
+	}}}, f.e.Run.Rules...)
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true, Yes: true}); code != exit.Error ||
+		!strings.Contains(f.errb.String(), `after the edit, flake.lock pins dms to "v1.0.0", not v1.1.0: nothing written`) {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != dmsNix {
+		t.Errorf("flake.nix untouched: %s", b)
+	}
+}
+
+func TestLockAsksAboutADirtyFlakeNixBeforeMovingATag(t *testing.T) {
+	f := tagFixture(t, "n\n", dmsNix, "v1.0.0", "v1.1.0")
+	f.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.nix", Fail: errors.New("dirty")}}, f.e.Run.Rules...)
+	if f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true}); !strings.Contains(f.out.String(), "flake.nix has uncommitted changes. Update on top of them?") || f.called("nix flake update") {
+		t.Errorf("%s", f.out)
 	}
 }

@@ -38,7 +38,7 @@ func TestInputsPinnedTag(t *testing.T) {
 	rows := byName(checker(e).Inputs(repo, false))
 
 	dms := rows["dms"]
-	if dms.Status != check.Outdated || dms.Latest != "v2.0.0" {
+	if dms.Status != check.Outdated || dms.Latest != "v2.0.0" || dms.Note != "nixup update dms" {
 		t.Errorf("dms: %+v (prereleases must not count)", dms)
 	}
 	if !strings.Contains(dms.Warn, "MAJOR") || dms.Review != nil {

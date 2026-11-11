@@ -116,7 +116,7 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 | `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
 | `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
 | `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. Implies `--allow-dirty`. |
-| `--allow-dirty` | Update over uncommitted changes in `flake.lock` or a package without asking. They are kept. |
+| `--allow-dirty` | Update over uncommitted changes in `flake.lock`, `flake.nix` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
 
 Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is asked again. What was typed while nixup was busy, such as an Enter pressed during a build, is dropped before each question.
@@ -126,12 +126,22 @@ Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is aske
 The input step, in order:
 
 1. If `flake.lock` has uncommitted changes, ask `flake.lock has uncommitted changes (nixpkgs, home-manager). Update on top of them? They are kept. [y/N]`. The names are the inputs your working `flake.lock` already moved since the last commit; the parenthesis is left out when nixup cannot tell. A no prints `Skipped.` and ends the step; the other steps still run. With `--allow-dirty` or `-y` there is no question, only `flake.lock has uncommitted changes (...): updating on top of them; they are kept.` The update then starts from your working `flake.lock`, so the changes shown are only what nixup moved.
-2. Copy the working tree to a temporary directory and run `nix flake update --flake <copy> [input...]` there.
-3. If nothing changed, print `flake.lock is already up to date.` and stop.
-4. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
-5. Unless `--no-build`, run `nh os build <copy> -H <host>` for each host. The first failure stops the step and the repository is left as it was.
-6. Append the report, if `--report` was given.
-7. Ask `Write this flake.lock to the repo? [y/N]`, unless `-y`. Then copy the new `flake.lock` into the repository.
+2. Look for inputs pinned to a release tag (`v1.6.2`, `1.2.0`, `dms/1.11.6`) with a newer tag upstream, among the named inputs or, without names, among all of them. Without names, a likely breaking jump is left alone: `dms v1.6.2 -> v2.1.2 is a likely breaking jump: left alone. Run nixup update dms to move it.` Named, it moves.
+3. If a tag will move and `flake.nix` has uncommitted changes, ask `flake.nix has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and ends the step. `--allow-dirty` and `-y` skip the question, as for `flake.lock`.
+4. Copy the working tree to a temporary directory. For each tag that moves, replace it in the copy's `flake.nix` and print `Moving the dms tag in flake.nix: v1.6.2 -> v2.1.2`, followed by `⚠ MAJOR version jump: read the changelog, expect breaking changes` for a likely breaking jump. Then run `nix flake update --flake <copy> [input...]` there.
+5. If nothing changed, print `flake.lock is already up to date.` and stop.
+6. If a moved input is not pinned to its new tag in the new lock, stop with exit code 2: `after the edit, flake.lock pins dms to "v1.6.2", not v2.1.2: nothing written`.
+7. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
+8. Unless `--no-build`, run `nh os build <copy> -H <host>` for each host. The first failure stops the step and the repository is left as it was.
+9. Append the report, if `--report` was given. A moved tag adds a line such as ``Tag of `dms` moved in flake.nix: `v1.6.2` → `v2.1.2`.``
+10. Ask `Write this flake.lock to the repo? [y/N]`, unless `-y`. Then copy the new `flake.lock` into the repository and print `flake.lock updated.` When a tag moved, the question is `Write this flake.lock and flake.nix to the repo? [y/N]`, the copy's `flake.nix` is written too, and the last line is `flake.lock and flake.nix updated.`
+
+The tag is replaced as text. The old tag is taken from `flake.lock` (`original.ref`) and the new one from the tag list, both as written, so the tag format does not matter. The old tag must appear exactly once in `flake.nix` as a whole word, not inside a longer version such as `v1.2.0-rc1` or `v11.2.0`, in any form of the URL: `github:o/r/v1.2.0`, `?ref=v1.2.0` or `ref = "v1.2.0";`. Otherwise the step stops with exit code 2 before `nix flake update` runs, with one of these errors:
+
+- `dms: the tag v1.0.0 appears 2 times in flake.nix; change it in flake.nix by hand`
+- `dms: the tag v1.2.0 is not written in flake.nix as such; change it in flake.nix by hand`, for example when the URL is built with `${version}`.
+
+If the tags of an input cannot be listed, nixup prints `<name>: cannot list its tags (<reason>): its tag stays.` and goes on without moving it.
 
 ### Packages
 

@@ -16,7 +16,7 @@ lang: es
 
 nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original es `github`. Se saltan los inputs que solo hacen `follows` de otro, y también los de cualquier otro tipo.
 
-- **Inputs fijados a un tag de release.** Si el `ref` del input parece una versión (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lista los tags del repositorio con `git ls-remote --tags` y se queda con el más alto que tenga el mismo prefijo. Las prereleases solo cuentan si el tag actual ya es una prerelease. `nix flake update` nunca mueve un tag, así que la nota dice `pinned tag: edit flake.nix`.
+- **Inputs fijados a un tag de release.** Si el `ref` del input parece una versión (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lista los tags del repositorio con `git ls-remote --tags` y se queda con el más alto que tenga el mismo prefijo. Las prereleases solo cuentan si el tag actual ya es una prerelease. `nix flake update` nunca mueve un tag, así que `nixup update` lo cambia en `flake.nix` (ver [El paso de inputs](#el-paso-de-inputs)). Un tag desactualizado tiene `nixup update <nombre>` como acción; uno al día dice `pinned tag`.
 - **Inputs de rama.** Cualquier otro `ref`, o ninguno, es una rama. nixup pide a `git ls-remote` el último commit de esa rama (o `HEAD` si no hay `ref`) y lo compara con el commit bloqueado. La columna actual muestra el commit bloqueado y su antigüedad en días.
 
 ### packages
@@ -82,14 +82,18 @@ Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada l
 ### El paso de inputs
 
 1. Si `git diff --quiet -- flake.lock` detecta cambios, lee el lock del último commit con `git show HEAD:flake.lock` para nombrar los inputs que ya se han movido, y pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0. Si dices que sí, la actualización se hace sobre el `flake.lock` de trabajo, así que esos cambios se conservan y solo se enseña lo que mueve nixup.
-2. Crea un directorio temporal y copia en él todos los archivos que lista `git ls-files --cached --others --exclude-standard`: los archivos versionados con sus cambios sin commitear, más los archivos sin versionar que no están ignorados. Se saltan los enlaces simbólicos y los archivos borrados del árbol de trabajo. Esta es la copia temporal.
-3. Ejecuta `nix flake update --flake <copia>`, con los nombres de input que hayas dado.
-4. Compara el lock antiguo con el nuevo. Para cada input directo cuyo commit se ha movido, imprime los commits de upstream. Cuenta los demás nodos que se han movido.
-5. Salvo con `--no-build`, coge los hosts de `-H`, o los lista con `nix eval <copia>#nixosConfigurations --apply builtins.attrNames`.
-6. Salvo con `--no-build`, hace el build de cada host con `nh os build <copia> -H <host> -o <copia>/result`. No se activa nada. El primer build que falla para el paso de inputs con código de salida 2 y tu `flake.lock` se queda como estaba.
-7. Si has pasado `--report`, añade el informe en Markdown. Esto pasa antes de la pregunta, así que el informe se escribe aunque contestes que no.
-8. Pregunta, salvo con `-y`. Si dices que sí, escribe el nuevo `flake.lock` en tu repositorio.
-9. Borra la copia temporal.
+2. Para cada input del alcance (los nombres que hayas dado, o todos) fijado a un tag de release, lista sus tags igual que `check`. Si hay un tag más nuevo, el tag del input se moverá. Si no se pueden listar los tags, el tag se queda como está y nixup lo dice. Sin nombres, un salto que pinta a cambio incompatible se deja donde está y se avisa; con el nombre del input se mueve, con el aviso.
+3. Si se va a mover algún tag y `git diff --quiet -- flake.nix` detecta cambios, pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0.
+4. Crea un directorio temporal y copia en él todos los archivos que lista `git ls-files --cached --others --exclude-standard`: los archivos versionados con sus cambios sin commitear, más los archivos sin versionar que no están ignorados. Se saltan los enlaces simbólicos y los archivos borrados del árbol de trabajo. Esta es la copia temporal.
+5. Para cada tag que se mueve, cambia el tag antiguo por el nuevo en el `flake.nix` de la copia. El tag antiguo se lee de `original.ref` en `flake.lock` y el nuevo de la lista de tags, los dos tal cual. El tag antiguo tiene que aparecer exactamente una vez en `flake.nix` como palabra completa, no dentro de una versión más larga; si no, el paso para con código de salida 2 antes de ejecutar `nix flake update`.
+6. Ejecuta `nix flake update --flake <copia>`, con los nombres de input que hayas dado.
+7. Para cada tag que se ha movido, comprueba que el lock nuevo fija el input (`original.ref`) al tag nuevo. Si no, para con código de salida 2 y no escribe nada.
+8. Compara el lock antiguo con el nuevo. Para cada input directo cuyo commit se ha movido, imprime los commits de upstream. Cuenta los demás nodos que se han movido.
+9. Salvo con `--no-build`, coge los hosts de `-H`, o los lista con `nix eval <copia>#nixosConfigurations --apply builtins.attrNames`.
+10. Salvo con `--no-build`, hace el build de cada host con `nh os build <copia> -H <host> -o <copia>/result`. No se activa nada. El primer build que falla para el paso de inputs con código de salida 2 y tus `flake.lock` y `flake.nix` se quedan como estaban.
+11. Si has pasado `--report`, añade el informe en Markdown. Esto pasa antes de la pregunta, así que el informe se escribe aunque contestes que no.
+12. Pregunta, salvo con `-y`. Si dices que sí, escribe el nuevo `flake.lock` en tu repositorio, y el `flake.nix` de la copia si se ha movido algún tag.
+13. Borra la copia temporal.
 
 Como la copia incluye los archivos sin commitear y sin versionar, el build prueba tu árbol de trabajo tal y como está ahora, no el último commit.
 
@@ -131,7 +135,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 
 | Comando | Dónde |
 |---|---|
-| `git ls-remote --tags --refs https://github.com/<repo>` | inputs, packages, revisiones |
+| `git ls-remote --tags --refs https://github.com/<repo>` | inputs, packages, revisiones, update (inputs fijados a un tag) |
 | `git ls-remote https://github.com/<repo> <ref>` | inputs de rama |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), copia temporal |
 | `git diff --quiet -- <path>` | update (inputs y paquetes) |
@@ -165,7 +169,7 @@ Las peticiones HTTP propias de nixup solo van a `api.github.com`. `git`, `nix` y
 
 Se escribe:
 
-- Con el paso de inputs de `update`: tu `flake.lock`, tras un sí o con `-y`. Una copia temporal, que se borra al terminar.
+- Con el paso de inputs de `update`: tu `flake.lock`, tras un sí o con `-y`, y también tu `flake.nix` si se ha movido un tag fijado. Una copia temporal, que se borra al terminar.
 - Con el paso de paquetes de `update`: los archivos que cambia `nix-update`, normalmente en `<dir del paquete>`. Si falla la actualización o el build, los archivos de `<dir del paquete>` vuelven a quedar como estaban.
 - Con `--report <archivo>`: Markdown añadido al final de ese archivo.
 - Los builds acaban en el Nix store, como cualquier build.
