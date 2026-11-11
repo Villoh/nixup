@@ -20,7 +20,7 @@ type LockOpts struct {
 	Repo       string
 	Inputs     []string // empty: all
 	Hosts      []string // empty: every nixosConfiguration
-	NoBuild    bool
+	Build      bool     // build the hosts in the scratch copy before writing
 	Yes        bool
 	AllowDirty bool // go on over an uncommitted flake.nix without asking (-y does too)
 	Report     string
@@ -105,7 +105,7 @@ func (u *Updater) Lock(o LockOpts) int {
 		md += fmt.Sprintf("\nTag of `%s` moved in flake.nix: `%s` → `%s`.\n", b.input, b.old, b.new)
 	}
 
-	if !o.NoBuild {
+	if o.Build {
 		hosts := o.Hosts
 		if len(hosts) == 0 {
 			if hosts, err = flake.Hosts(u.R, tmp); err != nil {

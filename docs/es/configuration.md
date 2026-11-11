@@ -98,7 +98,7 @@ Por ejemplo:
 |---|---|---|
 | `git` | `ls-remote` para tags y ramas, la copia temporal, comprobar cambios sin commitear, el `flake.lock` del último commit | Fallan casi todas las comprobaciones |
 | `nix` | `nix eval` de paquetes y hosts, `nix flake update`, `nix build`, `nix profile list`, `nix profile upgrade` | La sección `profile` se salta; `packages` y `update` fallan |
-| `nh` | `nh os build` en el paso de inputs de `nixup update`; `nh os test`, `switch` o `boot` con `update --test`, `--switch` o `--boot` | El paso de inputs falla salvo con `--no-build`; la activación falla |
+| `nh` | `nh os build` en el paso de inputs de `nixup update` con `--build`, `--test`, `--switch` o `--boot`; `nh os test`, `switch` o `boot` con `update --test`, `--switch` o `--boot` | El paso de inputs falla con esos flags; sin ellos no se usa `nh` |
 | `nix-update` | El paso de paquetes de `nixup update` | nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar |
 | `flatpak` | La sección `flatpak` y el paso de Flatpak de `nixup update` | Se saltan las dos |
 | `gh` | Solo para leer un token con `gh auth token` | Las llamadas a la API van sin token |

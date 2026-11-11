@@ -126,11 +126,11 @@ func TestPkgYesSkipsTheQuestion(t *testing.T) {
 	}
 }
 
-func TestPkgNoBuild(t *testing.T) {
+func TestPkgAlwaysBuilds(t *testing.T) {
 	f := pkgFixture(t, "")
-	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true})
-	if !f.called("nix-update") || f.called("nix build") {
-		t.Errorf("calls: %v", f.e.Run.Calls())
+	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true})
+	if !f.called("nix-update") || !f.called("nix build --no-link .#padpoll") {
+		t.Errorf("the package is built, there is no opt-out: %v", f.e.Run.Calls())
 	}
 }
 
@@ -229,7 +229,7 @@ func TestPkgPassesPackageArgsAndNeverTheirVersion(t *testing.T) {
 	f.e.Tags("flectar/mail", "v0.1.0-alpha.6", "v0.1.0-alpha.7")
 	// --use-github-releases makes nixup read releases (as nix-update will), not tags.
 	f.e.Releases("flectar/mail", testutil.Release{Tag: "v0.1.0-alpha.6"}, testutil.Release{Tag: "v0.1.0-alpha.7"})
-	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true}); code != exit.OK {
+	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true}); code != exit.OK {
 		t.Fatalf("code %d\n%s", code, f.out)
 	}
 	for _, c := range f.e.Run.Calls() {
@@ -246,7 +246,7 @@ func TestPkgPassesPackageArgsAndNeverTheirVersion(t *testing.T) {
 func TestPkgFallsBackToNixRunWithoutNixUpdate(t *testing.T) {
 	f := pkgFixture(t, "")
 	f.e.Run.Missing["nix-update"] = true
-	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true})
+	f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true})
 	if !f.called("nix run nixpkgs#nix-update -- --flake padpoll --version=1.1.0") {
 		t.Errorf("calls: %v", f.e.Run.Calls())
 	}
@@ -260,7 +260,7 @@ func TestPkgOnlyTheRequestedPackage(t *testing.T) {
 	 "b":{"position":"/nix/store/x-source/packages/b/package.nix:1","version":"1.0.0","urls":["https://github.com/o/b/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/a", "v1.0.0", "v1.0.1")
 	f.e.Tags("o/b", "v1.0.0", "v1.0.1")
-	f.u.Pkg(update.PkgOpts{Repo: f.repo, Names: []string{"b"}, Yes: true, NoBuild: true})
+	f.u.Pkg(update.PkgOpts{Repo: f.repo, Names: []string{"b"}, Yes: true})
 	if f.called("nix-update --flake a") || !f.called("nix-update --flake b") {
 		t.Errorf("calls: %v", f.e.Run.Calls())
 	}
@@ -315,7 +315,7 @@ func TestPkgWorstCodeWins(t *testing.T) {
 	 "good":{"position":"/nix/store/x-source/packages/good/package.nix:1","version":"1.0.0","urls":["https://github.com/o/good/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/bad", "v1.0.0", "v1.0.1")
 	f.e.Tags("o/good", "v1.0.0", "v1.0.1")
-	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: true})
+	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true})
 	if code != exit.Error || !f.called("nix-update --flake good") {
 		t.Errorf("one failure must not stop the others, and must show in the exit code: code %d", code)
 	}
@@ -354,7 +354,7 @@ func (f *fixture) lock() string {
 
 func TestLockAppliesAfterBuildAndConfirmation(t *testing.T) {
 	f := lockFixture(t, "y\n")
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo}); code != exit.OK {
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Build: true}); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	if f.lock() != lockJSON(newRev) {
@@ -391,7 +391,7 @@ func TestLockAppliesAfterBuildAndConfirmation(t *testing.T) {
 func TestLockBuildFailureLeavesRepoUntouched(t *testing.T) {
 	f := lockFixture(t, "", run.Rule{Prefix: "nh os build", Fail: errors.New("exit 1")})
 	report := filepath.Join(t.TempDir(), "r.md")
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true, Report: report}); code != exit.Error {
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Build: true, Yes: true, Report: report}); code != exit.Error {
 		t.Errorf("code %d", code)
 	}
 	if f.lock() != lockJSON(oldRev) {
@@ -423,7 +423,7 @@ func TestLockDeclinedOrUnattendedChangesNothing(t *testing.T) {
 
 func TestLockYesWritesWithoutAsking(t *testing.T) {
 	f := lockFixture(t, "")
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true, Hosts: []string{"desktop"}}); code != exit.OK {
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Build: true, Yes: true, Hosts: []string{"desktop"}}); code != exit.OK {
 		t.Fatalf("code %d", code)
 	}
 	if f.lock() != lockJSON(newRev) || strings.Contains(f.out.String(), "[y/N]") {
@@ -434,11 +434,11 @@ func TestLockYesWritesWithoutAsking(t *testing.T) {
 	}
 }
 
-func TestLockNoBuild(t *testing.T) {
+func TestLockBuildsOnlyWhenAsked(t *testing.T) {
 	f := lockFixture(t, "")
-	f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true, NoBuild: true})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true})
 	if f.called("nh ") || f.called("nix eval") {
-		t.Errorf("--no-build must not build or list hosts: %v", f.e.Run.Calls())
+		t.Errorf("without --build: no build, no host listed: %v", f.e.Run.Calls())
 	}
 	if f.lock() != lockJSON(newRev) {
 		t.Error("lock not written")
@@ -452,7 +452,7 @@ func TestLockUpdatesOnlyTheNamedInputsInAScratchCopy(t *testing.T) {
 		scratch = c.Args[3]
 		os.WriteFile(filepath.Join(scratch, "flake.lock"), []byte(lockJSON(newRev)), 0o644)
 	}}}, f.e.Run.Rules...)
-	f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"nixpkgs", "home-manager"}, Yes: true, NoBuild: true})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"nixpkgs", "home-manager"}, Yes: true})
 
 	var upd run.Call
 	for _, c := range f.e.Run.Calls() {
@@ -486,7 +486,7 @@ func TestLockDirtyLock(t *testing.T) {
 	note := "flake.lock already has uncommitted changes"
 
 	f := lockFixture(t, "", dirty, head)
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"home-manager"}, NoBuild: true}); code != exit.OK || !f.called("nix flake update") {
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"home-manager"}}); code != exit.OK || !f.called("nix flake update") {
 		t.Errorf("no question: it goes on, code %d", code)
 	}
 	if s := f.out.String(); !strings.Contains(s, note+" (nixpkgs): they stay, and this update goes on top.") || strings.Contains(s, "[y/N] Skipped") {
@@ -494,17 +494,17 @@ func TestLockDirtyLock(t *testing.T) {
 	}
 	for name, scope := range map[string][]string{"the pending input itself": {"nixpkgs"}, "every input": nil} {
 		g := lockFixture(t, "", dirty, head)
-		g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: scope, NoBuild: true})
+		g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: scope})
 		if strings.Contains(g.out.String(), note) {
 			t.Errorf("%s: the update covers what was pending, nothing to say:\n%s", name, g.out)
 		}
 	}
 	k := lockFixture(t, "", dirty, run.Rule{Prefix: "git show HEAD:flake.lock", Out: lockJSON(oldRev)}) // only non-direct nodes moved
-	if k.u.Lock(update.LockOpts{Repo: k.repo, Inputs: []string{"nixpkgs"}, NoBuild: true}); !strings.Contains(k.out.String(), note+": they stay") {
+	if k.u.Lock(update.LockOpts{Repo: k.repo, Inputs: []string{"nixpkgs"}}); !strings.Contains(k.out.String(), note+": they stay") {
 		t.Errorf("a change it cannot name is still mentioned:\n%s", k.out)
 	}
 	h := lockFixture(t, "", dirty) // no HEAD to compare with
-	if h.u.Lock(update.LockOpts{Repo: h.repo, Inputs: []string{"nixpkgs"}, NoBuild: true}); !strings.Contains(h.out.String(), note+": they stay, and this update goes on top.") {
+	if h.u.Lock(update.LockOpts{Repo: h.repo, Inputs: []string{"nixpkgs"}}); !strings.Contains(h.out.String(), note+": they stay, and this update goes on top.") {
 		t.Errorf("when it cannot tell what changed, it says so without names:\n%s", h.out)
 	}
 }
@@ -523,7 +523,7 @@ func TestLockOutputIsQuietAndPlain(t *testing.T) {
 	f := lockFixture(t, "", run.Rule{Prefix: "nix flake update", Err: "warning: updating lock file \"/tmp/nixup-1/flake.lock\"\n", Do: func(c run.Call) {
 		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(lockJSON(newRev)), 0o644)
 	}})
-	f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"nixpkgs"}, Hosts: []string{"desktop"}, Yes: true})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Build: true, Inputs: []string{"nixpkgs"}, Hosts: []string{"desktop"}, Yes: true})
 	s := f.out.String() + f.errb.String()
 	if strings.Contains(s, "/tmp/nixup-1") || strings.Contains(s, "== ") {
 		t.Errorf("nix's own lines stay out on success, and no raw command headers:\n%s", s)
@@ -538,7 +538,7 @@ func TestLockOutputIsQuietAndPlain(t *testing.T) {
 func TestLockWritesReport(t *testing.T) {
 	f := lockFixture(t, "")
 	report := filepath.Join(t.TempDir(), "r.md")
-	f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true, Report: report})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Build: true, Yes: true, Report: report})
 	b, _ := os.ReadFile(report)
 	for _, want := range []string{"### flake.lock", "#### nixpkgs `aaa1111` → `bbb2222`", "7 commits", "Build of `desktop`: ok.", "Build of `zenbook`: ok."} {
 		if !strings.Contains(string(b), want) {
@@ -555,25 +555,9 @@ func TestLockCopiesUncommittedWorkIntoTheBuild(t *testing.T) {
 		sawFile = string(b)
 	}}}, f.e.Run.Rules...)
 	os.WriteFile(filepath.Join(f.repo, "flake.nix"), []byte("{ uncommitted = true; }"), 0o644)
-	f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true, Hosts: []string{"desktop"}})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Build: true, Yes: true, Hosts: []string{"desktop"}})
 	if sawFile != "{ uncommitted = true; }" {
 		t.Errorf("the build must see the working tree, got %q", sawFile)
-	}
-}
-
-func TestPkgReportDoesNotClaimABuildThatDidNotHappen(t *testing.T) {
-	for _, c := range []struct {
-		noBuild bool
-		want    string
-		notWant string
-	}{{false, "Build: ok.", "skipped"}, {true, "Build: skipped (--no-build).", "Build: ok."}} {
-		f := pkgFixture(t, "")
-		report := filepath.Join(t.TempDir(), "r.md")
-		f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, NoBuild: c.noBuild, Report: report})
-		b, _ := os.ReadFile(report)
-		if !strings.Contains(string(b), c.want) || strings.Contains(string(b), c.notWant) {
-			t.Errorf("NoBuild=%v: report %q must contain %q and not %q", c.noBuild, b, c.want, c.notWant)
-		}
 	}
 }
 
@@ -634,7 +618,7 @@ func flakeUpdateArgs(f *fixture) []string {
 
 func TestUpdateEverythingInputsFirst(t *testing.T) {
 	f := updateFixture(t)
-	f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true})
+	f.u.Update(update.Opts{Repo: f.repo, Yes: true})
 	var order []string
 	for _, c := range f.e.Run.Calls() {
 		if strings.HasPrefix(c.String(), "nix flake update") || strings.HasPrefix(c.String(), "nix-update") {
@@ -648,7 +632,7 @@ func TestUpdateEverythingInputsFirst(t *testing.T) {
 
 func TestUpdateSplitsNames(t *testing.T) {
 	f := updateFixture(t)
-	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"nixpkgs", "padpoll"}, Yes: true, NoBuild: true})
+	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"nixpkgs", "padpoll"}, Yes: true})
 	if got := flakeUpdateArgs(f); strings.Join(got, " ") != "nixpkgs" {
 		t.Errorf("inputs go to nix flake update: %v", got)
 	}
@@ -657,7 +641,7 @@ func TestUpdateSplitsNames(t *testing.T) {
 	}
 
 	g := updateFixture(t)
-	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"padpoll"}, Yes: true, NoBuild: true})
+	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"padpoll"}, Yes: true})
 	if g.called("nix flake update") || !g.called("nix-update --flake padpoll") {
 		t.Errorf("only packages named: flake.lock is not touched: %v", g.e.Run.Calls())
 	}
@@ -670,7 +654,7 @@ func TestUpdateNameErrors(t *testing.T) {
 		t.Errorf("ambiguous: code %d err %q", code, f.errb)
 	}
 	g := updateFixture(t)
-	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"both"}, Sources: []string{"package"}, Yes: true, NoBuild: true})
+	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"both"}, Sources: []string{"package"}, Yes: true})
 	if g.called("nix flake update") || !g.called("nix eval --json .#packages.") || g.errb.Len() != 0 {
 		t.Errorf("--source settles it: %q %v", g.errb, g.e.Run.Calls())
 	}
@@ -686,14 +670,14 @@ func TestUpdateNameErrors(t *testing.T) {
 
 func TestUpdateSourcesAndWorstCode(t *testing.T) {
 	f := updateFixture(t)
-	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Yes: true, NoBuild: true})
+	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Yes: true})
 	if f.called("nix-update") || !f.called("nix flake update") {
 		t.Errorf("--source input: no packages: %v", f.e.Run.Calls())
 	}
 	g := updateFixture(t)
 	g.e.Run.On(run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
 	g.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("dirty")}}, g.e.Run.Rules...)
-	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true}); code != exit.Error {
+	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true}); code != exit.Error {
 		t.Errorf("a failed package (2): the worst wins, got %d", code)
 	}
 	if !g.called("nix-update") || !g.called("nix flake update") {
@@ -701,7 +685,7 @@ func TestUpdateSourcesAndWorstCode(t *testing.T) {
 	}
 	h := updateFixture(t)
 	h.e.Run.Rules = append([]run.Rule{{Prefix: "nix flake update", Fail: errors.New("exit 1")}}, h.e.Run.Rules...)
-	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true, NoBuild: true}); code != exit.Error || !h.called("nix-update --flake padpoll") {
+	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true}); code != exit.Error || !h.called("nix-update --flake padpoll") {
 		t.Errorf("a failed lock (2) is not hidden by packages that went fine: code %d", code)
 	}
 }
@@ -873,7 +857,7 @@ func TestUpdateRunsTheFourStepsInOrder(t *testing.T) {
 	f := updateFixture(t)
 	f.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
 	f.e.Run.On(run.Rule{Prefix: "nix profile list --json", Out: `{"elements":{"hello":{"originalUrl":"flake:nixpkgs"}}}`})
-	f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true})
+	f.u.Update(update.Opts{Repo: f.repo, Yes: true})
 	var order []string
 	for _, c := range f.e.Run.Calls() {
 		for _, step := range []string{"nix flake update", "nix-update", "flatpak update", "nix profile upgrade"} {
@@ -889,13 +873,13 @@ func TestUpdateRunsTheFourStepsInOrder(t *testing.T) {
 	h := updateFixture(t)
 	h.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
 	h.e.Run.Rules = append([]run.Rule{{Prefix: "flatpak update", Fail: errors.New("exit 1")}}, h.e.Run.Rules...)
-	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true, NoBuild: true}); code != exit.Error {
+	if code := h.u.Update(update.Opts{Repo: h.repo, Yes: true}); code != exit.Error {
 		t.Errorf("a failed Flatpak step counts in the exit code: %d", code)
 	}
 
 	g := updateFixture(t)
 	g.e.Run.Missing = map[string]bool{"flatpak": true}
-	g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true})
+	g.u.Update(update.Opts{Repo: g.repo, Yes: true})
 	if strings.Contains(g.out.String(), "Flatpak") {
 		t.Errorf("without flatpak the step is skipped silently: %s", g.out)
 	}
@@ -934,7 +918,7 @@ func TestUpdateNamesAcrossSources(t *testing.T) {
 func TestUpdatePassesAllowDirtyToPackages(t *testing.T) {
 	f := updateFixture(t)
 	f.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- packages/padpoll", Fail: errors.New("dirty")}}, f.e.Run.Rules...)
-	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"padpoll"}, AllowDirty: true, NoBuild: true})
+	f.u.Update(update.Opts{Repo: f.repo, Names: []string{"padpoll"}, AllowDirty: true})
 	if s := f.out.String(); !strings.Contains(s, "packages/padpoll has uncommitted changes: updating on top of them") || strings.Contains(s, "Update on top") {
 		t.Errorf("--allow-dirty reaches the package step:\n%s", s)
 	}
@@ -962,7 +946,7 @@ const dmsNix = `{ inputs.dms.url = "github:o/dms/v1.0.0"; }`
 
 func TestLockMovesAPinnedTag(t *testing.T) {
 	f := tagFixture(t, "y\n", dmsNix, "v1.0.0", "v1.1.0")
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true}); code != exit.OK {
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo}); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != `{ inputs.dms.url = "github:o/dms/v1.1.0"; }` {
@@ -981,7 +965,7 @@ func TestLockMovesAPinnedTag(t *testing.T) {
 
 func TestLockLeavesAMajorTagUnlessNamed(t *testing.T) {
 	f := tagFixture(t, "", dmsNix, "v1.0.0", "v2.0.0")
-	f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true, Yes: true})
+	f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true})
 	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != dmsNix {
 		t.Errorf("without names a major jump stays: %s", b)
 	}
@@ -990,7 +974,7 @@ func TestLockLeavesAMajorTagUnlessNamed(t *testing.T) {
 	}
 
 	g := tagFixture(t, "", dmsNix, "v1.0.0", "v2.0.0")
-	g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: []string{"dms"}, NoBuild: true, Yes: true})
+	g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: []string{"dms"}, Yes: true})
 	if b, _ := os.ReadFile(filepath.Join(g.repo, "flake.nix")); !strings.Contains(string(b), "v2.0.0") || !strings.Contains(g.out.String(), "⚠ MAJOR") {
 		t.Errorf("named, it moves, with the warning: %s\n%s", b, g.out)
 	}
@@ -999,7 +983,7 @@ func TestLockLeavesAMajorTagUnlessNamed(t *testing.T) {
 func TestLockRefusesATagItCannotPlace(t *testing.T) {
 	twice := `{ inputs.dms.url = "github:o/dms/v1.0.0"; inputs.x.url = "github:o/x/v1.0.0"; }`
 	f := tagFixture(t, "", twice, "v1.0.0", "v1.1.0")
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"dms"}, NoBuild: true, Yes: true}); code != exit.Error ||
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"dms"}, Yes: true}); code != exit.Error ||
 		!strings.Contains(f.errb.String(), "dms: the tag v1.0.0 appears 2 times in flake.nix; change it in flake.nix by hand") {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
@@ -1013,7 +997,7 @@ func TestLockChecksTheTagWithNix(t *testing.T) {
 	f.e.Run.Rules = append([]run.Rule{{Prefix: "nix flake update", Do: func(c run.Call) {
 		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"dms": "o/dms@v1.0.0#" + strings.Repeat("9", 40)})), 0o644)
 	}}}, f.e.Run.Rules...)
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true, Yes: true}); code != exit.Error ||
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Yes: true}); code != exit.Error ||
 		!strings.Contains(f.errb.String(), `after the edit, flake.lock pins dms to "v1.0.0", not v1.1.0: nothing written`) {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
@@ -1025,7 +1009,7 @@ func TestLockChecksTheTagWithNix(t *testing.T) {
 func TestLockAsksAboutADirtyFlakeNixBeforeMovingATag(t *testing.T) {
 	f := tagFixture(t, "n\n", dmsNix, "v1.0.0", "v1.1.0")
 	f.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.nix", Fail: errors.New("dirty")}}, f.e.Run.Rules...)
-	if f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true}); !strings.Contains(f.out.String(), "flake.nix has uncommitted changes. Update on top of them?") || f.called("nix flake update") {
+	if f.u.Lock(update.LockOpts{Repo: f.repo}); !strings.Contains(f.out.String(), "flake.nix has uncommitted changes. Update on top of them?") || f.called("nix flake update") {
 		t.Errorf("%s", f.out)
 	}
 }
@@ -1044,7 +1028,7 @@ func activateFixture(t *testing.T, hosts string, extra ...run.Rule) *fixture {
 
 func TestUpdateActivates(t *testing.T) {
 	f := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
-	if code := f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.OK {
+	if code := f.u.Update(update.Opts{Repo: f.repo, Yes: true, Activate: "switch"}); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
 	calls := f.e.Run.Calls()
@@ -1056,7 +1040,7 @@ func TestUpdateActivates(t *testing.T) {
 	}
 
 	g := activateFixture(t, `["desktop","laptop"]`)
-	g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"input"}, Hosts: []string{"laptop"}, Yes: true, NoBuild: true, Activate: "boot"})
+	g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"input"}, Hosts: []string{"laptop"}, Yes: true, Activate: "boot"})
 	if !g.called("nh os boot " + g.repo + " -H laptop") {
 		t.Errorf("the host named with -H: %v", g.e.Run.Calls())
 	}
@@ -1080,25 +1064,25 @@ func TestUpdateActivateNeedsOneHost(t *testing.T) {
 
 func TestUpdateActivatesOnlyWhatWasWritten(t *testing.T) {
 	f := activateFixture(t, `["desktop"]`)
-	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, NoBuild: true, Activate: "switch"}) // no terminal: no write
+	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Activate: "switch"}) // no terminal: no write
 	if f.called("nh os switch") || !strings.Contains(f.out.String(), "Nothing was written: nothing to activate.") {
 		t.Errorf("nothing written, nothing activated:\n%s", f.out)
 	}
 
 	g := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
-	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.Error ||
+	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, Activate: "switch"}); code != exit.Error ||
 		g.called("nh os switch") || !strings.Contains(g.out.String(), "Not activating: a step failed.") {
 		t.Errorf("a failed step: no activation, even with the lock written: code %d\n%s", code, g.out)
 	}
 
 	h := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "nh os switch", Fail: errors.New("exit 1")})
-	if code := h.u.Update(update.Opts{Repo: h.repo, Sources: []string{"input"}, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.Error ||
+	if code := h.u.Update(update.Opts{Repo: h.repo, Sources: []string{"input"}, Yes: true, Activate: "switch"}); code != exit.Error ||
 		!strings.Contains(h.out.String(), "nh os switch failed.") {
 		t.Errorf("a failed activation is an error: code %d\n%s", code, h.out)
 	}
 
 	k := activateFixture(t, `["desktop"]`)
-	k.u.Update(update.Opts{Repo: k.repo, Sources: []string{"input"}, Yes: true, NoBuild: true})
+	k.u.Update(update.Opts{Repo: k.repo, Sources: []string{"input"}, Yes: true})
 	if k.called("nh os") || strings.Contains(k.out.String(), "Next:") {
 		t.Errorf("without a flag: no activation and no Next line:\n%s", k.out)
 	}
@@ -1146,5 +1130,23 @@ diff --git a/packages/padpoll/deps.json b/packages/padpoll/deps.json
 	g := pkgFixture(t, "y\n")
 	if g.u.Pkg(update.PkgOpts{Repo: g.repo}); strings.Contains(g.out.String(), "Besides") || strings.Contains(g.out.String(), "(version") {
 		t.Errorf("a routine update has nothing to check:\n%s", g.out)
+	}
+}
+
+func TestActivationBuildsOnlyItsHost(t *testing.T) {
+	f := activateFixture(t, `["desktop","laptop"]`)
+	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Hosts: []string{"laptop"}, Yes: true, Activate: "test"})
+	if !f.called("nh os build") || f.called("nh os build "+f.repo) || f.e.Run.Count("nh os build") != 1 {
+		t.Errorf("--test implies the scratch build, of the host it activates only: %v", f.e.Run.Calls())
+	}
+	for _, c := range f.e.Run.Calls() {
+		if strings.HasPrefix(c.String(), "nh os build") && !strings.Contains(c.String(), "-H laptop") {
+			t.Errorf("built another host: %s", c)
+		}
+	}
+	g := activateFixture(t, `["desktop","laptop"]`, run.Rule{Prefix: "nix eval --json " + os.TempDir(), Out: `["desktop","laptop"]`}) // hosts of the scratch copy
+	g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"input"}, Build: true, Yes: true})
+	if g.e.Run.Count("nh os build") != 2 {
+		t.Errorf("--build alone builds every host: %v", g.e.Run.Calls())
 	}
 }

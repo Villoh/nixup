@@ -89,8 +89,8 @@ func runUpdate(args []string, d Deps) int {
 	fs, dir := d.flags("update")
 	source := fs.String("source", "", "comma list of: "+strings.Join(update.Sources, ", ")+" (default: all)")
 	var hosts hostList
-	fs.Var(&hosts, "H", "host to build for inputs and to activate (repeatable; default: all nixosConfigurations)")
-	noBuild := fs.Bool("no-build", false, "do not build: only update and show the changes")
+	fs.Var(&hosts, "H", "host to build (--build) and to activate (--test, --switch, --boot); repeatable for --build (default: every nixosConfiguration)")
+	build := fs.Bool("build", false, "build the hosts from a scratch copy before writing flake.lock (--test, --switch and --boot imply it)")
 	yes := fs.Bool("y", false, "apply without asking (CI)")
 	allowDirty := fs.Bool("allow-dirty", false, "update over uncommitted changes in flake.nix or a package without asking (they are kept)")
 	reportFile := fs.String("report", "", "append a Markdown report to this file")
@@ -116,7 +116,7 @@ func runUpdate(args []string, d Deps) int {
 		}
 	}
 	return d.updater().Update(update.Opts{Repo: repo, Names: names, Sources: sources, Hosts: hosts,
-		NoBuild: *noBuild, Yes: *yes, AllowDirty: *allowDirty, Report: *reportFile, Activate: activate})
+		Build: *build, Yes: *yes, AllowDirty: *allowDirty, Report: *reportFile, Activate: activate})
 }
 
 func printJSON(d Deps, v any) {

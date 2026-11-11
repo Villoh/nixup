@@ -23,7 +23,7 @@ lang: en
 
 ## update builds NixOS hosts only
 
-The input step of `update` builds each entry in `nixosConfigurations` with `nh os build`. Home Manager, nix-darwin and other outputs are not built. On a flake without `nixosConfigurations`, run `update --source input --no-build` (and `update --source package` for the packages, which are still built); otherwise listing the hosts fails with exit code 2.
+The input step of `update` builds hosts only with `--build`, `--test`, `--switch` or `--boot`. With `--build` it builds each entry in `nixosConfigurations` (or each `-H`) with `nh os build`; with an activation flag, only the host to activate. Home Manager, nix-darwin and other outputs are never built. Without those flags no host is built, so a `flake.lock` that does not build can be written: you find out at `nh os test`, and `git checkout flake.lock` takes it back. On your own machine, use `update --test`. On a flake without `nixosConfigurations`, run `update` without those flags; with them, listing the hosts fails with exit code 2. Your own packages are always built.
 
 ## What update cannot move or review
 

@@ -64,14 +64,14 @@ type Opts struct {
 	Names      []string // inputs, packages, Flatpak app IDs, profile entries, mixed; empty: everything
 	Sources    []string // some of Sources; empty: all
 	Hosts      []string // for the inputs; empty: every nixosConfiguration
-	NoBuild    bool
+	Build      bool     // build the hosts before writing flake.lock; --test, --switch and --boot imply it
 	Yes        bool
 	AllowDirty bool
 	Report     string
 	Activate   string // "test", "switch" or "boot": nh os <it> at the end, if something was written
 }
 
-// Update runs one step per source: the inputs (Lock: one scratch copy, every host built),
+// Update runs one step per source: the inputs (Lock: one scratch copy, hosts built with --build),
 // the own packages (Pkg: one by one), Flatpak (one question, then flatpak update) and
 // nix profile (one question, then nix profile upgrade). Each name is looked up in every
 // source and sent to its step; steps without names are skipped when names are given.
@@ -91,6 +91,10 @@ func (u *Updater) Update(o Opts) int {
 			return u.fail(fmt.Errorf("--%s activates one host: name it with -H (this flake has %s)", o.Activate, strings.Join(hosts, ", ")))
 		}
 		host = hosts[0]
+	}
+	lockHosts := o.Hosts
+	if host != "" {
+		lockHosts = []string{host} // build what will be activated, not every host
 	}
 	named := map[string][]string{}
 	if len(o.Names) > 0 {
@@ -142,9 +146,9 @@ func (u *Updater) Update(o Opts) int {
 		ran = true
 		switch s {
 		case "input":
-			code = max(code, u.Lock(LockOpts{Repo: o.Repo, Inputs: named[s], Hosts: o.Hosts, NoBuild: o.NoBuild, Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
+			code = max(code, u.Lock(LockOpts{Repo: o.Repo, Inputs: named[s], Hosts: lockHosts, Build: o.Build || o.Activate != "", Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
 		case "package":
-			code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: named[s], NoBuild: o.NoBuild, Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
+			code = max(code, u.Pkg(PkgOpts{Repo: o.Repo, Names: named[s], Yes: o.Yes, AllowDirty: o.AllowDirty, Report: o.Report}))
 		case "flatpak":
 			code = max(code, u.Flatpak(FlatpakOpts{IDs: named[s], Yes: o.Yes, Report: o.Report}))
 		case "profile":

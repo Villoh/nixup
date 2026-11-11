@@ -89,13 +89,13 @@ The input and package steps only edit files in your repository; nothing reaches 
 6. Run `nix flake update --flake <copy>`, with the input names you gave.
 7. For each tag that moved, check that the new lock pins the input (`original.ref`) to the new tag. If not, stop with exit code 2 and write nothing.
 8. Compare the old and new lock. For each direct input whose commit moved, print the upstream commits. Count the other nodes that moved.
-9. Unless `--no-build`, take the hosts from `-H`, or list them with `nix eval <copy>#nixosConfigurations --apply builtins.attrNames`.
-10. Unless `--no-build`, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the input step with exit code 2 and your `flake.lock` and `flake.nix` stay as they were.
+9. Only with `--build`, `--test`, `--switch` or `--boot`: take the hosts from `-H`, or list them with `nix eval <copy>#nixosConfigurations --apply builtins.attrNames`. With an activation flag, the only host is the one to activate.
+10. Only with those flags, build each host with `nh os build <copy> -H <host> -o <copy>/result`. Nothing is activated. The first failed build stops the input step with exit code 2 and your `flake.lock` and `flake.nix` stay as they were.
 11. Append the Markdown report if `--report` was given. This happens before the question, so the report is written even if you answer no.
 12. Ask, unless `-y`. On yes, write the new `flake.lock` into your repository, and the copy's `flake.nix` if a tag moved.
 13. Delete the scratch copy.
 
-Because the copy includes uncommitted and untracked files, the build tests your working tree as it is now, not the last commit.
+Without those flags steps 9 and 10 are skipped: no host is built, and the report has no build lines. Because the copy includes uncommitted and untracked files, a host build tests your working tree as it is now, not the last commit.
 
 ### The package step
 
@@ -105,7 +105,7 @@ For each package, in alphabetical order, or in the order you named them. `<pkg d
 2. If it is outdated, print the review.
 3. If `git diff --quiet -- <pkg dir>` reports changes, ask whether to update on top of them, unless `--allow-dirty` or `-y`. A no skips this package with exit code 0. Then ask whether to update it, unless `-y`.
 4. Save every regular file under `<pkg dir>`. Run `nix-update --flake <name> --version=<reviewed version>` plus the extra arguments from the update script. If `nix-update` is not on `PATH`, use `nix run nixpkgs#nix-update --`.
-5. Run `nix build --no-link .#<name>`, unless `--no-build`.
+5. Run `nix build --no-link .#<name>`. This build always runs.
 6. On failure in step 4 or 5, write the saved files back as they were and remove the files added since. On success, print `<name> updated to <version>.` and read `git diff -- <pkg dir>`: changes to routine attributes (`version`, `hash`, `sha256`, `rev`, and any attribute ending in `Hash`) are not shown; any other changed line in a `.nix` file is printed in full, and other files only as a count of added and removed lines, under `Besides version and hash, nix-update edited:`.
 
 `nix-update` edits your repository directly here, not a copy. The files saved in step 4 are what puts the package back, uncommitted edits included. git is not used for it.
@@ -135,7 +135,7 @@ Only with `--test`, `--switch` or `--boot`.
 
 1. Before the first step, take the host from `-H`, or list the hosts with `nix eval <repo>#nixosConfigurations --apply builtins.attrNames`. Anything but exactly one host stops `update` with exit code 2 before any work.
 2. After the last step, if a step failed, print `Not activating: a step failed.` If neither `flake.lock` nor a package was written, print `Nothing was written: nothing to activate.` In both cases nh is not run.
-3. Otherwise run `nh os <test|switch|boot> <repo> -H <host>` in your repository. nh builds the system, mostly from the store when the input step already built it, asks for sudo and activates. nixup only reports whether nh succeeded.
+3. Otherwise run `nh os <test|switch|boot> <repo> -H <host>` in your repository. nh builds the system, from the store when the input step already built it (it builds the activated host whenever it writes `flake.lock`), asks for sudo and activates. nixup only reports whether nh succeeded.
 
 ## Commands nixup runs
 
@@ -151,11 +151,11 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `git diff -- <pkg dir>` | update (packages), after a success |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs), completion of `-H` |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) with `--build` and without `-H`, completion of `-H` |
 | `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), without `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | completion of names |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
-| `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
+| `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) with `--build`, `--test`, `--switch` or `--boot` |
 | `nix-update --flake <name> --version=<v> [args...]` | update (packages) |
 | `nix build --no-link .#<name>` | update (packages) |
 | `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |

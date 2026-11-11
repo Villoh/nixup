@@ -12,7 +12,7 @@ lang: es
 
 - Una configuración de NixOS en un flake, dentro de un repositorio git, con `flake.nix` y `flake.lock` commiteados.
 - `git` y `nix` en el `PATH`.
-- `nh` si quieres que `nixup update` haga el build de tus hosts, o que active uno con `--test`, `--switch` o `--boot`. Con `--no-build` y sin ninguno de esos tres no hace falta.
+- `nh` si quieres que `nixup update` haga el build de tus hosts con `--build`, o que haga el build de uno y lo active con `--test`, `--switch` o `--boot`. Sin ninguno de esos cuatro flags no hace falta.
 - `nix-update` para actualizar tus propios paquetes con `nixup update`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
 - `flatpak` es opcional. Sin él, se saltan la sección `flatpak` y el paso de Flatpak de `nixup update`.
 - Acceso de red a github.com y api.github.com.
@@ -130,16 +130,17 @@ nixup update --source input   # solo los inputs
 nixup update home-manager     # un solo input
 nixup update ripgrep          # uno de tus paquetes
 nixup update co.hyprlab.Hylki # una app de Flatpak
+nixup update --build          # build de cada host antes de la pregunta de flake.lock
 ```
 
-Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. Estos dos pasos solo editan archivos de tu repositorio, y nixup no hace commit. Cada paquete se comprueba compilando solo el paquete (no el sistema) y termina con `herdr-app updated to 0.1.14.`; si nix-update ha editado en tus archivos algo más que la versión y el hash, esas ediciones se listan debajo.
+Con los inputs, `update` actualiza `flake.lock` en una copia temporal, te enseña los commits de upstream de cada input que se ha movido y pregunta antes de escribir `flake.lock`. No hace el build de tus hosts salvo que pases `--build` (todos los hosts, o cada `-H`) o uno de `--test`, `--switch` y `--boot` (el host que se activa). Sin build, se puede escribir un `flake.lock` que no compila; `git checkout flake.lock` lo devuelve atrás. Después pregunta antes de cada uno de tus paquetes. Estos dos pasos solo editan archivos de tu repositorio, y nixup no hace commit. Cada paquete se comprueba compilando solo el paquete (no el sistema) y termina con `herdr-app updated to 0.1.14.`; si nix-update ha editado en tus archivos algo más que la versión y el hash, esas ediciones se listan debajo.
 
 Al final van Flatpak y `nix profile`. Cada uno enseña qué actualizaría y pregunta una vez, y la pregunta dice `This installs them right away.` Si dices que sí, instalan y después te dicen cómo volver atrás: una línea `flatpak update --commit=<commit anterior> <ref>` por cada ref de Flatpak, o `nix profile rollback`. Usa `--source input,package` para no tocar la máquina.
 
 Por defecto nixup no activa nada: revisa con `git diff` y aplica tú con nh. Para que nh active el resultado al final, añade `--test`, `--switch` o `--boot`:
 
 ```bash
-nixup update --test           # y después nh os test en el único host
+nixup update --test           # build del único host y después nh os test en él
 nixup update -H desktop --test
 ```
 

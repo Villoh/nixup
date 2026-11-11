@@ -47,7 +47,7 @@ func TestCompleteCommands(t *testing.T) {
 func TestCompleteFlags(t *testing.T) {
 	f := completionFixture(t)
 	got := "\n" + strings.Join(f.completions(t, "update", "--"), "\n")
-	for _, want := range []string{"\n-C\tflake directory", "\n-H\thost to build", "\n-y\tapply without asking", "\n--allow-dirty\t", "\n--source\t", "\n--no-build\t"} {
+	for _, want := range []string{"\n-C\tflake directory", "\n-H\thost to build", "\n-y\tapply without asking", "\n--allow-dirty\t", "\n--source\t", "\n--build\t"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
@@ -72,7 +72,7 @@ func TestCompleteFlagValues(t *testing.T) {
 		{[]string{"update", "--source", "="}, "input package flatpak profile"},
 		{[]string{"update", "-C", f.repo, "-H", ""}, "desktop\thost laptop\thost"},
 		{[]string{"update", "-C", f.repo, "-H=l"}, "-H=desktop\thost -H=laptop\thost"},
-		{[]string{"update", "-C", f.repo, "--source", "input", "--no-build", ""}, "home-manager\tinput nixpkgs\tinput"}, // a bool flag takes no value
+		{[]string{"update", "-C", f.repo, "--source", "input", "--build", ""}, "home-manager\tinput nixpkgs\tinput"}, // a bool flag takes no value
 		{[]string{"update", "-C", ""}, ":dirs"},
 		{[]string{"update", "--report", ""}, ":files"},
 	} {
@@ -90,7 +90,7 @@ func TestCompleteUpdateNames(t *testing.T) {
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("every source, sorted, a name once (nixpkgs is an input first):\n%q\nwant\n%q", got, want)
 	}
-	if got := f.completions(t, "update", "-C", f.repo, "nixpkgs", "--no-build", ""); strings.Contains(strings.Join(got, ","), "nixpkgs") {
+	if got := f.completions(t, "update", "-C", f.repo, "nixpkgs", "--build", ""); strings.Contains(strings.Join(got, ","), "nixpkgs") {
 		t.Errorf("a name already typed is not offered again: %q", got)
 	}
 	if got := f.completions(t, "update", "-C", f.repo, "--source", "package,profile", ""); strings.Join(got, ",") != "hello\tprofile,nixpkgs\tpackage,ripgrep\tpackage" {

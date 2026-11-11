@@ -18,7 +18,7 @@ Actualizaciones seguras para NixOS con flakes. Primero revisas, luego decides.
 
 ---
 
-nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias, y hace el build en una copia temporal antes de escribir nada. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte. Nunca activa una generación de NixOS salvo que pases `--test`, `--switch` o `--boot`, y entonces lo hace nh: nixup no tiene código de activación, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
+nixup busca actualizaciones para una configuración de NixOS basada en flakes y solo las aplica cuando ya has leído qué ha cambiado upstream. Compara con su origen los inputs del flake, los paquetes que define tu flake, las entradas de `nix profile` y las apps de Flatpak. Para cada actualización pendiente te enseña los commits y las release notes que hay entre medias. Después actualiza `flake.lock` en una copia temporal y pregunta antes de escribir nada. Con `--build` hace el build de tus hosts en esa copia antes de preguntar. El build de tus propios paquetes se hace siempre después de actualizarlos. También puede instalar las actualizaciones de Flatpak pendientes y actualizar entradas de `nix profile`, tras preguntarte. Nunca activa una generación de NixOS salvo que pases `--test`, `--switch` o `--boot`, y entonces lo hace nh: nixup no tiene código de activación, ni `sudo`, ni demonios. Está escrito en Go, solo con la biblioteca estándar.
 
 ## Ejemplo
 
@@ -59,14 +59,15 @@ O añádelo a tu flake y mete `inputs.nixup.packages.${system}.default` en `envi
 ```bash
 nixup                    # igual que `nixup check`: qué está desactualizado, solo lectura
 nixup check --review     # además, commits y release notes de upstream
-nixup update             # inputs: actualiza flake.lock en una copia temporal, hace el build, pregunta y escribe;
+nixup update             # inputs: actualiza flake.lock en una copia temporal, enseña qué se ha movido, pregunta y escribe;
                          # después tus propios paquetes uno a uno, tras revisar cada uno;
                          # después Flatpak y nix profile, con una pregunta cada uno
 nixup update nixpkgs     # solo ese input
 nixup update ripgrep     # solo ese paquete
 nixup update co.hyprlab.Hylki   # solo esa app de Flatpak
 nixup update --source input,package   # solo lo que vive en el repositorio
-nixup update --test      # y después nh os test, si ha escrito flake.lock o un paquete
+nixup update --build     # hace el build de cada host en la copia temporal antes de preguntar
+nixup update --test      # primero el build del host, después nh os test si ha escrito flake.lock o un paquete
 nixup list               # todo lo que vigila, con las versiones actuales, sin red
 nixup search ripgrep     # en tu nixpkgs, tus paquetes, tus inputs y Flatpak
 ```
@@ -76,7 +77,7 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 ## Por qué es seguro
 
 - `check` solo lee. No escribe nada en tu repositorio.
-- `update` ejecuta `nix flake update` y los builds de los hosts en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si el build pasa y contestas que sí.
+- `update` ejecuta `nix flake update` en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si contestas que sí. Con `--build`, `--test`, `--switch` o `--boot` primero se hace el build de los hosts en esa copia, y un build que falla deja `flake.lock` como estaba. Sin ellos no se hace el build de los hosts, así que se puede escribir un `flake.lock` que no compila; `git checkout flake.lock` lo devuelve atrás. En tu propia máquina, usa `update --test`.
 - Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, los archivos del paquete vuelven a quedar como estaban, con los cambios sin commitear incluidos.
 - `update` conserva los cambios sin commitear: avisa cuando `flake.lock` lleva otros además de la actualización, y pregunta antes de actualizar sobre tus ediciones de `flake.nix` o de un paquete.
 - Los pasos de inputs y de paquetes solo editan archivos del repositorio; los aplicas tú con nh, o con `--test`, `--switch` o `--boot` nixup ejecuta nh al final. Los pasos de Flatpak y de `nix profile` instalan en el momento, así que su pregunta lo dice, y te indican cómo deshacerlo (`flatpak update --commit=...`, `nix profile rollback`). Una entrada de `nix profile` fijada a una revisión nunca se actualiza.

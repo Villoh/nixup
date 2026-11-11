@@ -188,7 +188,7 @@ jobs:
       - name: update flake.lock and packages
         run: |
           touch "$RUNNER_TEMP/report.md"
-          nix run "$NIXUP" -- update --source input -y --no-build --report "$RUNNER_TEMP/report.md"
+          nix run "$NIXUP" -- update --source input -y --report "$RUNNER_TEMP/report.md"
           nix run "$NIXUP" -- update --source package -y --report "$RUNNER_TEMP/report.md"
 
       - uses: peter-evans/create-pull-request@v7
@@ -203,7 +203,7 @@ Detalles de este workflow:
 
 - `--source input,package` se salta `profile` y `flatpak`, que describen la máquina donde corre nixup, no tu configuración.
 - Los dos comandos de update pasan `--source input` y `--source package` por lo mismo: sin `--source`, `update -y` ejecutaría también los pasos de Flatpak y de `nix profile`, que instalan en el runner en vez de editar el repositorio.
-- Los dos pasos van en comandos separados para que solo el de inputs se salte el build.
+- El paso de inputs no necesita ningún flag para saltarse el build de los hosts: sin `--build` no construye ningún host.
 - El runner no tiene `nix-update`, así que `update` lo ejecuta con `nix run nixpkgs#nix-update`.
 - `update --source package -y` hace el build de cada paquete actualizado en el runner. Si alguno falla, sus archivos se restauran, nixup sale con 2 y el job para antes de la pull request.
 - Si quieres usar el mismo nixup todas las semanas, fija un tag de release en `NIXUP`, por ejemplo `github:Villoh/nixup/v0.8.0`.
@@ -211,12 +211,12 @@ Detalles de este workflow:
 
 ## Builds del sistema completo
 
-El workflow pasa `--no-build` al paso de inputs, así que el nuevo lock se escribe sin construir ningún host. Un sistema NixOS completo suele necesitar más disco y más tiempo de los que da un runner alojado por GitHub, y `update` construye todos los hosts de `nixosConfigurations` salvo que pases `-H`.
+El paso de inputs no construye ningún host salvo que pases `--build`, así que el workflow escribe el nuevo lock sin construir ningún host. Un sistema NixOS completo suele necesitar más disco y más tiempo de los que da un runner alojado por GitHub, y `update --build` construye todos los hosts de `nixosConfigurations` salvo que pases `-H`.
 
 Tienes tres opciones:
 
-- Dejar `--no-build` en CI y ejecutar `nixup update --source input` (que sí hace el build) o `nh os build` en tu máquina antes de mergear la pull request.
-- Construir un solo host con `update --source input -y -H <host> --report ...`. Entonces el runner necesita `nh` en el `PATH` y espacio suficiente para ese host.
+- Dejar el paso de inputs como está en CI y ejecutar `nh os build` (o `nh os test`) en tu máquina sobre la rama de la pull request antes de mergearla.
+- Construir un solo host en el runner con `update --source input -y --build -H <host> --report ...`. Entonces el runner necesita `nh` en el `PATH` y espacio suficiente para ese host.
 - Usar un runner propio (self-hosted) donde quepa el build.
 
 Elijas lo que elijas, no pases `--test`, `--switch` ni `--boot` en CI: activarían la configuración en el runner. Sin ellos nixup nunca activa el resultado. Prueba la configuración mergeada con `nh os test` en la propia máquina.

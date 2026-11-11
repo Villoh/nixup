@@ -192,8 +192,8 @@ func TestUpdateParsesFlagsAfterInputs(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	// `nixup update nixpkgs home-manager --no-build -C repo`: Go's flag package alone stops at "nixpkgs".
-	f.run("update", "nixpkgs", "home-manager", "--no-build", "-C", f.repo)
+	// `nixup update nixpkgs home-manager --build -C repo`: Go's flag package alone stops at "nixpkgs".
+	f.run("update", "nixpkgs", "home-manager", "--build", "-C", f.repo)
 	for _, c := range f.e.Run.Calls() {
 		if strings.HasPrefix(c.String(), "nix flake update") {
 			if !strings.HasSuffix(c.String(), "nixpkgs home-manager") {
@@ -212,7 +212,7 @@ func TestUpdateAllowDirty(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("dirty")})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
-	f.run("update", "padpoll", "--allow-dirty", "--no-build", "-C", f.repo) // no terminal: only the update question says no
+	f.run("update", "padpoll", "--allow-dirty", "--build", "-C", f.repo) // no terminal: the update question says no
 	if s := f.out.String(); !strings.Contains(s, "packages/padpoll has uncommitted changes: updating on top of them; they are kept.") || strings.Contains(s, "Update on top") {
 		t.Errorf("--allow-dirty goes on over a dirty package without asking:\n%s%s", s, f.errb)
 	}
@@ -225,7 +225,7 @@ func TestUpdateRepeatedHostFlags(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
 		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"nixpkgs": "NixOS/nixpkgs@#bbb"})), 0o644)
 	}})
-	f.run("update", "--source", "input", "-C", f.repo, "-H", "desktop", "-H", "zenbook")
+	f.run("update", "--source", "input", "--build", "-C", f.repo, "-H", "desktop", "-H", "zenbook")
 	if f.e.Run.Count("nh os build") != 2 || f.e.Run.Count("nix eval --json") != 0 {
 		t.Errorf("calls: %v", f.e.Run.Calls())
 	}
@@ -238,11 +238,11 @@ func TestUpdateFlagsAfterPackageNames(t *testing.T) {
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
 	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
-	// The bug this guards: `pkg padpoll --no-build -y` once read "--no-build" as a package name.
-	if code := f.run("update", "padpoll", "--no-build", "-y", "-C", f.repo); code != exit.OK {
+	// The bug this guards: `pkg padpoll --build -y` once read "--build" as a package name.
+	if code := f.run("update", "padpoll", "--build", "-y", "-C", f.repo); code != exit.OK {
 		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
 	}
-	if f.e.Run.Count("nix-update --flake padpoll --version=1.1.0") != 1 || f.e.Run.Count("nix build") != 0 {
+	if f.e.Run.Count("nix-update --flake padpoll --version=1.1.0") != 1 || f.e.Run.Count("nix build") != 1 {
 		t.Errorf("calls: %v", f.e.Run.Calls())
 	}
 }
@@ -415,7 +415,7 @@ func TestUpdateActivationFlags(t *testing.T) {
 		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"nixpkgs": "NixOS/nixpkgs@#bbb"})), 0o644)
 	}})
 	g.e.Run.On(run.Rule{Prefix: "nix eval --json " + g.repo + "#nixosConfigurations", Out: `["desktop"]`})
-	g.run("update", "--source", "input", "--no-build", "-y", "--boot", "-C", g.repo)
+	g.run("update", "--source", "input", "--build", "-y", "--boot", "-C", g.repo)
 	if g.e.Run.Count("nh os boot "+g.repo+" -H desktop") != 1 {
 		t.Errorf("--boot reaches nh: %v", g.e.Run.Calls())
 	}

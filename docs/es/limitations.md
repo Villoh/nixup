@@ -23,7 +23,7 @@ lang: es
 
 ## update solo hace el build de hosts NixOS
 
-El paso de inputs de `update` hace el build de cada entrada de `nixosConfigurations` con `nh os build`. Home Manager, nix-darwin y otras salidas no se construyen. En un flake sin `nixosConfigurations`, usa `update --source input --no-build` (y `update --source package` para los paquetes, que sí se construyen); si no, el listado de hosts falla con código de salida 2.
+El paso de inputs de `update` solo hace el build de los hosts con `--build`, `--test`, `--switch` o `--boot`. Con `--build` construye cada entrada de `nixosConfigurations` (o cada `-H`) con `nh os build`; con un flag de activación, solo el host que se activa. Home Manager, nix-darwin y otras salidas no se construyen nunca. Sin esos flags no se hace el build de ningún host, así que se puede escribir un `flake.lock` que no compila: te enteras en `nh os test`, y `git checkout flake.lock` lo devuelve atrás. En tu propia máquina, usa `update --test`. En un flake sin `nixosConfigurations`, ejecuta `update` sin esos flags; con ellos, el listado de hosts falla con código de salida 2. El build de tus propios paquetes se hace siempre.
 
 ## Lo que update no puede mover ni revisar
 

@@ -94,7 +94,8 @@ The input and package steps only edit files in your repository; you apply them t
 ```bash
 nixup update
 nixup update nixpkgs home-manager
-nixup update ripgrep --no-build
+nixup update ripgrep
+nixup update --build
 nixup update co.hyprlab.Hylki
 nixup update --source input -H desktop -H laptop
 nixup update --source package -y --report report.md
@@ -114,8 +115,8 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 |---|---|
 | `-C <dir>` | Flake directory. |
 | `--source <list>` | Comma-separated steps to run: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. Anything else is an error. |
-| `-H <host>` | Host to build in the input step, and the host to activate with `--test`, `--switch` or `--boot`. Repeatable. Default: every entry in `nixosConfigurations`. |
-| `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
+| `-H <host>` | Host to build in the input step with `--build`, and the host to activate with `--test`, `--switch` or `--boot`. Repeatable. Default: every entry in `nixosConfigurations`. |
+| `--build` | In the input step, build the hosts in the scratch copy with `nh os build` before asking to write `flake.lock`. Without it the hosts are not built. `--test`, `--switch` and `--boot` imply it, for the activated host only. Packages are always built; the Flatpak and `nix profile` steps build nothing. |
 | `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. Implies `--allow-dirty`. |
 | `--allow-dirty` | Update over uncommitted changes in `flake.nix` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
@@ -136,7 +137,7 @@ The input step, in order:
 5. If nothing changed, print `flake.lock is already up to date.` and stop.
 6. If a moved input is not pinned to its new tag in the new lock, stop with exit code 2: `after the edit, flake.lock pins dms to "v1.6.2", not v2.1.2: nothing written`.
 7. For every direct input that moved, print the old and new commit and the upstream commits. Inputs that are not direct are counted on one line.
-8. Unless `--no-build`, run `nh os build <copy> -H <host>` for each host. The first failure stops the step and the repository is left as it was.
+8. With `--build`, run `nh os build <copy> -H <host>` for each host: the ones from `-H`, or every entry in `nixosConfigurations`. With `--test`, `--switch` or `--boot`, only the host to activate. nh prints its diff (`CHANGED`, paths, size), so you see the impact on the system before the question. The first failure stops the step and the repository is left as it was. Without any of these flags no host is built.
 9. Append the report, if `--report` was given. A moved tag adds a line such as ``Tag of `dms` moved in flake.nix: `v1.6.2` → `v2.1.2`.``
 10. Ask `Write this flake.lock to the repo? [y/N]`, unless `-y`. Then copy the new `flake.lock` into the repository and print `flake.lock updated.` When a tag moved, the question is `Write this flake.lock and flake.nix to the repo? [y/N]`, the copy's `flake.nix` is written too, and the last line is `flake.lock and flake.nix updated.`
 
@@ -155,7 +156,7 @@ The package step goes through the packages one at a time. For each outdated pack
 2. If `<pkg dir>` has uncommitted changes, asks `<pkg dir> has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and moves on. With `--allow-dirty` or `-y` there is no question, only `<pkg dir> has uncommitted changes: updating on top of them; they are kept.`
 3. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
 4. Saves every file under `<pkg dir>`, then runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`. It prints `Updating <file> with nix-update…`, naming the file that defines the package; nix-update's own output is shown only when it fails.
-5. Unless `--no-build`, prints `Checking that <name> builds…` and runs `nix build --no-link .#<name>`. This builds the package alone, not the system: it checks that the edited recipe still builds (for a prebuilt `-bin`, that the release tarball exists, its hash matches and the patching works).
+5. Prints `Checking that <name> builds…` and runs `nix build --no-link .#<name>`. This builds the package alone, not the system: it checks that the edited recipe still builds (for a prebuilt `-bin`, that the release tarball exists, its hash matches and the patching works).
 6. If step 4 or 5 fails, writes the saved files back as they were, uncommitted edits included, removes the files added since and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.` Otherwise prints `<name> updated to <version>.` and reads `git diff -- <pkg dir>`. A routine update changes only routine attributes (`version`, `hash`, `sha256`, `rev` and any attribute ending in `Hash`) and prints nothing more. Anything else nix-update edited in your files is listed under `Besides version and hash, nix-update edited:`: each other changed line of a `.nix` file in full, and other files (lock files it regenerates) as a count, `packages/x/deps.json: +2 −1 lines`. These are edits to your repository, not upstream changes. The `--report` gets the files and attributes in any case.
 
 Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and none is outdated, the step prints `Every package is up to date.`
@@ -191,7 +192,7 @@ Names are `nix profile` entry names, as `nix profile list` shows them.
 Without `--test`, `--switch` or `--boot`, `update` activates nothing. With one of them, it hands the result to nh at the end. Only one is allowed: `--test --switch` stops with `--test and --switch: pick one` and exit code 2. In order:
 
 1. Before any step, pick the host: the one given with `-H`, or the only entry in `nixosConfigurations`. With several hosts and no `-H`, or with more than one `-H`, stop before doing any work: `--test activates one host: name it with -H (this flake has desktop, laptop)`, exit code 2.
-2. Run the four steps as usual.
+2. Run the four steps as usual. The input step builds that host in the scratch copy before asking to write `flake.lock`, as with `--build`.
 3. If a step failed, print `Not activating: a step failed.` and stop. The exit code stays 2.
 4. If neither `flake.lock` nor a package was written, because you answered no or everything was up to date, print `Nothing was written: nothing to activate.` and exit with 0. Flatpak and `nix profile` updates do not count: they are already installed.
 5. Print `Activating desktop (nh os test)…` and run `nh os test <repo> -H desktop`. nh builds the system, asks for your password through sudo and activates it. If the input step already built that host, the build comes from the Nix store. If nh fails, nixup prints `nh os test failed.` and exits with 2.

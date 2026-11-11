@@ -89,13 +89,13 @@ Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada l
 6. Ejecuta `nix flake update --flake <copia>`, con los nombres de input que hayas dado.
 7. Para cada tag que se ha movido, comprueba que el lock nuevo fija el input (`original.ref`) al tag nuevo. Si no, para con código de salida 2 y no escribe nada.
 8. Compara el lock antiguo con el nuevo. Para cada input directo cuyo commit se ha movido, imprime los commits de upstream. Cuenta los demás nodos que se han movido.
-9. Salvo con `--no-build`, coge los hosts de `-H`, o los lista con `nix eval <copia>#nixosConfigurations --apply builtins.attrNames`.
-10. Salvo con `--no-build`, hace el build de cada host con `nh os build <copia> -H <host> -o <copia>/result`. No se activa nada. El primer build que falla para el paso de inputs con código de salida 2 y tus `flake.lock` y `flake.nix` se quedan como estaban.
+9. Solo con `--build`, `--test`, `--switch` o `--boot`: coge los hosts de `-H`, o los lista con `nix eval <copia>#nixosConfigurations --apply builtins.attrNames`. Con un flag de activación, el único host es el que se va a activar.
+10. Solo con esos flags, hace el build de cada host con `nh os build <copia> -H <host> -o <copia>/result`. No se activa nada. El primer build que falla para el paso de inputs con código de salida 2 y tus `flake.lock` y `flake.nix` se quedan como estaban.
 11. Si has pasado `--report`, añade el informe en Markdown. Esto pasa antes de la pregunta, así que el informe se escribe aunque contestes que no.
 12. Pregunta, salvo con `-y`. Si dices que sí, escribe el nuevo `flake.lock` en tu repositorio, y el `flake.nix` de la copia si se ha movido algún tag.
 13. Borra la copia temporal.
 
-Como la copia incluye los archivos sin commitear y sin versionar, el build prueba tu árbol de trabajo tal y como está ahora, no el último commit.
+Sin esos flags los pasos 9 y 10 no se ejecutan: no se hace el build de ningún host, y el informe no tiene líneas de build. Como la copia incluye los archivos sin commitear y sin versionar, el build de un host prueba tu árbol de trabajo tal y como está ahora, no el último commit.
 
 ### El paso de paquetes
 
@@ -105,7 +105,7 @@ Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado.
 2. Si está desactualizado, imprime la revisión.
 3. Si `git diff --quiet -- <dir del paquete>` detecta cambios, pregunta si actualizar sobre ellos, salvo con `--allow-dirty` o `-y`. Si dices que no, se salta este paquete con código de salida 0. Después pregunta si actualizarlo, salvo con `-y`.
 4. Guarda todos los archivos normales de `<dir del paquete>`. Ejecuta `nix-update --flake <name> --version=<versión revisada>` más los argumentos extra del script de actualización. Si `nix-update` no está en el `PATH`, usa `nix run nixpkgs#nix-update --`.
-5. Ejecuta `nix build --no-link .#<name>`, salvo con `--no-build`.
+5. Ejecuta `nix build --no-link .#<name>`. Este build se hace siempre.
 6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban y borra los archivos añadidos desde entonces. Si todo va bien, imprime `<name> updated to <versión>.` y lee `git diff -- <dir del paquete>`: los cambios de atributos rutinarios (`version`, `hash`, `sha256`, `rev` y cualquier atributo que termine en `Hash`) no se enseñan; cualquier otra línea cambiada en un `.nix` se imprime entera, y los demás archivos solo como recuento de líneas añadidas y quitadas, bajo `Besides version and hash, nix-update edited:`.
 
 Aquí `nix-update` edita tu repositorio directamente, no una copia. Los archivos guardados en el paso 4 son lo que deja el paquete como estaba, con los cambios sin commitear incluidos. No se usa git para eso.
@@ -135,7 +135,7 @@ Solo con `--test`, `--switch` o `--boot`.
 
 1. Antes del primer paso, coge el host de `-H`, o lista los hosts con `nix eval <repo>#nixosConfigurations --apply builtins.attrNames`. Si no hay exactamente un host, `update` para con código de salida 2 antes de hacer nada.
 2. Después del último paso, si alguno ha fallado, imprime `Not activating: a step failed.` Si no se ha escrito ni `flake.lock` ni ningún paquete, imprime `Nothing was written: nothing to activate.` En los dos casos no se ejecuta nh.
-3. Si no, ejecuta `nh os <test|switch|boot> <repo> -H <host>` en tu repositorio. nh hace el build del sistema, casi todo desde el store si el paso de inputs ya lo ha construido, pide sudo y lo activa. nixup solo informa de si nh ha ido bien.
+3. Si no, ejecuta `nh os <test|switch|boot> <repo> -H <host>` en tu repositorio. nh hace el build del sistema, desde el store si el paso de inputs ya lo ha construido (construye el host que se activa siempre que escribe `flake.lock`), pide sudo y lo activa. nixup solo informa de si nh ha ido bien.
 
 ## Comandos que ejecuta nixup
 
@@ -151,11 +151,11 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git diff -- <dir del paquete>` | update (paquetes), tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs), autocompletado de `-H` |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) con `--build` y sin `-H`, autocompletado de `-H` |
 | `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), sin `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | autocompletado de nombres |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
-| `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
+| `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) con `--build`, `--test`, `--switch` o `--boot` |
 | `nix-update --flake <name> --version=<v> [args...]` | update (paquetes) |
 | `nix build --no-link .#<name>` | update (paquetes) |
 | `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |

@@ -16,7 +16,6 @@ import (
 type PkgOpts struct {
 	Repo       string
 	Names      []string // empty: every package
-	NoBuild    bool
 	Yes        bool
 	AllowDirty bool // go on over uncommitted changes without asking (-y does too)
 	Report     string
@@ -104,14 +103,13 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		u.appendReport(o.Report, md+"\n**nix-update failed.**\n")
 		return exit.Error
 	}
-	if !o.NoBuild {
-		t.Println(t.Bold("Checking that " + p.Name + " builds…"))
-		if err := u.R.Stream(o.Repo, "nix", "build", "--no-link", ".#"+p.Name); err != nil {
-			u.restore(restore)
-			t.Println(t.Paint("build FAILED; "+dir+" restored.", 31))
-			u.appendReport(o.Report, md+"\n**Build failed; not applied.**\n")
-			return exit.Error
-		}
+	// Always: the edited recipe must build before the update counts.
+	t.Println(t.Bold("Checking that " + p.Name + " builds…"))
+	if err := u.R.Stream(o.Repo, "nix", "build", "--no-link", ".#"+p.Name); err != nil {
+		u.restore(restore)
+		t.Println(t.Paint("build FAILED; "+dir+" restored.", 31))
+		u.appendReport(o.Report, md+"\n**Build failed; not applied.**\n")
+		return exit.Error
 	}
 	diff, _, _ := u.R.Capture(o.Repo, "git", "diff", "--", dir)
 	summary, edits := summarizeDiff(diff)
@@ -123,11 +121,7 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		md += "\nBesides version and hash, nix-update edited:\n\n```diff\n" + edits + "```\n"
 	}
 	u.edited = true
-	built := "Build: ok."
-	if o.NoBuild {
-		built = "Build: skipped (--no-build)."
-	}
-	u.appendReport(o.Report, md+"\n"+built+"\n")
+	u.appendReport(o.Report, md+"\nBuild: ok.\n")
 	return exit.OK
 }
 
