@@ -263,3 +263,24 @@ input:strata  strata       1.1.1               Files
 		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
 }
+
+func TestReviewShowsTheSizeOfTheChange(t *testing.T) {
+	for _, c := range []struct {
+		files, add, del int
+		want            string
+	}{
+		{38, 1204, 311, "changes  5 commits · 38 files (+1,204 −311)  https://x"},
+		{1, 3, 0, "changes  5 commits · 1 file (+3 −0)  https://x"},
+		{300, 99999, 1, "changes  5 commits · 300+ files  https://x"},
+		{0, 0, 0, "changes  5 commits  https://x"},
+	} {
+		r := &gh.Review{Repo: "o/r", Commits: 5, CompareURL: "https://x", Files: c.files, Additions: c.add, Deletions: c.del}
+		if got := report.ReviewText(r, ""); !strings.Contains(got, c.want+"\n") {
+			t.Errorf("got %q, want %q", got, c.want)
+		}
+	}
+	md := report.ReviewMarkdown(&gh.Review{Repo: "o/r", Commits: 5, CompareURL: "https://x", Files: 2, Additions: 1234567, Deletions: 1})
+	if !strings.Contains(md, "[5 commits](https://x) · 2 files (+1,234,567 −1)") {
+		t.Errorf("markdown: %q", md)
+	}
+}

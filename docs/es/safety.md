@@ -8,7 +8,7 @@ lang: es
 
 [English](../safety.md) | **Español**
 
-nixup está hecho para que una actualización fallida o que no quieres deje tu repositorio como estaba, y para que nada llegue al sistema en marcha sin pasar por ti. Los pasos de inputs y de paquetes de `update` solo editan archivos de tu repositorio. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras un sí. Aquí tienes lo que se cumple y lo que no.
+nixup está hecho para que una actualización fallida o que no quieres deje tu repositorio como estaba, y para que nada llegue al sistema en marcha salvo que lo pidas. Los pasos de inputs y de paquetes de `update` solo editan archivos de tu repositorio; llegan al sistema con nh, ejecutado por ti o por `update --test`, `--switch` o `--boot`. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras un sí. Aquí tienes lo que se cumple y lo que no.
 
 ## Qué garantiza nixup
 
@@ -26,11 +26,15 @@ nixup está hecho para que una actualización fallida o que no quieres deje tu r
 - **El paso de `nix profile` te dice cómo deshacerlo.** Después de actualizar imprime `To undo it: nix profile rollback`.
 - **Las entradas de `nix profile` fijadas nunca se tocan.** Una entrada fijada a una revisión se deja fuera de `nix profile upgrade`. nixup solo te dice cómo actualizarla a mano.
 - **Sin terminal, la respuesta es no.** Si stdin no es una terminal, todas las preguntas se responden que no. En ejecuciones desatendidas tienes que pasar `-y` a propósito.
-- **No se activa ninguna generación ni se hace commit.** Ni `git commit`, ni `switch`, ni `boot`, ni `test`, ni `sudo`. Después de actualizar, `git diff`, `nix flake check` y `nh os test` los sigues ejecutando tú.
+- **No se hace commit, y no se activa ninguna generación salvo que lo pidas.** Ni `git commit`. Sin `--test`, `--switch` ni `--boot` no hay ni `switch`, ni `boot`, ni `test`, ni `sudo`: después de actualizar, `git diff`, `nix flake check` y `nh os test` los sigues ejecutando tú. Con uno de esos flags, nh activa un host después del último paso, solo si se ha escrito `flake.lock` o algún paquete y no ha fallado ningún paso. nixup no tiene código de activación propio, y quien pide sudo es nh.
+- **La activación necesita un host, conocido antes de hacer nada.** Con varios hosts y sin `-H`, o con más de un `-H`, `update --test` se niega antes del primer paso: `--test activates one host: name it with -H (this flake has desktop, laptop)`.
 
 ## Dónde terminan las garantías
 
-- **Que el build pase no significa que el sistema arranque.** `nh os build` demuestra que la configuración se evalúa y se construye. No demuestra que la nueva generación funcione. Pruébala con `nh os test` antes de hacer el switch.
+- **Que el build pase no significa que el sistema arranque.** `nh os build` demuestra que la configuración se evalúa y se construye. No demuestra que la nueva generación funcione. Pruébala con `nh os test`, o con `update --test`, antes de hacer el switch.
+- **`-y` con `--test`, `--switch` o `--boot` activa sin nadie delante.** nixup no pregunta nada: la ejecución revisa, escribe y activa de una vez. Con `--switch` o `--boot`, el siguiente arranque también usa el resultado. Solo sudo puede pararla, si pide contraseña.
+- **La activación llega justo después de escribir.** Con `--test`, `--switch` o `--boot` no hay pausa para leer `git diff`. Lo que ves antes de que se ejecute nh es la revisión y, en los paquetes, la línea de resumen.
+- **El resumen de un paquete nombra los cambios rutinarios sin enseñarlos.** Las líneas que cambian `version`, `hash`, `sha256`, `rev` o un atributo que termina en `Hash` solo se nombran, y los archivos que no son `.nix` solo se cuentan. `git diff` enseña los valores.
 - **`--no-build` quita la comprobación del build.** Con `update --no-build -y` el nuevo lock se escribe sin construir ningún host, y un paquete roto no se nota hasta más tarde.
 - **`-y` se salta tu revisión.** La revisión se sigue imprimiendo y, con `--report`, se guarda. Pero nadie la lee antes de escribir. `-y` también actualiza sobre cambios sin commitear, igual que `--allow-dirty`.
 - **El paso de paquetes edita tu copia de trabajo real.** A diferencia del paso de inputs, `nix-update` se ejecuta en tu repositorio. Al deshacer se recuperan todos los archivos normales del directorio del archivo que define el paquete (sacado de `meta.position`), versionados o no. Los archivos que `nix-update` cambie en otros sitios ni se comprueban ni se restauran. Los enlaces simbólicos no se guardan, y los directorios que añada `nix-update` se quedan, vacíos.

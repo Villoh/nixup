@@ -3,6 +3,7 @@ package report
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -214,6 +215,27 @@ func Markdown(rows []check.Row) string {
 	return b.String()
 }
 
+// size is how big the change upstream is: " · 38 files (+1,204 −311)". GitHub lists 300
+// files at most, so past that the line counts would be partial and are left out.
+func size(r *gh.Review) string {
+	switch {
+	case r.Files == 0:
+		return ""
+	case r.Files >= gh.MaxFiles:
+		return fmt.Sprintf(" · %d+ files", gh.MaxFiles)
+	}
+	return fmt.Sprintf(" · %s (+%s −%s)", plural(r.Files, "file", "files"), thousands(r.Additions), thousands(r.Deletions))
+}
+
+// thousands writes n with comma separators: 1204 -> "1,204".
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
 // ReviewText renders a review indented under its row.
 func ReviewText(r *gh.Review, indent string) string {
 	var b strings.Builder
@@ -223,7 +245,7 @@ func ReviewText(r *gh.Review, indent string) string {
 		return b.String()
 	}
 	line("source   https://github.com/%s", r.Repo)
-	line("changes  %d commits  %s", r.Commits, r.CompareURL)
+	line("changes  %d commits%s  %s", r.Commits, size(r), r.CompareURL)
 	for _, s := range r.Subjects {
 		line("  · %s", s)
 	}
@@ -251,7 +273,7 @@ func ReviewMarkdown(r *gh.Review) string {
 		return fmt.Sprintf("_review unavailable: %s_\n", r.Err)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "[%s](https://github.com/%s) · [%d commits](%s)\n\n", r.Repo, r.Repo, r.Commits, r.CompareURL)
+	fmt.Fprintf(&b, "[%s](https://github.com/%s) · [%d commits](%s)%s\n\n", r.Repo, r.Repo, r.Commits, r.CompareURL, size(r))
 	for _, s := range r.Subjects {
 		fmt.Fprintf(&b, "- %s\n", s)
 	}

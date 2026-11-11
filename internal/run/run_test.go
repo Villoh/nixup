@@ -3,6 +3,7 @@ package run
 import (
 	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -25,6 +26,33 @@ func TestExecStreamAndDir(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "oops") || !strings.Contains(buf.String(), dir) {
 		t.Errorf("stream must carry stdout and stderr from the given dir: %q", buf.String())
+	}
+}
+
+func TestExecTurnsOffTheDirtyWarning(t *testing.T) {
+	t.Setenv("NIX_CONFIG", "max-jobs = 2")
+	out, _, _ := Exec{}.Capture("", "sh", "-c", "printf %s \"$NIX_CONFIG\"")
+	if out != "max-jobs = 2\nwarn-dirty = false" {
+		t.Errorf("added to the user's NIX_CONFIG, not instead of it: %q", out)
+	}
+	var buf bytes.Buffer
+	(Exec{Out: &buf}).Stream("", "sh", "-c", "printf %s \"$NIX_CONFIG\"")
+	if !strings.HasSuffix(buf.String(), "warn-dirty = false") {
+		t.Errorf("stream too: %q", buf.String())
+	}
+}
+
+func TestExecStreamHasTheTerminalInput(t *testing.T) {
+	r, w, _ := os.Pipe()
+	old := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = old }()
+	w.WriteString("secret\n")
+	w.Close()
+	var buf bytes.Buffer
+	(Exec{Out: &buf}).Stream("", "sh", "-c", "read x; echo got $x")
+	if strings.TrimSpace(buf.String()) != "got secret" {
+		t.Errorf("a streamed command reads the terminal's input: %q", buf.String())
 	}
 }
 

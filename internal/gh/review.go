@@ -15,6 +15,9 @@ type Review struct {
 	To         string   `json:"to"`
 	CompareURL string   `json:"compare_url,omitempty"`
 	Commits    int      `json:"commits"`
+	Files      int      `json:"files,omitempty"` // changed files; GitHub lists at most 300
+	Additions  int      `json:"additions,omitempty"`
+	Deletions  int      `json:"deletions,omitempty"`
 	Subjects   []string `json:"subjects,omitempty"`
 	Releases   []Note   `json:"releases,omitempty"`
 	SkippedPre int      `json:"skipped_prereleases,omitempty"`
@@ -28,8 +31,15 @@ type Note struct {
 
 const maxSubjects = 8
 
+// MaxFiles is how many changed files the compare API lists, on its first page only.
+const MaxFiles = 300
+
 type compareResp struct {
-	Total   int `json:"total_commits"`
+	Total int `json:"total_commits"`
+	Files []struct {
+		Additions int `json:"additions"`
+		Deletions int `json:"deletions"`
+	} `json:"files"`
 	Commits []struct {
 		Commit struct {
 			Message string `json:"message"`
@@ -65,6 +75,11 @@ func (c *Client) Review(repo, from, to string, releases bool) *Review {
 		r.Err = err.Error()
 	} else {
 		r.Commits = cmp.Total
+		r.Files = len(cmp.Files)
+		for _, f := range cmp.Files {
+			r.Additions += f.Additions
+			r.Deletions += f.Deletions
+		}
 		page := max((cmp.Total+99)/100, 1)
 		var last compareResp
 		if c.Get(fmt.Sprintf("%s?per_page=100&page=%d", base, page), &last) == nil {

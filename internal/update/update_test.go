@@ -42,6 +42,17 @@ func (f *fixture) called(prefix string) bool { return f.e.Run.Count(prefix) > 0 
 
 const padpollJSON = `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/PabloStarOk/padpoll/releases/download/v1.0.0/x"],"homepage":"","update":["nix-update"]}}`
 
+const padpollDiff = `diff --git a/packages/padpoll/package.nix b/packages/padpoll/package.nix
+index 1..2 100644
+--- a/packages/padpoll/package.nix
++++ b/packages/padpoll/package.nix
+@@ -3,7 +3,7 @@
+-  version = "1.0.0";
++  version = "1.1.0";
+-    hash = "sha256-AAA=";
++    hash = "sha256-BBB=";
+`
+
 // pkgFixture scripts a padpoll 1.0.0 whose upstream is at 1.1.0.
 func pkgFixture(t *testing.T, answers string, extra ...run.Rule) *fixture {
 	f := newFixture(t, answers, map[string]string{"flake.nix": "{}", "flake.lock": "{}"})
@@ -49,7 +60,7 @@ func pkgFixture(t *testing.T, answers string, extra ...run.Rule) *fixture {
 		f.e.Run.On(r)
 	}
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet"})
-	f.e.Run.On(run.Rule{Prefix: "git diff --", Out: "-version = 1.0.0\n+version = 1.1.0\n"})
+	f.e.Run.On(run.Rule{Prefix: "git diff --", Out: padpollDiff})
 	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: padpollJSON})
 	f.e.Tags("PabloStarOk/padpoll", "v1.0.0", "v1.1.0")
 	f.e.Compare("PabloStarOk/padpoll", "v1.0.0", "v1.1.0", 5, "build: bump")
@@ -69,7 +80,7 @@ func TestPkgUpdatesAfterReview(t *testing.T) {
 		}
 	}
 	s := f.out.String()
-	for _, want := range []string{"padpoll  1.0.0 -> 1.1.0", "source   https://github.com/PabloStarOk/padpoll", "release notes", "Update padpoll to 1.1.0? [y/N]", "+version = 1.1.0", "Building padpoll…", "padpoll updated."} {
+	for _, want := range []string{"padpoll  1.0.0 -> 1.1.0", "source   https://github.com/PabloStarOk/padpoll", "release notes", "Update padpoll to 1.1.0? [y/N]", "Updating packages/padpoll/package.nix with nix-update…", "Checking that padpoll builds…", "padpoll updated to 1.1.0."} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in:\n%s", want, s)
 		}
@@ -143,13 +154,16 @@ func (f *fixture) restored(t *testing.T) {
 
 func TestPkgNixUpdateFailureRestores(t *testing.T) {
 	var f *fixture
-	f = pkgFixture(t, "", run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1"), Do: edits(&f)})
+	f = pkgFixture(t, "", run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1"), Err: "error: hash mismatch\n", Do: edits(&f)})
 	report := filepath.Join(t.TempDir(), "r.md")
 	code := f.u.Pkg(update.PkgOpts{Repo: f.repo, Yes: true, Report: report})
 	if code != exit.Error {
 		t.Errorf("code %d", code)
 	}
 	f.restored(t)
+	if !strings.Contains(f.errb.String(), "error: hash mismatch") {
+		t.Errorf("a failure shows what nix-update said: %q", f.errb)
+	}
 	if f.called("nix build") {
 		t.Error("no build after a failed update")
 	}
@@ -926,74 +940,6 @@ func TestUpdatePassesAllowDirtyToPackages(t *testing.T) {
 	}
 }
 
-func TestUpdateNextOnceAtTheEnd(t *testing.T) {
-	f := updateFixture(t)
-	f.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
-		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{
-			"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("c", 40), "both": "o/both@#" + strings.Repeat("b", 40)})), 0o644)
-	}})
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json", Out: `["desktop"]`})
-	f.e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
-	f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true})
-	s := f.out.String()
-	next := "Next: review with git diff, then nh os test " + f.repo + " -H desktop (nothing is committed or activated)"
-	if strings.Count(s, "Next:") != 1 || !strings.HasSuffix(strings.TrimSpace(s), next) {
-		t.Errorf("one Next line, last, after Flatpak:\n%s", s)
-	}
-	if strings.Contains(s, "transitive inputs changed") {
-		t.Errorf("no transitive line when none changed:\n%s", s)
-	}
-
-	g := updateFixture(t)
-	g.e.Run.On(run.Rule{Prefix: "nix eval --json", Out: `["desktop","laptop"]`})
-	g.u.Update(update.Opts{Repo: g.repo, Names: []string{"padpoll"}, Yes: true, NoBuild: true})
-	if !strings.Contains(g.out.String(), "nh os test "+g.repo+" -H <host>") {
-		t.Errorf("a package alone also needs nh; with two hosts, a placeholder:\n%s", g.out)
-	}
-
-	h := flatpakFixture(t, "")
-	h.u.Update(update.Opts{Repo: h.repo, Sources: []string{"flatpak"}, Yes: true})
-	if strings.Contains(h.out.String(), "Next:") {
-		t.Errorf("Flatpak installs itself: nothing for nh:\n%s", h.out)
-	}
-	k := updateFixture(t)
-	k.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
-		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{
-			"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("c", 40), "both": "o/both@#" + strings.Repeat("b", 40)})), 0o644)
-	}})
-	k.u.Update(update.Opts{Repo: k.repo, Sources: []string{"input"}, NoBuild: true}) // no terminal: every answer is no
-	if strings.Contains(k.out.String(), "Next:") {
-		t.Errorf("nothing written, no Next:\n%s", k.out)
-	}
-}
-
-func TestUpdateNextTarget(t *testing.T) {
-	moved := run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
-		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{
-			"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("c", 40), "both": "o/both@#" + strings.Repeat("b", 40)})), 0o644)
-	}}
-	inputs := func(f *fixture, hosts ...string) string {
-		f.e.Run.Rules = append([]run.Rule{moved, {Prefix: "nix eval --json", Out: `["desktop","laptop"]`}}, f.e.Run.Rules...)
-		f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, Hosts: hosts, Yes: true, NoBuild: true})
-		return f.out.String()
-	}
-	f := updateFixture(t)
-	if s := inputs(f, "laptop"); !strings.Contains(s, "nh os test "+f.repo+" -H laptop") {
-		t.Errorf("the inputs alone, and the host given with -H:\n%s", s)
-	}
-	g := updateFixture(t)
-	t.Chdir(g.repo)
-	if s := inputs(g); !strings.Contains(s, "nh os test . -H <host>") {
-		t.Errorf("from inside the repository, '.':\n%s", s)
-	}
-	h := updateFixture(t)
-	t.Chdir(t.TempDir())
-	t.Setenv("HOME", filepath.Dir(h.repo))
-	if s := inputs(h); !strings.Contains(s, "nh os test ~/"+filepath.Base(h.repo)+" -H <host>") {
-		t.Errorf("under the home directory, with ~:\n%s", s)
-	}
-}
-
 // tagFixture: dms pinned to v1.0.0 in flake.nix and flake.lock, upstream at the given tags.
 // nix flake update re-locks it to whatever tag flake.nix names in the scratch copy.
 func tagFixture(t *testing.T, answers, flakeNix string, tags ...string) *fixture {
@@ -1081,5 +1027,124 @@ func TestLockAsksAboutADirtyFlakeNixBeforeMovingATag(t *testing.T) {
 	f.e.Run.Rules = append([]run.Rule{{Prefix: "git diff --quiet -- flake.nix", Fail: errors.New("dirty")}}, f.e.Run.Rules...)
 	if f.u.Lock(update.LockOpts{Repo: f.repo, NoBuild: true}); !strings.Contains(f.out.String(), "flake.nix has uncommitted changes. Update on top of them?") || f.called("nix flake update") {
 		t.Errorf("%s", f.out)
+	}
+}
+
+// movedLock makes nix flake update move nixpkgs, so the input step has a lock to write.
+var movedLock = run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
+	os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{
+		"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("c", 40), "both": "o/both@#" + strings.Repeat("b", 40)})), 0o644)
+}}
+
+func activateFixture(t *testing.T, hosts string, extra ...run.Rule) *fixture {
+	f := updateFixture(t)
+	f.e.Run.Rules = append(append(extra, movedLock, run.Rule{Prefix: "nix eval --json " + f.repo + "#nixosConfigurations", Out: hosts}), f.e.Run.Rules...)
+	return f
+}
+
+func TestUpdateActivates(t *testing.T) {
+	f := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.0\n"})
+	if code := f.u.Update(update.Opts{Repo: f.repo, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	calls := f.e.Run.Calls()
+	if last := calls[len(calls)-1].String(); last != "nh os switch "+f.repo+" -H desktop" {
+		t.Errorf("nh os switch runs last, after Flatpak, on the only host: %q", last)
+	}
+	if s := f.out.String(); !strings.Contains(s, "Activating desktop (nh os switch)…") || strings.Contains(s, "Next:") {
+		t.Errorf("%s", s)
+	}
+
+	g := activateFixture(t, `["desktop","laptop"]`)
+	g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"input"}, Hosts: []string{"laptop"}, Yes: true, NoBuild: true, Activate: "boot"})
+	if !g.called("nh os boot " + g.repo + " -H laptop") {
+		t.Errorf("the host named with -H: %v", g.e.Run.Calls())
+	}
+}
+
+func TestUpdateActivateNeedsOneHost(t *testing.T) {
+	g := activateFixture(t, `["desktop","laptop"]`)
+	if code := g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"flatpak"}, Yes: true, Activate: "test"}); code != exit.OK || g.called("nix eval --json "+g.repo+"#nixosConfigurations") {
+		t.Errorf("only Flatpak: nothing can be written, so no host is needed: code %d %s", code, g.errb)
+	}
+
+	f := activateFixture(t, `["desktop","laptop"]`)
+	if code := f.u.Update(update.Opts{Repo: f.repo, Yes: true, Activate: "test"}); code != exit.Error ||
+		!strings.Contains(f.errb.String(), "--test activates one host: name it with -H (this flake has desktop, laptop)") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	if f.called("nix flake update") || f.called("nh os") {
+		t.Errorf("refused before any work: %v", f.e.Run.Calls())
+	}
+}
+
+func TestUpdateActivatesOnlyWhatWasWritten(t *testing.T) {
+	f := activateFixture(t, `["desktop"]`)
+	f.u.Update(update.Opts{Repo: f.repo, Sources: []string{"input"}, NoBuild: true, Activate: "switch"}) // no terminal: no write
+	if f.called("nh os switch") || !strings.Contains(f.out.String(), "Nothing was written: nothing to activate.") {
+		t.Errorf("nothing written, nothing activated:\n%s", f.out)
+	}
+
+	g := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "nix-update", Fail: errors.New("exit 1")})
+	if code := g.u.Update(update.Opts{Repo: g.repo, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.Error ||
+		g.called("nh os switch") || !strings.Contains(g.out.String(), "Not activating: a step failed.") {
+		t.Errorf("a failed step: no activation, even with the lock written: code %d\n%s", code, g.out)
+	}
+
+	h := activateFixture(t, `["desktop"]`, run.Rule{Prefix: "nh os switch", Fail: errors.New("exit 1")})
+	if code := h.u.Update(update.Opts{Repo: h.repo, Sources: []string{"input"}, Yes: true, NoBuild: true, Activate: "switch"}); code != exit.Error ||
+		!strings.Contains(h.out.String(), "nh os switch failed.") {
+		t.Errorf("a failed activation is an error: code %d\n%s", code, h.out)
+	}
+
+	k := activateFixture(t, `["desktop"]`)
+	k.u.Update(update.Opts{Repo: k.repo, Sources: []string{"input"}, Yes: true, NoBuild: true})
+	if k.called("nh os") || strings.Contains(k.out.String(), "Next:") {
+		t.Errorf("without a flag: no activation and no Next line:\n%s", k.out)
+	}
+}
+
+func TestPkgSummarizesTheDiff(t *testing.T) {
+	odd := padpollDiff + `@@ -20,3 +20,3 @@
+-  src.rev = "abc";
++  src.rev = "def";
+-    cargoHash = "sha256-C=";
++    cargoHash = "sha256-D=";
+diff --git a/packages/padpoll/deps.json b/packages/padpoll/deps.json
+--- a/packages/padpoll/deps.json
++++ b/packages/padpoll/deps.json
+@@ -1,2 +1,3 @@
+-{"a": 1}
++{"a": 2}
++{"b": 3}
+`
+	f := pkgFixture(t, "y\n", run.Rule{Prefix: "git diff --", Out: odd})
+	f.u.Pkg(update.PkgOpts{Repo: f.repo})
+	s := f.out.String()
+	for _, want := range []string{
+		"padpoll updated to 1.1.0.\nBesides version and hash, nix-update edited:\n",
+		`  packages/padpoll/package.nix: -  src.rev = "abc";`,
+		`  packages/padpoll/package.nix: +  src.rev = "def";`,
+		"  packages/padpoll/deps.json: +2 −1 lines\n",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "sha256-") || strings.Contains(s, `"a": 2`) {
+		t.Errorf("hashes and lock files are summarised, not shown:\n%s", s)
+	}
+
+	report := filepath.Join(t.TempDir(), "r.md")
+	r := pkgFixture(t, "y\n", run.Rule{Prefix: "git diff --", Out: odd})
+	r.u.Pkg(update.PkgOpts{Repo: r.repo, Report: report})
+	if b, _ := os.ReadFile(report); !strings.Contains(string(b), "Updated: packages/padpoll/package.nix (version, hash, cargoHash)") ||
+		!strings.Contains(string(b), "```diff\n  packages/padpoll/package.nix: -  src.rev") {
+		t.Errorf("the report has the summary and the lines to check:\n%s", b)
+	}
+
+	g := pkgFixture(t, "y\n")
+	if g.u.Pkg(update.PkgOpts{Repo: g.repo}); strings.Contains(g.out.String(), "Besides") || strings.Contains(g.out.String(), "(version") {
+		t.Errorf("a routine update has nothing to check:\n%s", g.out)
 	}
 }

@@ -8,7 +8,7 @@ lang: en
 
 **English** | [Español](es/safety.md)
 
-nixup is built so that a failed or unwanted update leaves your repository as it was, and so that nothing reaches the running system without you. The input and package steps of `update` only edit files in your repository. The Flatpak and `nix profile` steps install on the machine right away, after a yes. This page lists what holds and what does not.
+nixup is built so that a failed or unwanted update leaves your repository as it was, and so that nothing reaches the running system unless you ask for it. The input and package steps of `update` only edit files in your repository; they reach the system through nh, run by you or by `update --test`, `--switch` or `--boot`. The Flatpak and `nix profile` steps install on the machine right away, after a yes. This page lists what holds and what does not.
 
 ## What nixup guarantees
 
@@ -26,11 +26,15 @@ nixup is built so that a failed or unwanted update leaves your repository as it 
 - **The `nix profile` step says how to undo it.** After an upgrade it prints `To undo it: nix profile rollback`.
 - **Pinned `nix profile` entries are never touched.** An entry pinned to a revision is left out of `nix profile upgrade`. nixup only says how to update it by hand.
 - **No terminal means no.** When stdin is not a terminal, every question is answered no. Unattended runs must pass `-y` on purpose.
-- **No generation is activated, nothing is committed.** No `git commit`, no `switch`, no `boot`, no `test`, no `sudo`. After an update you still run `git diff`, `nix flake check` and `nh os test` yourself.
+- **Nothing is committed, and no generation is activated unless you ask.** No `git commit`. Without `--test`, `--switch` or `--boot` there is no `switch`, no `boot`, no `test` and no `sudo`: after an update you still run `git diff`, `nix flake check` and `nh os test` yourself. With one of those flags, nh activates one host after the last step, only if `flake.lock` or a package was written and no step failed. nixup has no activation code of its own, and the sudo prompt comes from nh.
+- **Activation needs one host, known before any work.** With several hosts and no `-H`, or with more than one `-H`, `update --test` refuses before the first step: `--test activates one host: name it with -H (this flake has desktop, laptop)`.
 
 ## Where the guarantees end
 
-- **A build that passes is not a system that boots.** `nh os build` proves the configuration evaluates and builds. It does not prove the new generation works. Test it with `nh os test` before you switch.
+- **A build that passes is not a system that boots.** `nh os build` proves the configuration evaluates and builds. It does not prove the new generation works. Test it with `nh os test`, or `update --test`, before you switch.
+- **`-y` with `--test`, `--switch` or `--boot` activates unattended.** nixup asks nothing: the run reviews, writes and activates in one go. With `--switch` or `--boot` the next boot uses the result too. Only sudo can stop it, if it asks for a password.
+- **Activation comes right after the write.** With `--test`, `--switch` or `--boot` there is no pause to read `git diff`. What you see before nh runs is the review and, for packages, the summary line.
+- **The package summary names routine changes without showing them.** Lines that set `version`, `hash`, `sha256`, `rev` or an attribute ending in `Hash` are only named, and files that are not `.nix` are only counted. `git diff` shows the values.
 - **`--no-build` removes the build check.** With `update --no-build -y` the new lock is written without building any host, and a broken package is only noticed later.
 - **`-y` skips your review.** The review is still printed and, with `--report`, saved. Nobody reads it before the write. `-y` also updates over uncommitted changes, as `--allow-dirty` does.
 - **The package step edits the real checkout.** Unlike the input step, `nix-update` runs in your repository. The rollback covers every regular file in the directory of the file that defines the package (from `meta.position`), tracked or not. Files `nix-update` might change elsewhere are neither checked nor restored. Symlinks are not saved, and directories added by `nix-update` stay behind, empty.

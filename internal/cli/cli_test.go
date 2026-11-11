@@ -403,3 +403,20 @@ func TestUpdateRejectsOtherSources(t *testing.T) {
 		t.Errorf("code %d err %q", code, f.errb)
 	}
 }
+
+func TestUpdateActivationFlags(t *testing.T) {
+	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+	if code := f.run("update", "--test", "--switch", "-C", f.repo); code != exit.Error || !strings.Contains(f.errb.String(), "--test and --switch: pick one") {
+		t.Errorf("code %d err %q", code, f.errb)
+	}
+	g := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
+	g.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	g.e.Run.On(run.Rule{Prefix: "nix flake update", Do: func(c run.Call) {
+		os.WriteFile(filepath.Join(c.Args[3], "flake.lock"), []byte(testutil.LockJSON(map[string]string{"nixpkgs": "NixOS/nixpkgs@#bbb"})), 0o644)
+	}})
+	g.e.Run.On(run.Rule{Prefix: "nix eval --json " + g.repo + "#nixosConfigurations", Out: `["desktop"]`})
+	g.run("update", "--source", "input", "--no-build", "-y", "--boot", "-C", g.repo)
+	if g.e.Run.Count("nh os boot "+g.repo+" -H desktop") != 1 {
+		t.Errorf("--boot reaches nh: %v", g.e.Run.Calls())
+	}
+}

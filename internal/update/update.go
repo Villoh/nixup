@@ -25,7 +25,7 @@ type Updater struct {
 	Check *check.Checker
 	T     *ui.Term
 
-	edited bool // flake.lock or a package was written: there is something to apply with nh
+	edited bool // flake.lock or a package was written: there is something to activate
 }
 
 func (u *Updater) fail(err error) int {
@@ -68,6 +68,7 @@ type Opts struct {
 	Yes        bool
 	AllowDirty bool
 	Report     string
+	Activate   string // "test", "switch" or "boot": nh os <it> at the end, if something was written
 }
 
 // Update runs one step per source: the inputs (Lock: one scratch copy, every host built),
@@ -77,6 +78,20 @@ type Opts struct {
 // The result is the worst code of the steps.
 func (u *Updater) Update(o Opts) int {
 	on := func(s string) bool { return len(o.Sources) == 0 || slices.Contains(o.Sources, s) }
+	host := ""
+	if o.Activate != "" && (on("input") || on("package")) { // known before any work: nh os takes one host
+		hosts := o.Hosts
+		if len(hosts) == 0 {
+			var err error
+			if hosts, err = flake.Hosts(u.R, o.Repo); err != nil {
+				return u.fail(err)
+			}
+		}
+		if len(hosts) != 1 {
+			return u.fail(fmt.Errorf("--%s activates one host: name it with -H (this flake has %s)", o.Activate, strings.Join(hosts, ", ")))
+		}
+		host = hosts[0]
+	}
 	named := map[string][]string{}
 	if len(o.Names) > 0 {
 		known, err := u.known(o.Repo, on)
@@ -136,29 +151,31 @@ func (u *Updater) Update(o Opts) int {
 			code = max(code, u.Profile(ProfileOpts{Names: named[s], Yes: o.Yes, Report: o.Report}))
 		}
 	}
-	if u.edited {
-		u.T.Println("\nNext: review with git diff, then nh os test " + u.target(o) + " (nothing is committed or activated)")
+	if o.Activate != "" {
+		code = max(code, u.activate(o, host, code))
 	}
 	return code
 }
 
-// target is how nh os test reaches the configuration just edited: "." from inside the
-// repository, else its path, and the host when there is only one.
-func (u *Updater) target(o Opts) string {
-	dir := o.Repo
-	if wd, err := os.Getwd(); err == nil && wd == o.Repo {
-		dir = "."
-	} else if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(dir, home+"/") {
-		dir = "~" + strings.TrimPrefix(dir, home)
+// activate hands the configuration just written to nh os <test|switch|boot>, which
+// builds (from the store, after the scratch build), asks for sudo and activates. Nothing
+// written, or a step failed: nothing is activated.
+func (u *Updater) activate(o Opts, host string, code int) int {
+	t := u.T
+	switch {
+	case code >= exit.Error:
+		t.Println(t.Paint("\nNot activating: a step failed.", 33))
+		return exit.OK
+	case !u.edited:
+		t.Println(t.Paint("\nNothing was written: nothing to activate.", 2))
+		return exit.OK
 	}
-	hosts := o.Hosts
-	if len(hosts) == 0 {
-		hosts, _ = flake.Hosts(u.R, o.Repo)
+	t.Println(t.Bold("\nActivating " + host + " (nh os " + o.Activate + ")…"))
+	if err := u.R.Stream(o.Repo, "nh", "os", o.Activate, o.Repo, "-H", host); err != nil {
+		t.Println(t.Paint("nh os "+o.Activate+" failed.", 31))
+		return exit.Error
 	}
-	if len(hosts) == 1 {
-		return dir + " -H " + hosts[0]
-	}
-	return dir + " -H <host>"
+	return exit.OK
 }
 
 // known is every name each source has. Packages are only evaluated when their step is

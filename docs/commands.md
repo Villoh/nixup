@@ -32,7 +32,7 @@ Every command that works on a flake accepts `-C <dir>`. See [Configuration](conf
 
 - Results, reviews and questions go to stdout.
 - Errors go to stderr.
-- The output of `nh os build`, `nix-update`, `nix build`, `flatpak update` and `nix profile upgrade` is streamed to stderr. `nix flake update` runs quietly, since nixup lists what moved; its output is shown only when it fails.
+- The output of `nh os build`, `nix build`, `flatpak update`, `nix profile upgrade` and `nh os test`, `switch` or `boot` is streamed to stderr. `nix flake update` and `nix-update` run quietly, since nixup summarises what they changed; their output is shown only when they fail. nix's `warning: Git tree … is dirty` is turned off (`warn-dirty = false` added to `NIX_CONFIG`), since nixup works on uncommitted trees on purpose.
 
 So `nixup check --json > out.json` gives clean JSON.
 
@@ -53,7 +53,7 @@ nixup check --markdown --review
 | `-C <dir>` | Flake directory. |
 | `--source <list>` | Comma-separated sources to check: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. An unknown name is an error. |
 | `--all` | Also list up-to-date entries in the text output. Without it they are only counted. |
-| `--review` | Add the upstream review (commits, compare link, release notes) to every outdated entry. |
+| `--review` | Add the upstream review (commits, changed files and lines, compare link, release notes) to every outdated entry. |
 | `--json` | Print every row as JSON, up-to-date ones included. Takes precedence over `--markdown`. |
 | `--markdown` | Print only outdated and failed entries as Markdown, for a pull request body or a CI summary. Prints `Everything is up to date.` when there is nothing. |
 
@@ -75,7 +75,7 @@ The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` an
 ]
 ```
 
-`latest`, `note`, `warning`, `hint` and `review` are left out when empty. `hint` says that the flake's nixpkgs already has the package (see [How it works](how-it-works.md#packages)). With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
+`latest`, `note`, `warning`, `hint` and `review` are left out when empty. `hint` says that the flake's nixpkgs already has the package (see [How it works](how-it-works.md#packages)). With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
 
 Exit codes:
 
@@ -89,7 +89,7 @@ Exit codes:
 
 Reviews and applies updates in four steps, in this order: the flake's inputs (`flake.lock`), the packages your flake defines in its own `packages.<system>` output, Flatpak, and `nix profile`.
 
-The input and package steps only edit files in your repository; you apply them to the system with nh. The Flatpak and `nix profile` steps install on the machine right away, after one question each, and print how to undo it.
+The input and package steps only edit files in your repository; you apply them to the system with nh, or pass `--test`, `--switch` or `--boot` and nixup runs nh for you at the end (see [Activation](#activation)). The Flatpak and `nix profile` steps install on the machine right away, after one question each, and print how to undo it.
 
 ```bash
 nixup update
@@ -99,6 +99,7 @@ nixup update co.hyprlab.Hylki
 nixup update --source input -H desktop -H laptop
 nixup update --source package -y --report report.md
 nixup update --source flatpak
+nixup update --test
 ```
 
 Without names everything is updated: every input, every package, every pending Flatpak update and every `nix profile` entry that follows a moving reference. Each name is looked up as a direct input of `flake.lock`, as a package of the flake (only when the package step is on), as an installed Flatpak app ID and as a `nix profile` entry. Each name goes to the step of its source; a step with no names of its kind is skipped, so `nixup update ripgrep` never touches `flake.lock` and `nixup update co.hyprlab.Hylki` runs only the Flatpak step. Inputs always go first, so packages are built against the new lock.
@@ -113,11 +114,14 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 |---|---|
 | `-C <dir>` | Flake directory. |
 | `--source <list>` | Comma-separated steps to run: `input`, `package`, `flatpak`, `profile` (plurals work too). Default: all. Anything else is an error. |
-| `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
+| `-H <host>` | Host to build in the input step, and the host to activate with `--test`, `--switch` or `--boot`. Repeatable. Default: every entry in `nixosConfigurations`. |
 | `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
 | `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. Implies `--allow-dirty`. |
 | `--allow-dirty` | Update over uncommitted changes in `flake.nix` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
+| `--test` | After the four steps, run `nh os test` on the host if `flake.lock` or a package was written. |
+| `--switch` | The same with `nh os switch`. |
+| `--boot` | The same with `nh os boot`. |
 
 Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is asked again. What was typed while nixup was busy, such as an Enter pressed during a build, is dropped before each question.
 
@@ -150,9 +154,9 @@ The package step goes through the packages one at a time. For each outdated pack
 1. Prints the current and new version, the major-jump warning if any, and the upstream review.
 2. If `<pkg dir>` has uncommitted changes, asks `<pkg dir> has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and moves on. With `--allow-dirty` or `-y` there is no question, only `<pkg dir> has uncommitted changes: updating on top of them; they are kept.`
 3. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
-4. Saves every file under `<pkg dir>`, then runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`.
-5. Unless `--no-build`, runs `nix build --no-link .#<name>`.
-6. If step 4 or 5 fails, writes the saved files back as they were, uncommitted edits included, removes the files added since and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.` Otherwise prints `git diff -- <pkg dir>`, which also shows the uncommitted changes you already had.
+4. Saves every file under `<pkg dir>`, then runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`. It prints `Updating <file> with nix-update…`, naming the file that defines the package; nix-update's own output is shown only when it fails.
+5. Unless `--no-build`, prints `Checking that <name> builds…` and runs `nix build --no-link .#<name>`. This builds the package alone, not the system: it checks that the edited recipe still builds (for a prebuilt `-bin`, that the release tarball exists, its hash matches and the patching works).
+6. If step 4 or 5 fails, writes the saved files back as they were, uncommitted edits included, removes the files added since and prints `nix-update failed; <pkg dir> restored.` or `build FAILED; <pkg dir> restored.` Otherwise prints `<name> updated to <version>.` and reads `git diff -- <pkg dir>`. A routine update changes only routine attributes (`version`, `hash`, `sha256`, `rev` and any attribute ending in `Hash`) and prints nothing more. Anything else nix-update edited in your files is listed under `Besides version and hash, nix-update edited:`: each other changed line of a `.nix` file in full, and other files (lock files it regenerates) as a count, `packages/x/deps.json: +2 −1 lines`. These are edits to your repository, not upstream changes. The `--report` gets the files and attributes in any case.
 
 Packages that are up to date are listed only when you name them. Entries marked `info` or `ERROR` are always listed. If you name no packages and none is outdated, the step prints `Every package is up to date.`
 
@@ -182,12 +186,24 @@ The `nix profile` step, in order:
 
 Names are `nix profile` entry names, as `nix profile list` shows them.
 
+### Activation
+
+Without `--test`, `--switch` or `--boot`, `update` activates nothing. With one of them, it hands the result to nh at the end. Only one is allowed: `--test --switch` stops with `--test and --switch: pick one` and exit code 2. In order:
+
+1. Before any step, pick the host: the one given with `-H`, or the only entry in `nixosConfigurations`. With several hosts and no `-H`, or with more than one `-H`, stop before doing any work: `--test activates one host: name it with -H (this flake has desktop, laptop)`, exit code 2.
+2. Run the four steps as usual.
+3. If a step failed, print `Not activating: a step failed.` and stop. The exit code stays 2.
+4. If neither `flake.lock` nor a package was written, because you answered no or everything was up to date, print `Nothing was written: nothing to activate.` and exit with 0. Flatpak and `nix profile` updates do not count: they are already installed.
+5. Print `Activating desktop (nh os test)…` and run `nh os test <repo> -H desktop`. nh builds the system, asks for your password through sudo and activates it. If the input step already built that host, the build comes from the Nix store. If nh fails, nixup prints `nh os test failed.` and exits with 2.
+
+nixup has no activation code of its own: `test`, `switch` and `boot` mean what they mean in nh. With `-y` and `--switch` nixup asks nothing: an unattended run writes the updates and switches the system, and only sudo may still ask for a password.
+
 Exit codes. The worst code of the four steps, and of all the packages, wins:
 
 | Code | Meaning |
 |---|---|
 | 0 | Everything was updated, you answered no, or there was nothing to update. |
-| 2 | Something failed: a name or `--source` was wrong, a check failed, or `nix flake update`, listing hosts, a build, `nix-update`, writing the file, `flatpak update` or `nix profile upgrade` failed. |
+| 2 | Something failed: a name or `--source` was wrong, more than one of `--test`, `--switch` and `--boot` was given, there was not exactly one host to activate, a check failed, or `nix flake update`, listing hosts, a build, `nix-update`, writing the file, `flatpak update`, `nix profile upgrade` or `nh os test`, `switch` or `boot` failed. |
 
 ## list
 

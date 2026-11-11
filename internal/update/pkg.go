@@ -2,6 +2,8 @@ package update
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -93,14 +95,17 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 	extra, _ := p.ExtraArgs()
 	cmd := append(u.nixUpdate(), "--flake", p.Name, "--version="+row.Latest)
 	cmd = append(cmd, extra...)
-	if err := u.R.Stream(o.Repo, cmd[0], cmd[1:]...); err != nil {
+	t.Println(t.Paint("Updating "+p.File(o.Repo)+" with nix-update…", 2))
+	// Quiet: its evaluations and diff are summarised below; they matter only on failure.
+	if out, errs, err := u.R.Capture(o.Repo, cmd[0], cmd[1:]...); err != nil {
 		u.restore(restore)
+		t.Errorln(strings.TrimSpace(out + "\n" + errs))
 		t.Println(t.Paint("nix-update failed; "+dir+" restored.", 31))
 		u.appendReport(o.Report, md+"\n**nix-update failed.**\n")
 		return exit.Error
 	}
 	if !o.NoBuild {
-		t.Println(t.Bold("Building " + p.Name + "…"))
+		t.Println(t.Bold("Checking that " + p.Name + " builds…"))
 		if err := u.R.Stream(o.Repo, "nix", "build", "--no-link", ".#"+p.Name); err != nil {
 			u.restore(restore)
 			t.Println(t.Paint("build FAILED; "+dir+" restored.", 31))
@@ -109,8 +114,14 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 		}
 	}
 	diff, _, _ := u.R.Capture(o.Repo, "git", "diff", "--", dir)
-	t.Println(diff)
-	t.Println(t.Paint(p.Name+" updated.", 32))
+	summary, edits := summarizeDiff(diff)
+	t.Println(t.Paint(p.Name+" updated to "+row.Latest+".", 32))
+	md += "\nUpdated" + summary + "\n"
+	if edits != "" {
+		t.Println(t.Paint("Besides version and hash, nix-update edited:", 33))
+		t.Printf("%s", edits)
+		md += "\nBesides version and hash, nix-update edited:\n\n```diff\n" + edits + "```\n"
+	}
 	u.edited = true
 	built := "Build: ok."
 	if o.NoBuild {
@@ -139,4 +150,70 @@ func (u *Updater) onDirty(path, detail string, allow bool) bool {
 	}
 	u.T.Println("Skipped.")
 	return false
+}
+
+var attrLine = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_'-]*)\s*=`)
+
+// routine are the attributes nix-update is expected to rewrite.
+func routine(attr string) bool {
+	switch attr {
+	case "version", "hash", "sha256", "rev":
+		return true
+	}
+	return strings.HasSuffix(attr, "Hash") // vendorHash, cargoHash, npmDepsHash...
+}
+
+// summarizeDiff reads the diff of a package update. summary is ": file.nix (version,
+// hash)" for the report; extra lists what deserves a look: changed lines that are not
+// routine, and other files (lock files nix-update regenerates), counted, not shown.
+func summarizeDiff(diff string) (summary, extra string) {
+	type file struct {
+		name     string
+		attrs    []string
+		add, del int
+	}
+	var files []*file
+	var odd strings.Builder
+	for _, l := range strings.Split(diff, "\n") {
+		if strings.HasPrefix(l, "diff --git ") {
+			_, b, _ := strings.Cut(l, " b/")
+			files = append(files, &file{name: b})
+			continue
+		}
+		if len(files) == 0 || len(l) == 0 || (l[0] != '+' && l[0] != '-') || strings.HasPrefix(l, "+++") || strings.HasPrefix(l, "---") {
+			continue
+		}
+		f := files[len(files)-1]
+		if l[0] == '+' {
+			f.add++
+		} else {
+			f.del++
+		}
+		if !strings.HasSuffix(f.name, ".nix") || strings.TrimSpace(l[1:]) == "" {
+			continue
+		}
+		if m := attrLine.FindStringSubmatch(l[1:]); m != nil && routine(m[1]) {
+			if !slices.Contains(f.attrs, m[1]) {
+				f.attrs = append(f.attrs, m[1])
+			}
+			continue
+		}
+		odd.WriteString("  " + f.name + ": " + l + "\n")
+	}
+	var parts []string
+	for _, f := range files {
+		switch {
+		case !strings.HasSuffix(f.name, ".nix"):
+			parts = append(parts, fmt.Sprintf("%s (+%d −%d lines)", f.name, f.add, f.del))
+			fmt.Fprintf(&odd, "  %s: +%d −%d lines\n", f.name, f.add, f.del)
+		case len(f.attrs) > 0:
+			parts = append(parts, f.name+" ("+strings.Join(f.attrs, ", ")+")")
+		default:
+			parts = append(parts, f.name)
+		}
+	}
+	if len(parts) == 0 {
+		return ".", odd.String()
+	}
+	return ": " + strings.Join(parts, ", "), odd.String()
 }

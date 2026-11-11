@@ -169,6 +169,16 @@ func TestReviewReadsLastPageOfCommits(t *testing.T) {
 	}
 }
 
+func TestReviewCountsTheChangedFiles(t *testing.T) {
+	e := testutil.New(t)
+	e.API("repos/o/r/compare/v1.0.0...v1.1.0", map[string]any{"total_commits": 2,
+		"files": []map[string]any{{"additions": 1000, "deletions": 10}, {"additions": 204, "deletions": 301}}})
+	r := e.GH.Review("o/r", "v1.0.0", "v1.1.0", false)
+	if r.Files != 2 || r.Additions != 1204 || r.Deletions != 311 {
+		t.Errorf("the size of the change: %+v", r)
+	}
+}
+
 func TestReviewCapsSubjects(t *testing.T) {
 	e := testutil.New(t)
 	var subjects []string

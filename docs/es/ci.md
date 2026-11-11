@@ -219,4 +219,4 @@ Tienes tres opciones:
 - Construir un solo host con `update --source input -y -H <host> --report ...`. Entonces el runner necesita `nh` en el `PATH` y espacio suficiente para ese host.
 - Usar un runner propio (self-hosted) donde quepa el build.
 
-Elijas lo que elijas, nixup nunca activa el resultado. Prueba la configuración mergeada con `nh os test` en la propia máquina.
+Elijas lo que elijas, no pases `--test`, `--switch` ni `--boot` en CI: activarían la configuración en el runner. Sin ellos nixup nunca activa el resultado. Prueba la configuración mergeada con `nh os test` en la propia máquina.

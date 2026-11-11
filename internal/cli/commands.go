@@ -89,11 +89,15 @@ func runUpdate(args []string, d Deps) int {
 	fs, dir := d.flags("update")
 	source := fs.String("source", "", "comma list of: "+strings.Join(update.Sources, ", ")+" (default: all)")
 	var hosts hostList
-	fs.Var(&hosts, "H", "host to build for inputs (repeatable; default: all nixosConfigurations)")
+	fs.Var(&hosts, "H", "host to build for inputs and to activate (repeatable; default: all nixosConfigurations)")
 	noBuild := fs.Bool("no-build", false, "do not build: only update and show the changes")
 	yes := fs.Bool("y", false, "apply without asking (CI)")
 	allowDirty := fs.Bool("allow-dirty", false, "update over uncommitted changes in flake.nix or a package without asking (they are kept)")
 	reportFile := fs.String("report", "", "append a Markdown report to this file")
+	verbs := map[string]*bool{}
+	for _, v := range []string{"test", "switch", "boot"} {
+		verbs[v] = fs.Bool(v, false, "then run nh os "+v+" on the host, if flake.lock or a package was written")
+	}
 	names, repo, code, ok := d.setup(fs, dir, args)
 	if !ok {
 		return code
@@ -102,8 +106,17 @@ func runUpdate(args []string, d Deps) int {
 	if err != nil {
 		return d.fail(err)
 	}
+	activate := ""
+	for _, v := range []string{"test", "switch", "boot"} {
+		if *verbs[v] {
+			if activate != "" {
+				return d.fail(fmt.Errorf("--%s and --%s: pick one", activate, v))
+			}
+			activate = v
+		}
+	}
 	return d.updater().Update(update.Opts{Repo: repo, Names: names, Sources: sources, Hosts: hosts,
-		NoBuild: *noBuild, Yes: *yes, AllowDirty: *allowDirty, Report: *reportFile})
+		NoBuild: *noBuild, Yes: *yes, AllowDirty: *allowDirty, Report: *reportFile, Activate: activate})
 }
 
 func printJSON(d Deps, v any) {

@@ -5,6 +5,7 @@ package run
 import (
 	"bytes"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -21,9 +22,17 @@ type Runner interface {
 // Exec runs real processes. Out receives the output of Stream.
 type Exec struct{ Out io.Writer }
 
-func (Exec) Capture(dir, name string, args ...string) (string, string, error) {
+// command is name with nix's "Git tree is dirty" warning turned off: nixup works on
+// uncommitted trees on purpose and says so itself.
+func command(dir, name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "NIX_CONFIG="+strings.TrimSpace(os.Getenv("NIX_CONFIG")+"\nwarn-dirty = false"))
+	return cmd
+}
+
+func (Exec) Capture(dir, name string, args ...string) (string, string, error) {
+	cmd := command(dir, name, args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
@@ -31,8 +40,8 @@ func (Exec) Capture(dir, name string, args ...string) (string, string, error) {
 }
 
 func (e Exec) Stream(dir, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
+	cmd := command(dir, name, args...)
+	cmd.Stdin = os.Stdin // interactive tools (nh --ask, a sudo that reads stdin) can ask
 	cmd.Stdout, cmd.Stderr = e.Out, e.Out
 	return cmd.Run()
 }

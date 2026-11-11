@@ -83,6 +83,19 @@ func Select(pkgs []Package, names []string) ([]Package, error) {
 // alone when it sits at the top of the flake, so a restore never touches the whole
 // repository. "" when the file is not part of this flake.
 func (p Package) Path(repo string) string {
+	rel := p.File(repo)
+	if rel == "" {
+		return ""
+	}
+	if dir := filepath.Dir(rel); dir != "." {
+		return dir
+	}
+	return rel
+}
+
+// File is the file that defines the package, relative to the repository (from
+// meta.position), or "" when it is not part of this flake.
+func (p Package) File(repo string) string {
 	file := p.Position
 	if i := strings.LastIndex(file, ":"); i >= 0 {
 		file = file[:i] // drop the line number
@@ -90,9 +103,6 @@ func (p Package) Path(repo string) string {
 	_, rel, ok := strings.Cut(file, "-source/") // flake sources are copied to /nix/store/<hash>-source
 	if !ok || rel == "" || strings.HasPrefix(rel, "..") || !exists(filepath.Join(repo, rel)) {
 		return ""
-	}
-	if dir := filepath.Dir(rel); dir != "." {
-		return dir
 	}
 	return rel
 }

@@ -219,4 +219,4 @@ You have three options:
 - Build one host with `update --source input -y -H <host> --report ...`. The runner then needs `nh` on `PATH` and enough space for that host.
 - Use a self-hosted runner, where the build fits.
 
-Whichever you pick, nixup never activates the result. Test the merged configuration with `nh os test` on the machine itself.
+Whichever you pick, do not pass `--test`, `--switch` or `--boot` in CI: they would activate the configuration on the runner. Without them nixup never activates the result. Test the merged configuration with `nh os test` on the machine itself.

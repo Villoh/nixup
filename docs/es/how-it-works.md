@@ -65,7 +65,7 @@ Un salto lleva aviso cuando cambia el primer número (de `1.x` a `2.x`), o cuand
 Con `check --review`, y siempre en `nixup update`, nixup monta una revisión para cada actualización pendiente:
 
 - `source`: el repositorio de GitHub.
-- `changes`: el número de commits entre las dos versiones, sacado de la API de comparación de GitHub, y un enlace de comparación.
+- `changes`: el número de commits entre las dos versiones, sacado de la API de comparación de GitHub, cuántos archivos han cambiado con las líneas añadidas y quitadas, y un enlace de comparación: `changes  45 commits · 38 files (+1,204 −311)  <compare url>`. En Markdown es `[45 commits](<compare url>) · 38 files (+1,204 −311)`. La API de comparación lista como mucho 300 archivos, así que a partir de 300 la línea dice `300+ files` sin contar líneas. Si GitHub no da archivos, esa parte no aparece. En JSON son `files`, `additions` y `deletions`.
 - Hasta ocho mensajes de commit, del más nuevo al más antiguo.
 - Para los paquetes, y para los inputs fijados en `check --review`, las release notes publicadas entre las dos versiones. Los borradores se saltan. Las prereleases se saltan y se cuentan. En la terminal salen las primeras líneas de hasta tres releases; el resto está en el enlace de comparación.
 
@@ -73,11 +73,11 @@ Los inputs de rama, y todos los inputs en `nixup update`, solo llevan commits, s
 
 ## update, paso a paso
 
-`nixup update` ejecuta cuatro pasos en este orden: inputs, paquetes, Flatpak y `nix profile`. Los inputs van primero, para que el build de los paquetes se haga con el lock nuevo. Cada paso se ejecuta aunque uno anterior haya fallado o hayas contestado que no; en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de todos los pasos.
+`nixup update` ejecuta cuatro pasos en este orden: inputs, paquetes, Flatpak y `nix profile`. Los inputs van primero, para que el build de los paquetes se haga con el lock nuevo. Cada paso se ejecuta aunque uno anterior haya fallado o hayas contestado que no; en ese caso el build de los paquetes se hace con el lock que ya tenías. El código de salida es el más alto de todos los pasos. Con `--test`, `--switch` o `--boot`, el host que activar se elige antes del primer paso y nh se ejecuta después del último (ver [Activación](#activación)).
 
 Con `--source`, solo se ejecutan los pasos de la lista. Con nombres, cada nombre se busca en `flake.lock`, en los paquetes del flake (que solo se evalúan si el paso de paquetes está activo), en `flatpak list --columns=application` (apps y runtimes) y en `nix profile list --json`. Cada paso recibe solo los nombres de su origen, y un paso sin ninguno no se ejecuta.
 
-Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada llega al sistema hasta que lo aplicas con nh. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento. Su pregunta lo dice, y te indican cómo deshacerlo.
+Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada llega al sistema hasta que lo aplicas con nh, a mano o con `--test`, `--switch` o `--boot`. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento. Su pregunta lo dice, y te indican cómo deshacerlo.
 
 ### El paso de inputs
 
@@ -106,7 +106,7 @@ Para cada paquete, en orden alfabético o en el orden en que los hayas nombrado.
 3. Si `git diff --quiet -- <dir del paquete>` detecta cambios, pregunta si actualizar sobre ellos, salvo con `--allow-dirty` o `-y`. Si dices que no, se salta este paquete con código de salida 0. Después pregunta si actualizarlo, salvo con `-y`.
 4. Guarda todos los archivos normales de `<dir del paquete>`. Ejecuta `nix-update --flake <name> --version=<versión revisada>` más los argumentos extra del script de actualización. Si `nix-update` no está en el `PATH`, usa `nix run nixpkgs#nix-update --`.
 5. Ejecuta `nix build --no-link .#<name>`, salvo con `--no-build`.
-6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban y borra los archivos añadidos desde entonces. Si todo va bien, imprime `git diff -- <dir del paquete>`.
+6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban y borra los archivos añadidos desde entonces. Si todo va bien, imprime `<name> updated to <versión>.` y lee `git diff -- <dir del paquete>`: los cambios de atributos rutinarios (`version`, `hash`, `sha256`, `rev` y cualquier atributo que termine en `Hash`) no se enseñan; cualquier otra línea cambiada en un `.nix` se imprime entera, y los demás archivos solo como recuento de líneas añadidas y quitadas, bajo `Besides version and hash, nix-update edited:`.
 
 Aquí `nix-update` edita tu repositorio directamente, no una copia. Los archivos guardados en el paso 4 son lo que deja el paquete como estaba, con los cambios sin commitear incluidos. No se usa git para eso.
 
@@ -129,6 +129,14 @@ Se salta si `flatpak` no está en el `PATH`.
 4. Ejecuta `nix profile upgrade <nombre...>` con las entradas que siguen una referencia móvil.
 5. Imprime `nix profile rollback` como forma de volver atrás.
 
+### Activación
+
+Solo con `--test`, `--switch` o `--boot`.
+
+1. Antes del primer paso, coge el host de `-H`, o lista los hosts con `nix eval <repo>#nixosConfigurations --apply builtins.attrNames`. Si no hay exactamente un host, `update` para con código de salida 2 antes de hacer nada.
+2. Después del último paso, si alguno ha fallado, imprime `Not activating: a step failed.` Si no se ha escrito ni `flake.lock` ni ningún paquete, imprime `Nothing was written: nothing to activate.` En los dos casos no se ejecuta nh.
+3. Si no, ejecuta `nh os <test|switch|boot> <repo> -H <host>` en tu repositorio. nh hace el build del sistema, casi todo desde el store si el paso de inputs ya lo ha construido, pide sudo y lo activa. nixup solo informa de si nh ha ido bien.
+
 ## Comandos que ejecuta nixup
 
 Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), así que no se lanza nada más.
@@ -144,11 +152,13 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
 | `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs), autocompletado de `-H` |
+| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), sin `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | autocompletado de nombres |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
 | `nix-update --flake <name> --version=<v> [args...]` | update (paquetes) |
 | `nix build --no-link .#<name>` | update (paquetes) |
+| `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |
 | `nix profile list --json` | profile, update (nombres, nix profile) |
 | `nix profile upgrade <nombre...>` | update (nix profile) |
 | `nix eval --json --impure --expr <getFlake del flake>` | search |
@@ -174,6 +184,10 @@ Se escribe:
 - Con `--report <archivo>`: Markdown añadido al final de ese archivo.
 - Los builds acaban en el Nix store, como cualquier build.
 
+Se activa, solo con `--test`, `--switch` o `--boot`:
+
+- La nueva configuración, con `nh os test`, `switch` o `boot` en un host, cuando todos los pasos han ido bien y solo si se ha escrito `flake.lock` o algún paquete. Quien pide sudo es nh, no nixup.
+
 Se instala, tras un sí o con `-y`:
 
 - Con el paso de Flatpak de `update`: las actualizaciones de Flatpak pendientes, mediante `flatpak update`. Para volver atrás, usa las líneas `flatpak update --commit=<commit anterior> <ref>` que imprime.
@@ -182,6 +196,6 @@ Se instala, tras un sí o con `-y`:
 Nunca:
 
 - `git add`, `git commit` ni `git push`.
-- `nixos-rebuild`, `nh os switch`, `nh os boot`, `nh os test` ni nada que active una generación.
-- `sudo`.
+- `nixos-rebuild`, `nh os switch`, `nh os boot`, `nh os test` ni nada que active una generación, salvo que pases `--test`, `--switch` o `--boot`. Entonces lo hace nh.
+- `sudo` desde el propio nixup. Con esos flags, lo pide nh.
 - Un demonio, un timer o un proceso en segundo plano.

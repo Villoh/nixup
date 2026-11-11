@@ -32,7 +32,7 @@ Todos los comandos que trabajan sobre un flake aceptan `-C <dir>`. En [Configura
 
 - Los resultados, las revisiones y las preguntas van a stdout.
 - Los errores van a stderr.
-- La salida de `nh os build`, `nix-update`, `nix build`, `flatpak update` y `nix profile upgrade` se vuelca en directo a stderr. `nix flake update` se ejecuta en silencio, porque nixup ya lista lo que se ha movido; su salida solo se muestra si falla.
+- La salida de `nh os build`, `nix build`, `flatpak update`, `nix profile upgrade` y `nh os test`, `switch` o `boot` se vuelca en directo a stderr. `nix flake update` y `nix-update` se ejecutan en silencio, porque nixup resume lo que han cambiado; su salida solo se muestra si fallan. El aviso `warning: Git tree … is dirty` de nix se desactiva (se añade `warn-dirty = false` a `NIX_CONFIG`), porque nixup trabaja a propósito sobre árboles sin commitear.
 
 Así, `nixup check --json > out.json` te da un JSON limpio.
 
@@ -53,7 +53,7 @@ nixup check --markdown --review
 | `-C <dir>` | Directorio del flake. |
 | `--source <lista>` | Orígenes a comprobar, separados por comas: `input`, `package`, `flatpak`, `profile` (también en plural). Por defecto, todos. Un nombre desconocido es un error. |
 | `--all` | Lista también las entradas al día en la salida de texto. Sin él solo se cuentan. |
-| `--review` | Añade la revisión de upstream (commits, enlace de comparación, release notes) a cada entrada desactualizada. |
+| `--review` | Añade la revisión de upstream (commits, archivos y líneas cambiados, enlace de comparación, release notes) a cada entrada desactualizada. |
 | `--json` | Imprime todas las filas en JSON, incluidas las que están al día. Tiene prioridad sobre `--markdown`. |
 | `--markdown` | Imprime solo las entradas desactualizadas o con error, en Markdown, para el cuerpo de una pull request o un resumen de CI. Si no hay nada, imprime `Everything is up to date.` |
 
@@ -75,7 +75,7 @@ La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS`
 ]
 ```
 
-`latest`, `note`, `warning`, `hint` y `review` no aparecen si están vacíos. `hint` indica que el nixpkgs del flake ya tiene el paquete (ver [Cómo funciona](how-it-works.md#packages)). Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
+`latest`, `note`, `warning`, `hint` y `review` no aparecen si están vacíos. `hint` indica que el nixpkgs del flake ya tiene el paquete (ver [Cómo funciona](how-it-works.md#packages)). Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
 
 Códigos de salida:
 
@@ -89,7 +89,7 @@ Códigos de salida:
 
 Revisa y aplica las actualizaciones en cuatro pasos, en este orden: los inputs del flake (`flake.lock`), los paquetes que tu flake define en su propia salida `packages.<system>`, Flatpak y `nix profile`.
 
-Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; los aplicas al sistema con nh. Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras una pregunta cada uno, y te dicen cómo deshacerlo.
+Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; los aplicas al sistema con nh, o pasas `--test`, `--switch` o `--boot` y nixup ejecuta nh por ti al final (ver [Activación](#activación)). Los pasos de Flatpak y de `nix profile` instalan en la máquina en el momento, tras una pregunta cada uno, y te dicen cómo deshacerlo.
 
 ```bash
 nixup update
@@ -99,6 +99,7 @@ nixup update co.hyprlab.Hylki
 nixup update --source input -H desktop -H laptop
 nixup update --source package -y --report report.md
 nixup update --source flatpak
+nixup update --test
 ```
 
 Sin nombres se actualiza todo: todos los inputs, todos los paquetes, todas las actualizaciones de Flatpak pendientes y todas las entradas de `nix profile` que siguen una referencia móvil. Cada nombre se busca como input directo de `flake.lock`, como paquete del flake (solo si el paso de paquetes está activo), como ID de una app de Flatpak instalada y como entrada de `nix profile`. Cada nombre va al paso de su origen; un paso sin nombres de su tipo no se ejecuta, así que `nixup update ripgrep` no toca `flake.lock` y `nixup update co.hyprlab.Hylki` solo ejecuta el paso de Flatpak. Los inputs van siempre primero, para que el build de los paquetes se haga con el lock nuevo.
@@ -113,11 +114,14 @@ Un nombre que no lleva a un único paso es un error, y no se ejecuta nada:
 |---|---|
 | `-C <dir>` | Directorio del flake. |
 | `--source <lista>` | Pasos a ejecutar, separados por comas: `input`, `package`, `flatpak`, `profile` (también en plural). Por defecto, todos. Cualquier otro valor es un error. |
-| `-H <host>` | Host del que hacer el build en el paso de inputs. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
+| `-H <host>` | Host del que hacer el build en el paso de inputs, y el host que activar con `--test`, `--switch` o `--boot`. Se puede repetir. Por defecto, todas las entradas de `nixosConfigurations`. |
 | `--no-build` | Actualiza y enseña los cambios, pero no hace el build: ni `nh os build` para los inputs ni `nix build` para los paquetes. Los pasos de Flatpak y de `nix profile` no construyen nada en ningún caso. |
 | `-y` | Escribe el nuevo lock, actualiza los paquetes, instala las actualizaciones de Flatpak y actualiza las entradas de `nix profile` sin preguntar. Necesario en ejecuciones desatendidas. Implica `--allow-dirty`. |
 | `--allow-dirty` | Actualiza sobre cambios sin commitear en `flake.nix` o en un paquete sin preguntar. Esos cambios se conservan. |
 | `--report <archivo>` | Añade al final de este archivo un informe en Markdown (inputs movidos, revisiones, resultado de los builds, un bloque por paquete actualizado, la tabla de Flatpak con los comandos para volver atrás, las entradas de `nix profile` actualizadas). Si no existe, lo crea. |
+| `--test` | Después de los cuatro pasos, ejecuta `nh os test` en el host si se ha escrito `flake.lock` o algún paquete. |
+| `--switch` | Lo mismo con `nh os switch`. |
+| `--boot` | Lo mismo con `nh os boot`. |
 
 Las preguntas aceptan `y` o `yes`, `n` o `no`; Enter es no, y cualquier otra cosa se vuelve a preguntar. Lo que se haya tecleado mientras nixup estaba ocupado, como un Enter pulsado durante un build, se descarta antes de cada pregunta.
 
@@ -150,9 +154,9 @@ El paso de paquetes los recorre de uno en uno. Para cada paquete desactualizado,
 1. Imprime la versión actual y la nueva, el aviso de salto mayor si lo hay y la revisión de upstream.
 2. Si `<dir del paquete>` tiene cambios sin commitear, pregunta `<dir del paquete> has uncommitted changes. Update on top of them? They are kept. [y/N]`. Si dices que no, imprime `Skipped.` y sigue con el siguiente. Con `--allow-dirty` o `-y` no pregunta, solo imprime `<dir del paquete> has uncommitted changes: updating on top of them; they are kept.`
 3. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
-4. Guarda todos los archivos de `<dir del paquete>` y después ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete.
-5. Salvo con `--no-build`, ejecuta `nix build --no-link .#<name>`.
-6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban, con los cambios sin commitear incluidos, borra los archivos añadidos desde entonces e imprime `nix-update failed; <dir del paquete> restored.` o `build FAILED; <dir del paquete> restored.` Si no, imprime `git diff -- <dir del paquete>`, que también enseña los cambios sin commitear que ya tenías.
+4. Guarda todos los archivos de `<dir del paquete>` y después ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete. Imprime `Updating <archivo> with nix-update…`, con el archivo que define el paquete; la salida de nix-update solo se muestra si falla.
+5. Salvo con `--no-build`, imprime `Checking that <name> builds…` y ejecuta `nix build --no-link .#<name>`. Compila solo el paquete, no el sistema: comprueba que la receta editada sigue compilando (en un `-bin` precompilado, que el tarball de la release existe, que su hash cuadra y que el parcheo funciona).
+6. Si falla el paso 4 o el 5, vuelve a escribir los archivos guardados tal y como estaban, con los cambios sin commitear incluidos, borra los archivos añadidos desde entonces e imprime `nix-update failed; <dir del paquete> restored.` o `build FAILED; <dir del paquete> restored.` Si no, imprime `<name> updated to <versión>.` y lee `git diff -- <dir del paquete>`. Un update normal solo cambia atributos rutinarios (`version`, `hash`, `sha256`, `rev` y cualquier atributo que termine en `Hash`) y no imprime nada más. Lo demás que nix-update haya editado en tus archivos sale bajo `Besides version and hash, nix-update edited:`: cada otra línea cambiada de un `.nix`, entera, y los demás archivos (los lock que regenera) como recuento, `packages/x/deps.json: +2 −1 lines`. Son ediciones en tu repositorio, no cambios de upstream. El `--report` recoge los archivos y atributos en todos los casos.
 
 Los paquetes al día solo se listan si los nombras. Las entradas `info` y `ERROR` se listan siempre. Si no nombras ningún paquete y ninguno está desactualizado, el paso imprime `Every package is up to date.`
 
@@ -182,12 +186,24 @@ El paso de `nix profile`, en orden:
 
 Los nombres son los de las entradas de `nix profile`, tal y como los muestra `nix profile list`.
 
+### Activación
+
+Sin `--test`, `--switch` ni `--boot`, `update` no activa nada. Con uno de ellos, al final le pasa el resultado a nh. Solo se admite uno: `--test --switch` para con `--test and --switch: pick one` y código de salida 2. En orden:
+
+1. Antes de ningún paso, elige el host: el que hayas dado con `-H`, o la única entrada de `nixosConfigurations`. Con varios hosts y sin `-H`, o con más de un `-H`, para antes de hacer nada: `--test activates one host: name it with -H (this flake has desktop, laptop)`, código de salida 2.
+2. Ejecuta los cuatro pasos como siempre.
+3. Si ha fallado algún paso, imprime `Not activating: a step failed.` y para. El código de salida sigue siendo 2.
+4. Si no se ha escrito ni `flake.lock` ni ningún paquete, porque has contestado que no o todo estaba al día, imprime `Nothing was written: nothing to activate.` y sale con 0. Las actualizaciones de Flatpak y de `nix profile` no cuentan: ya están instaladas.
+5. Imprime `Activating desktop (nh os test)…` y ejecuta `nh os test <repo> -H desktop`. nh hace el build del sistema, te pide la contraseña con sudo y lo activa. Si el paso de inputs ya ha hecho el build de ese host, el build sale del Nix store. Si nh falla, nixup imprime `nh os test failed.` y sale con 2.
+
+nixup no tiene código de activación propio: `test`, `switch` y `boot` significan lo mismo que en nh. Con `-y` y `--switch` nixup no pregunta nada: una ejecución desatendida escribe las actualizaciones y cambia el sistema, y solo sudo puede pedir todavía la contraseña.
+
 Códigos de salida. Gana el peor código de los cuatro pasos y de todos los paquetes:
 
 | Código | Significado |
 |---|---|
 | 0 | Se ha actualizado todo, has contestado que no o no había nada que actualizar. |
-| 2 | Algo ha fallado: un nombre o `--source` estaban mal, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update`, la escritura del archivo, `flatpak update` o `nix profile upgrade`. |
+| 2 | Algo ha fallado: un nombre o `--source` estaban mal, se ha pasado más de uno de `--test`, `--switch` y `--boot`, no había exactamente un host que activar, ha fallado una comprobación, o han fallado `nix flake update`, el listado de hosts, un build, `nix-update`, la escritura del archivo, `flatpak update`, `nix profile upgrade` o `nh os test`, `switch` o `boot`. |
 
 ## list
 

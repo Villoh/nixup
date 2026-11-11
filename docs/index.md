@@ -10,7 +10,7 @@ lang: en
 
 nixup is a command-line tool for people who manage NixOS with a flake. It answers two questions: what is out of date, and what changed upstream since the version you run. Then it updates `flake.lock` and your own packages, but only after a build in a safe place and a yes from you. It can also install pending Flatpak updates and upgrade `nix profile` entries, after asking.
 
-It does not activate a NixOS generation. There is no `switch`, `boot` or `sudo` in the code, no daemon and no timer. After nixup writes a file, you review the diff, test the system with your usual tools and commit. The Flatpak and `nix profile` steps are the exception to "nixup only writes files": they install right away and print how to undo it.
+It does not activate a NixOS generation unless you pass `--test`, `--switch` or `--boot` to `nixup update`, and then nh does it. There is no activation code and no `sudo` in nixup, no daemon and no timer. After nixup writes a file, you review the diff, test the system with your usual tools and commit. The Flatpak and `nix profile` steps are the exception to "nixup only writes files": they install right away and print how to undo it.
 
 ## What it checks
 
@@ -24,7 +24,7 @@ It does not activate a NixOS generation. There is no `switch`, `boot` or `sudo` 
 ## The commands
 
 - `nixup check` lists what is outdated. It is the default command and it is read-only.
-- `nixup update` first updates `flake.lock` in a scratch copy, shows what moved upstream, builds every host and writes the new lock after you confirm. Then it updates the packages your flake defines, one at a time, after showing what changed upstream. Last it installs the pending Flatpak updates and upgrades the `nix profile` entries that follow a moving reference, one question each. Names or `--source` limit it to some inputs, packages, Flatpak apps or profile entries.
+- `nixup update` first updates `flake.lock` in a scratch copy, shows what moved upstream, builds every host and writes the new lock after you confirm. Then it updates the packages your flake defines, one at a time, after showing what changed upstream. Last it installs the pending Flatpak updates and upgrades the `nix profile` entries that follow a moving reference, one question each. Names or `--source` limit it to some inputs, packages, Flatpak apps or profile entries. With `--test`, `--switch` or `--boot`, it ends by running `nh os test`, `switch` or `boot` on one host, if something was written.
 - `nixup list` shows everything it watches with the versions you have, without touching the network.
 - `nixup search <name>` looks a package up in your locked nixpkgs, your own packages, your inputs and Flatpak.
 

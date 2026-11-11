@@ -12,7 +12,7 @@ lang: es
 
 - Una configuración de NixOS en un flake, dentro de un repositorio git, con `flake.nix` y `flake.lock` commiteados.
 - `git` y `nix` en el `PATH`.
-- `nh` si quieres que `nixup update` haga el build de tus hosts. Con `--no-build` no hace falta.
+- `nh` si quieres que `nixup update` haga el build de tus hosts, o que active uno con `--test`, `--switch` o `--boot`. Con `--no-build` y sin ninguno de esos tres no hace falta.
 - `nix-update` para actualizar tus propios paquetes con `nixup update`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
 - `flatpak` es opcional. Sin él, se saltan la sección `flatpak` y el paso de Flatpak de `nixup update`.
 - Acceso de red a github.com y api.github.com.
@@ -108,7 +108,19 @@ En los inputs de rama, `CURRENT` muestra el commit bloqueado y cuántos días ti
 nixup check --review
 ```
 
-Después de la tabla, para cada actualización, añade el repositorio de origen, el número de commits con un enlace de comparación, los últimos mensajes de commit y, si las versiones son tags, las release notes entre medias.
+Después de la tabla, para cada actualización, añade el repositorio de origen, el número de commits con el tamaño del cambio y un enlace de comparación, los últimos mensajes de commit y, si las versiones son tags, las release notes entre medias:
+
+```text
+ripgrep package  14.0.0 → 15.2.0
+  source   https://github.com/BurntSushi/ripgrep
+  changes  45 commits · 38 files (+1,204 −311)  https://github.com/BurntSushi/ripgrep/compare/14.0.0...15.2.0
+    · release: 15.2.0
+    · changelog: prepare for 15.2.0
+  notes    15.2.0
+           ripgrep 15.2.0 is a minor release with bug fixes.
+```
+
+GitHub lista como mucho 300 archivos cambiados, así que un cambio más grande dice `300+ files` sin contar líneas.
 
 ## Aplica las actualizaciones
 
@@ -120,17 +132,18 @@ nixup update ripgrep          # uno de tus paquetes
 nixup update co.hyprlab.Hylki # una app de Flatpak
 ```
 
-Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. Estos dos pasos solo editan archivos de tu repositorio, y nixup ni hace commit ni activa ninguna generación.
+Con los inputs, `update` te enseña los commits de upstream de cada input que se ha movido, hace el build de cada host desde una copia temporal y pregunta antes de escribir `flake.lock`. Después pregunta antes de cada uno de tus paquetes. Estos dos pasos solo editan archivos de tu repositorio, y nixup no hace commit. Cada paquete se comprueba compilando solo el paquete (no el sistema) y termina con `herdr-app updated to 0.1.14.`; si nix-update ha editado en tus archivos algo más que la versión y el hash, esas ediciones se listan debajo.
 
 Al final van Flatpak y `nix profile`. Cada uno enseña qué actualizaría y pregunta una vez, y la pregunta dice `This installs them right away.` Si dices que sí, instalan y después te dicen cómo volver atrás: una línea `flatpak update --commit=<commit anterior> <ref>` por cada ref de Flatpak, o `nix profile rollback`. Usa `--source input,package` para no tocar la máquina.
 
-Cuando ha escrito `flake.lock` o algún paquete, `update` termina con una línea que dice cómo aplicarlo. La ruta es `.` si estás dentro del repositorio, y el host aparece cuando el flake solo tiene uno o lo pasaste con `-H`:
+Por defecto nixup no activa nada: revisa con `git diff` y aplica tú con nh. Para que nh active el resultado al final, añade `--test`, `--switch` o `--boot`:
 
-```text
-Next: review with git diff, then nh os test . -H desktop (nothing is committed or activated)
+```bash
+nixup update --test           # y después nh os test en el único host
+nixup update -H desktop --test
 ```
 
-Las actualizaciones de Flatpak y de `nix profile` ya quedan instaladas, así que no imprimen esa línea.
+Después de los cuatro pasos, si se ha escrito `flake.lock` o algún paquete, nixup imprime `Activating desktop (nh os test)…` y ejecuta `nh os test <repo> -H desktop`. nh pide sudo y activa. Si no se ha escrito nada, o ha fallado algún paso, no se ejecuta nh. Un flake con varios hosts necesita `-H`. Ver [Activación](commands.md#activación).
 
 Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`, así que los mueve nixup. En la copia temporal cambia el tag de `flake.nix` por la release más nueva, y si dices que sí escribe `flake.nix` junto con `flake.lock`. Un `nixup update` sin nombres deja donde está un salto que pinta a cambio incompatible, como `v0.4.1` a `v1.2.0`, y lo avisa. `nixup update lanzaboote` lo mueve.
 

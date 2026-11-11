@@ -65,7 +65,7 @@ A jump gets a warning when the first number changes (`1.x` to `2.x`), or when th
 With `check --review`, and always in `nixup update`, nixup builds a review for each pending update:
 
 - `source`: the GitHub repository.
-- `changes`: the number of commits between the two versions, from the GitHub compare API, and a compare link.
+- `changes`: the number of commits between the two versions, from the GitHub compare API, how many files changed with the lines added and removed, and a compare link: `changes  45 commits · 38 files (+1,204 −311)  <compare url>`. In Markdown it is `[45 commits](<compare url>) · 38 files (+1,204 −311)`. The compare API lists at most 300 files, so from 300 on the line says `300+ files` without line counts. When GitHub gives no files, that part is left out. In JSON these are `files`, `additions` and `deletions`.
 - Up to eight commit subjects, newest first.
 - For packages, and for pinned inputs in `check --review`, the release notes published between the two versions. Drafts are skipped. Prereleases are skipped and counted. The terminal shows the first lines of up to three releases; the compare link has the rest.
 
@@ -73,11 +73,11 @@ Branch inputs, and every input in `nixup update`, get commits only, without rele
 
 ## update, step by step
 
-`nixup update` runs four steps in this order: inputs, packages, Flatpak and `nix profile`. Inputs go first, so packages are built against the new lock. Each step runs even when an earlier one failed or you answered no; packages are then built against the lock you already had. The exit code is the highest of the steps.
+`nixup update` runs four steps in this order: inputs, packages, Flatpak and `nix profile`. Inputs go first, so packages are built against the new lock. Each step runs even when an earlier one failed or you answered no; packages are then built against the lock you already had. The exit code is the highest of the steps. With `--test`, `--switch` or `--boot`, the host to activate is picked before the first step and nh runs after the last one (see [Activation](#activation)).
 
 With `--source`, only the listed steps run. With names, each name is looked up in `flake.lock`, in the flake's packages (evaluated only when the package step is on), in `flatpak list --columns=application` (apps and runtimes) and in `nix profile list --json`. Each step gets only the names of its source, and a step with none is skipped.
 
-The input and package steps only edit files in your repository; nothing reaches the system until you apply it with nh. The Flatpak and `nix profile` steps install on the machine right away. Their question says so, and they print how to undo it.
+The input and package steps only edit files in your repository; nothing reaches the system until you apply it with nh, yourself or through `--test`, `--switch` or `--boot`. The Flatpak and `nix profile` steps install on the machine right away. Their question says so, and they print how to undo it.
 
 ### The input step
 
@@ -106,7 +106,7 @@ For each package, in alphabetical order, or in the order you named them. `<pkg d
 3. If `git diff --quiet -- <pkg dir>` reports changes, ask whether to update on top of them, unless `--allow-dirty` or `-y`. A no skips this package with exit code 0. Then ask whether to update it, unless `-y`.
 4. Save every regular file under `<pkg dir>`. Run `nix-update --flake <name> --version=<reviewed version>` plus the extra arguments from the update script. If `nix-update` is not on `PATH`, use `nix run nixpkgs#nix-update --`.
 5. Run `nix build --no-link .#<name>`, unless `--no-build`.
-6. On failure in step 4 or 5, write the saved files back as they were and remove the files added since. On success, print `git diff -- <pkg dir>`.
+6. On failure in step 4 or 5, write the saved files back as they were and remove the files added since. On success, print `<name> updated to <version>.` and read `git diff -- <pkg dir>`: changes to routine attributes (`version`, `hash`, `sha256`, `rev`, and any attribute ending in `Hash`) are not shown; any other changed line in a `.nix` file is printed in full, and other files only as a count of added and removed lines, under `Besides version and hash, nix-update edited:`.
 
 `nix-update` edits your repository directly here, not a copy. The files saved in step 4 are what puts the package back, uncommitted edits included. git is not used for it.
 
@@ -129,6 +129,14 @@ Skipped when `flatpak` is not on `PATH`.
 4. Run `nix profile upgrade <name...>` with the entries that follow a moving reference.
 5. Print `nix profile rollback` as the way back.
 
+### Activation
+
+Only with `--test`, `--switch` or `--boot`.
+
+1. Before the first step, take the host from `-H`, or list the hosts with `nix eval <repo>#nixosConfigurations --apply builtins.attrNames`. Anything but exactly one host stops `update` with exit code 2 before any work.
+2. After the last step, if a step failed, print `Not activating: a step failed.` If neither `flake.lock` nor a package was written, print `Nothing was written: nothing to activate.` In both cases nh is not run.
+3. Otherwise run `nh os <test|switch|boot> <repo> -H <host>` in your repository. nh builds the system, mostly from the store when the input step already built it, asks for sudo and activates. nixup only reports whether nh succeeded.
+
 ## Commands nixup runs
 
 This is the complete list. Everything goes through one package (`internal/run`), so nothing else is started.
@@ -144,11 +152,13 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
 | `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs), completion of `-H` |
+| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), without `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | completion of names |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) |
 | `nix-update --flake <name> --version=<v> [args...]` | update (packages) |
 | `nix build --no-link .#<name>` | update (packages) |
+| `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |
 | `nix profile list --json` | profile, update (names, nix profile) |
 | `nix profile upgrade <name...>` | update (nix profile) |
 | `nix eval --json --impure --expr <getFlake of the flake>` | search |
@@ -174,6 +184,10 @@ Written:
 - By `--report <file>`: Markdown appended to that file.
 - Builds land in the Nix store, as with any build.
 
+Activated, only with `--test`, `--switch` or `--boot`:
+
+- The new configuration, by `nh os test`, `switch` or `boot` on one host, after every step succeeded and only if `flake.lock` or a package was written. nh asks for sudo, not nixup.
+
 Installed, after a yes or `-y`:
 
 - By the Flatpak step of `update`: the pending Flatpak updates, through `flatpak update`. Go back with the `flatpak update --commit=<previous commit> <ref>` lines it prints.
@@ -182,6 +196,6 @@ Installed, after a yes or `-y`:
 Never:
 
 - `git add`, `git commit` or `git push`.
-- `nixos-rebuild`, `nh os switch`, `nh os boot`, `nh os test`, or anything else that activates a generation.
-- `sudo`.
+- `nixos-rebuild`, `nh os switch`, `nh os boot`, `nh os test`, or anything else that activates a generation, unless you pass `--test`, `--switch` or `--boot`. Then nh does it.
+- `sudo` from nixup itself. With those flags, nh asks for it.
 - A daemon, timer or background process.
