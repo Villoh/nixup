@@ -116,7 +116,7 @@ A name that does not lead to exactly one step is an error, and nothing runs:
 | `-H <host>` | Host to build in the input step. Repeatable. Default: every entry in `nixosConfigurations`. |
 | `--no-build` | Update and show the changes, but do not build: no `nh os build` for inputs, no `nix build` for packages. The Flatpak and `nix profile` steps build nothing either way. |
 | `-y` | Write the new lock, update the packages, install the Flatpak updates and upgrade the `nix profile` entries without asking. Needed for unattended runs. Implies `--allow-dirty`. |
-| `--allow-dirty` | Update over uncommitted changes in `flake.lock`, `flake.nix` or a package without asking. They are kept. |
+| `--allow-dirty` | Update over uncommitted changes in `flake.nix` or a package without asking. They are kept. |
 | `--report <file>` | Append a Markdown report (moved inputs, reviews, build results, one block per updated package, the Flatpak table with the commands to go back, the upgraded `nix profile` entries) to this file. Created if missing. |
 
 Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is asked again. What was typed while nixup was busy, such as an Enter pressed during a build, is dropped before each question.
@@ -125,9 +125,9 @@ Questions take `y` or `yes`, `n` or `no`; Enter is no, and anything else is aske
 
 The input step, in order:
 
-1. If `flake.lock` has uncommitted changes, ask `flake.lock has uncommitted changes (nixpkgs, home-manager). Update on top of them? They are kept. [y/N]`. The names are the inputs your working `flake.lock` already moved since the last commit; the parenthesis is left out when nixup cannot tell. A no prints `Skipped.` and ends the step; the other steps still run. With `--allow-dirty` or `-y` there is no question, only `flake.lock has uncommitted changes (...): updating on top of them; they are kept.` The update then starts from your working `flake.lock`, so the changes shown are only what nixup moved.
+1. If `flake.lock` has uncommitted changes, go on without asking: nothing is lost, the update starts from your working `flake.lock` and the changes shown are only what nixup moved. When the result will also carry inputs this update does not cover, say so: `flake.lock already has uncommitted changes (holded-tt): they stay, and this update goes on top.` The names are the inputs your working `flake.lock` moved since the last commit (`git show HEAD:flake.lock`) and that you did not name; without names every input is covered and nothing is printed. When nixup cannot tell what changed, the line has no names.
 2. Look for inputs pinned to a release tag (`v1.6.2`, `1.2.0`, `dms/1.11.6`) with a newer tag upstream, among the named inputs or, without names, among all of them. Without names, a likely breaking jump is left alone: `dms v1.6.2 -> v2.1.2 is a likely breaking jump: left alone. Run nixup update dms to move it.` Named, it moves.
-3. If a tag will move and `flake.nix` has uncommitted changes, ask `flake.nix has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and ends the step. `--allow-dirty` and `-y` skip the question, as for `flake.lock`.
+3. If a tag will move and `flake.nix` has uncommitted changes, ask `flake.nix has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and ends the step. `--allow-dirty` and `-y` skip the question.
 4. Copy the working tree to a temporary directory. For each tag that moves, replace it in the copy's `flake.nix` and print `Moving the dms tag in flake.nix: v1.6.2 -> v2.1.2`, followed by `⚠ MAJOR version jump: read the changelog, expect breaking changes` for a likely breaking jump. Then run `nix flake update --flake <copy> [input...]` there.
 5. If nothing changed, print `flake.lock is already up to date.` and stop.
 6. If a moved input is not pinned to its new tag in the new lock, stop with exit code 2: `after the edit, flake.lock pins dms to "v1.6.2", not v2.1.2: nothing written`.

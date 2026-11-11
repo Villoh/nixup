@@ -81,7 +81,7 @@ Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada l
 
 ### El paso de inputs
 
-1. Si `git diff --quiet -- flake.lock` detecta cambios, lee el lock del último commit con `git show HEAD:flake.lock` para nombrar los inputs que ya se han movido, y pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0. Si dices que sí, la actualización se hace sobre el `flake.lock` de trabajo, así que esos cambios se conservan y solo se enseña lo que mueve nixup.
+1. Si `git diff --quiet -- flake.lock` detecta cambios, lee el lock del último commit con `git show HEAD:flake.lock` e imprime una línea con los inputs ya movidos que esta actualización no cubre. No pregunta: la actualización se hace sobre el `flake.lock` de trabajo, así que esos cambios se conservan y solo se enseña lo que mueve nixup.
 2. Para cada input del alcance (los nombres que hayas dado, o todos) fijado a un tag de release, lista sus tags igual que `check`. Si hay un tag más nuevo, el tag del input se moverá. Si no se pueden listar los tags, el tag se queda como está y nixup lo dice. Sin nombres, un salto que pinta a cambio incompatible se deja donde está y se avisa; con el nombre del input se mueve, con el aviso.
 3. Si se va a mover algún tag y `git diff --quiet -- flake.nix` detecta cambios, pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0.
 4. Crea un directorio temporal y copia en él todos los archivos que lista `git ls-files --cached --others --exclude-standard`: los archivos versionados con sus cambios sin commitear, más los archivos sin versionar que no están ignorados. Se saltan los enlaces simbólicos y los archivos borrados del árbol de trabajo. Esta es la copia temporal.
@@ -139,7 +139,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git ls-remote https://github.com/<repo> <ref>` | inputs de rama |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), copia temporal |
 | `git diff --quiet -- <path>` | update (inputs y paquetes) |
-| `git show HEAD:flake.lock` | update (inputs), para nombrar lo que ya ha movido un `flake.lock` sin commitear |
+| `git show HEAD:flake.lock` | update (inputs), para nombrar lo que un `flake.lock` sin commitear lleva además de la actualización |
 | `git diff -- <dir del paquete>` | update (paquetes), tras un éxito |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |

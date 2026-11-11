@@ -81,7 +81,7 @@ The input and package steps only edit files in your repository; nothing reaches 
 
 ### The input step
 
-1. If `git diff --quiet -- flake.lock` reports changes, read the committed lock with `git show HEAD:flake.lock` to name the inputs already moved, and ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0. On yes the update runs on top of the working `flake.lock`, so those changes are kept and only what nixup moves is shown.
+1. If `git diff --quiet -- flake.lock` reports changes, read the committed lock with `git show HEAD:flake.lock` and print one line naming the inputs already moved that this update does not cover. There is no question: the update runs on top of the working `flake.lock`, so those changes are kept and only what nixup moves is shown.
 2. For each input in scope (the names you gave, or every input) pinned to a release tag, list its tags as `check` does. If a newer tag exists, the input's tag will move. If the tags cannot be listed, the tag stays and nixup says so. Without names, a likely breaking jump is left alone and reported; with the input's name it moves, with the warning.
 3. If a tag will move and `git diff --quiet -- flake.nix` reports changes, ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0.
 4. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
@@ -139,7 +139,7 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `git ls-remote https://github.com/<repo> <ref>` | branch inputs |
 | `git ls-files -z --cached --others --exclude-standard` | update (inputs), scratch copy |
 | `git diff --quiet -- <path>` | update (inputs and packages) |
-| `git show HEAD:flake.lock` | update (inputs), to name what an uncommitted `flake.lock` already moved |
+| `git show HEAD:flake.lock` | update (inputs), to name what an uncommitted `flake.lock` carries besides the update |
 | `git diff -- <pkg dir>` | update (packages), after a success |
 | `nix eval --json .#packages.<system> --apply ...` | packages, update |
 | `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |

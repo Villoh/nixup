@@ -206,13 +206,15 @@ func TestUpdateParsesFlagsAfterInputs(t *testing.T) {
 }
 
 func TestUpdateAllowDirty(t *testing.T) {
-	f := newFixture(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#aaa"})
-	f.e.Run.On(run.Rule{Prefix: "git ls-files -z", Out: "flake.nix\x00flake.lock\x00"})
+	f := newFixture(t, nil)
+	os.MkdirAll(filepath.Join(f.repo, "packages/padpoll"), 0o755)
+	os.WriteFile(filepath.Join(f.repo, "packages/padpoll/package.nix"), []byte("{}"), 0o644)
 	f.e.Run.On(run.Rule{Prefix: "git diff --quiet", Fail: errors.New("dirty")})
-	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: "{}"})
-	f.run("update", "nixpkgs", "--allow-dirty", "--no-build", "-C", f.repo)
-	if !strings.Contains(f.out.String(), "updating on top of them; they are kept.") || f.e.Run.Count("nix flake update") != 1 {
-		t.Errorf("--allow-dirty goes on without asking:\n%s%s", f.out, f.errb)
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json .#packages.", Out: `{"padpoll":{"position":"/nix/store/x-source/packages/padpoll/package.nix:1","version":"1.0.0","urls":["https://github.com/o/padpoll/x"],"homepage":"","update":["nix-update"]}}`})
+	f.e.Tags("o/padpoll", "v1.0.0", "v1.1.0")
+	f.run("update", "padpoll", "--allow-dirty", "--no-build", "-C", f.repo) // no terminal: only the update question says no
+	if s := f.out.String(); !strings.Contains(s, "packages/padpoll has uncommitted changes: updating on top of them; they are kept.") || strings.Contains(s, "Update on top") {
+		t.Errorf("--allow-dirty goes on over a dirty package without asking:\n%s%s", s, f.errb)
 	}
 }
 

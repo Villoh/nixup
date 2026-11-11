@@ -468,22 +468,30 @@ func TestLockNothingChanged(t *testing.T) {
 
 func TestLockDirtyLock(t *testing.T) {
 	dirty := run.Rule{Prefix: "git diff --quiet -- flake.lock", Fail: errors.New("exit 1")}
-	head := run.Rule{Prefix: "git show HEAD:flake.lock", Out: lockJSON(strings.Repeat("0", 40))}
-	f := lockFixture(t, "n\n", dirty, head)
-	if code := f.u.Lock(update.LockOpts{Repo: f.repo}); code != exit.OK || f.called("nix flake update") || f.lock() != lockJSON(oldRev) {
-		t.Errorf("a no leaves it alone, without even running the update: code %d", code)
+	head := run.Rule{Prefix: "git show HEAD:flake.lock", Out: lockJSON(strings.Repeat("0", 40))} // nixpkgs moved since
+	note := "flake.lock already has uncommitted changes"
+
+	f := lockFixture(t, "", dirty, head)
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo, Inputs: []string{"home-manager"}, NoBuild: true}); code != exit.OK || !f.called("nix flake update") {
+		t.Errorf("no question: it goes on, code %d", code)
 	}
-	if !strings.Contains(f.out.String(), "flake.lock has uncommitted changes (nixpkgs). Update on top of them? They are kept. [y/N]") {
-		t.Errorf("names the inputs already moved:\n%s", f.out)
+	if s := f.out.String(); !strings.Contains(s, note+" (nixpkgs): they stay, and this update goes on top.") || strings.Contains(s, "[y/N] Skipped") {
+		t.Errorf("names what the result carries besides this update:\n%s", s)
 	}
-	for _, o := range []update.LockOpts{{AllowDirty: true, NoBuild: true}, {Yes: true, NoBuild: true}} {
-		g := lockFixture(t, "y\n", dirty)
-		o.Repo = g.repo
-		g.u.Lock(o)
-		if s := g.out.String(); strings.Contains(s, "Update on top") || !strings.Contains(s, "flake.lock has uncommitted changes: updating on top of them; they are kept.") ||
-			!g.called("nix flake update") {
-			t.Errorf("%+v goes on and says so (no HEAD: no names):\n%s", o, s)
+	for name, scope := range map[string][]string{"the pending input itself": {"nixpkgs"}, "every input": nil} {
+		g := lockFixture(t, "", dirty, head)
+		g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: scope, NoBuild: true})
+		if strings.Contains(g.out.String(), note) {
+			t.Errorf("%s: the update covers what was pending, nothing to say:\n%s", name, g.out)
 		}
+	}
+	k := lockFixture(t, "", dirty, run.Rule{Prefix: "git show HEAD:flake.lock", Out: lockJSON(oldRev)}) // only non-direct nodes moved
+	if k.u.Lock(update.LockOpts{Repo: k.repo, Inputs: []string{"nixpkgs"}, NoBuild: true}); !strings.Contains(k.out.String(), note+": they stay") {
+		t.Errorf("a change it cannot name is still mentioned:\n%s", k.out)
+	}
+	h := lockFixture(t, "", dirty) // no HEAD to compare with
+	if h.u.Lock(update.LockOpts{Repo: h.repo, Inputs: []string{"nixpkgs"}, NoBuild: true}); !strings.Contains(h.out.String(), note+": they stay, and this update goes on top.") {
+		t.Errorf("when it cannot tell what changed, it says so without names:\n%s", h.out)
 	}
 }
 
