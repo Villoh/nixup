@@ -17,6 +17,16 @@ lang: es
 nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original es `github`. Se saltan los inputs que solo hacen `follows` de otro, y también los de cualquier otro tipo.
 
 - **Inputs fijados a un tag de release.** Si el `ref` del input parece una versión (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lista los tags del repositorio con `git ls-remote --tags` y se queda con el más alto que tenga el mismo prefijo. Las prereleases solo cuentan si el tag actual ya es una prerelease. `nix flake update` nunca mueve un tag, así que `nixup update` lo cambia en `flake.nix` (ver [El paso de inputs](#el-paso-de-inputs)). Un tag desactualizado tiene `nixup update <nombre>` como acción; uno al día dice `pinned tag`.
+- **Inputs que siguen a un paquete de nixpkgs.** Algunos flakes solo se usan por lo que añaden a un paquete que viene de nixpkgs, como un módulo de Home Manager. Ese input debe quedarse en la versión que empaqueta nixpkgs, no en la más nueva de upstream. Márcalo en `flake.nix` con un comentario encima del input; puede haber otros comentarios y líneas en blanco en medio:
+
+  ```nix
+  # nixup: follows nixpkgs#dux-shell
+  dms = {
+    url = "github:duxlabs-dev/dux-shell/v2.1.1";
+  };
+  ```
+
+  nixup lee la versión de ese atributo en el nixpkgs que bloquea tu flake, con la misma evaluación que la [pista de nixpkgs](#packages). Si es más nueva que el tag fijado, la fila sale desactualizada, con el tag de upstream de esa versión como el más reciente, y `nixup update` mueve el tag ahí. Si no, la fila es `ok` (`follows nixpkgs dux-shell 2.1.1`), o `info` cuando upstream ya tiene un tag más nuevo (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) o el tag va por delante de nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Sin un input `nixpkgs`, sin ese atributo en nixpkgs o sin un tag de upstream para su versión, la fila es un error. La marca solo se aplica a inputs fijados a un tag.
 - **Inputs de rama.** Cualquier otro `ref`, o ninguno, es una rama. nixup pide a `git ls-remote` el último commit de esa rama (o `HEAD` si no hay `ref`) y lo compara con el commit bloqueado. La columna actual muestra el commit bloqueado y su antigüedad en días.
 
 ### packages
@@ -46,7 +56,7 @@ nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee 
   passthru.nixup.versionUrl = "https://versions.brave.com/latest/origin-release-linux-x64.version";
   ```
 
-  `pinned` y `versionUrl` son los únicos atributos propios de nixup.
+  `pinned` y `versionUrl` son los únicos atributos propios de nixup; para los inputs está el comentario `# nixup: follows` de arriba.
 
 - Si el script de actualización pasa `--use-github-releases`, nixup compara con las releases publicadas en GitHub, sin contar los borradores. Si no, compara con los tags. La idea es elegir la misma versión que elegiría `nix-update`.
 - Si el script de actualización pasa `--version-regex`, nixup lee las versiones igual que nix-update: solo cuentan los tags en los que la regex encaja desde el principio, y la versión son sus grupos no vacíos unidos con `.`. Así se sigue un repositorio con varias series de tags (`desktop-v0.6.1` junto a `desktop-minimal-v0.6.1`). Sin ella, solo cuentan los tags que empiezan por un dígito o por `v` más un dígito.

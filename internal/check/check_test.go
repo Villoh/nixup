@@ -520,3 +520,81 @@ func TestPackageWithAScriptOfItsOwnSaysSo(t *testing.T) {
 		t.Errorf("a custom script must not be read as nix-update (it would say 1.102.1): %+v", row)
 	}
 }
+
+// dms follows nixpkgs' dux-shell: its tag moves to nixpkgs' version, never past it.
+const followsNix = `{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # nixup: follows nixpkgs#dux-shell
+    # (a note under the marker is fine)
+    dms = {
+      url = "github:o/dux/v2.1.1";
+    };
+    other.url = "github:o/other/v1.0.0";
+  };
+}`
+
+func followsRepo(t *testing.T, e *testutil.Env, pinned, nixpkgsVersion string) string {
+	t.Helper()
+	repo := testutil.Tree(t, map[string]string{"flake.nix": followsNix, "flake.lock": testutil.LockJSON(map[string]string{
+		"dms": "o/dux@" + pinned + "#aaa", "other": "o/other@v1.0.0#bbb", "nixpkgs": "NixOS/nixpkgs@nixos-unstable#ccc"})})
+	e.Head("NixOS/nixpkgs", "nixos-unstable", "ccc")
+	e.Tags("o/other", "v1.0.0", "v1.1.0")
+	out := `{}`
+	if nixpkgsVersion != "" {
+		out = `{"dux-shell":{"version":"` + nixpkgsVersion + `","urls":[],"homepage":""}}`
+	}
+	e.Run.On(run.Rule{Prefix: "nix eval --json --inputs-from . nixpkgs#legacyPackages.", Out: out})
+	return repo
+}
+
+func TestInputsFollowingNixpkgs(t *testing.T) {
+	for _, c := range []struct {
+		name, pinned, nixpkgs string
+		tags                  []string
+		status, latest, note  string
+	}{
+		{"same as nixpkgs, nothing newer", "v2.1.1", "2.1.1", []string{"v2.1.1"}, check.OK, "v2.1.1", "follows nixpkgs dux-shell 2.1.1"},
+		{"upstream ahead of nixpkgs: information only", "v2.1.1", "2.1.1", []string{"v2.1.1", "v2.1.2"}, check.Info, "v2.1.1", "follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2"},
+		{"nixpkgs moved: to its version, not upstream's newest", "v2.1.1", "2.1.2", []string{"v2.1.1", "v2.1.2", "v2.2.0"}, check.Outdated, "v2.1.2", "nixup update dms"},
+		{"pin ahead of nixpkgs", "v2.1.2", "2.1.1", []string{"v2.1.1", "v2.1.2"}, check.Info, "v2.1.2", "ahead of nixpkgs dux-shell 2.1.1"},
+	} {
+		e := testutil.New(t)
+		repo := followsRepo(t, e, c.pinned, c.nixpkgs)
+		e.Tags("o/dux", c.tags...)
+		rows := byName(checker(e).Inputs(repo, false))
+		if r := rows["dms"]; r.Status != c.status || r.Latest != c.latest || r.Note != c.note {
+			t.Errorf("%s: %+v", c.name, r)
+		}
+		if r := rows["other"]; r.Status != check.Outdated || r.Latest != "v1.1.0" {
+			t.Errorf("%s: an input without the marker keeps the newest tag: %+v", c.name, r)
+		}
+	}
+}
+
+func TestInputsFollowingNixpkgsProblemsAreRows(t *testing.T) {
+	e := testutil.New(t)
+	repo := followsRepo(t, e, "v2.1.1", "") // nixpkgs has no dux-shell
+	e.Tags("o/dux", "v2.1.1", "v2.1.2")
+	if r := byName(checker(e).Inputs(repo, false))["dms"]; r.Status != check.Error || !strings.Contains(r.Note, "nixpkgs has no dux-shell") {
+		t.Errorf("%+v", r)
+	}
+	g := testutil.New(t)
+	repo = followsRepo(t, g, "v2.1.1", "2.1.3")
+	g.Tags("o/dux", "v2.1.1", "v2.1.2")
+	if r := byName(checker(g).Inputs(repo, false))["dms"]; r.Status != check.Error || !strings.Contains(r.Note, "has no tag for it") {
+		t.Errorf("nixpkgs' version without an upstream tag: %+v", r)
+	}
+}
+
+func TestFollows(t *testing.T) {
+	repo := testutil.Tree(t, map[string]string{"flake.nix": followsNix + `
+# nixup: follows nixpkgs#lost
+
+# nixup: follows nixpkgs#zen
+inputs.zen.url = "github:o/zen/v1";`})
+	got, err := flake.Follows(repo)
+	if err != nil || len(got) != 2 || got["dms"] != "dux-shell" || got["zen"] != "zen" {
+		t.Errorf("%v %v", got, err)
+	}
+}

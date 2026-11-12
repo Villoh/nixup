@@ -51,7 +51,7 @@ func (u *Updater) Lock(o LockOpts) int {
 			t.Println(t.Paint("flake.lock already has uncommitted changes"+which+": they stay, and this update goes on top.", 2))
 		}
 	}
-	bumps := u.tagBumps(old, o.Inputs)
+	bumps := u.tagBumps(o.Repo, old, o.Inputs)
 	if len(bumps) > 0 && flake.Dirty(u.R, o.Repo, "flake.nix") && !u.onDirty("flake.nix", "", o.AllowDirty || o.Yes) {
 		return exit.OK
 	}
@@ -152,21 +152,32 @@ func (u *Updater) Lock(o LockOpts) int {
 // tagBump is an input pinned to a release tag that Lock moves by rewriting flake.nix.
 type tagBump struct{ input, old, new, warn string }
 
-// tagBumps are the pinned tags with a newer release. Without names a likely breaking jump
-// is left alone and only reported: it moves when you name the input.
-func (u *Updater) tagBumps(lock *flake.Lock, names []string) []tagBump {
+// tagBumps are the pinned tags with a newer release, or for an input that follows a
+// nixpkgs package, the tag of nixpkgs' version. Without names a likely breaking jump is
+// left alone and only reported: it moves when you name the input.
+func (u *Updater) tagBumps(repo string, lock *flake.Lock, names []string) []tagBump {
 	scope := names
 	if len(scope) == 0 {
 		scope = lock.Names()
 	}
+	follows := u.Check.Follows(repo, lock)
 	var bumps []tagBump
 	for _, name := range scope {
 		node, ok := lock.Input(name)
 		if !ok || !check.PinnedTag(node) {
 			continue
 		}
-		top, err := u.Check.NewerTag(node)
-		if err != nil {
+		var top string
+		var err error
+		if f, followed := follows[name]; followed {
+			if top, err = u.Check.FollowTarget(node, f); err != nil {
+				u.T.Printf("%s: %v: its tag stays.\n", name, err)
+				continue
+			}
+			if top == "" && len(names) > 0 {
+				u.T.Printf("%s follows nixpkgs %s %s: its tag stays.\n", name, f.Attr, f.Version)
+			}
+		} else if top, err = u.Check.NewerTag(node); err != nil {
 			u.T.Printf("%s: cannot list its tags (%v): its tag stays.\n", name, err)
 			continue
 		}

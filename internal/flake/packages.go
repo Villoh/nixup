@@ -246,6 +246,24 @@ func InNixpkgs(r run.Runner, repo string, pkgs []Package) (map[string][]Package,
 			}
 		}
 	}
+	m, err := queryNixpkgs(r, repo, quoted)
+	if err != nil {
+		return nil, err
+	}
+	found := map[string][]Package{}
+	for _, p := range pkgs {
+		for _, n := range nixpkgsNames(p.Name) {
+			if q, ok := m[n]; ok {
+				q.Name = n
+				found[p.Name] = append(found[p.Name], q)
+			}
+		}
+	}
+	return found, nil
+}
+
+// queryNixpkgs evaluates the quoted attributes in the locked nixpkgs (see InNixpkgs).
+func queryNixpkgs(r run.Runner, repo string, quoted []string) (map[string]Package, error) {
 	if len(quoted) == 0 {
 		return nil, nil
 	}
@@ -258,16 +276,29 @@ func InNixpkgs(r run.Runner, repo string, pkgs []Package) (map[string][]Package,
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		return nil, fmt.Errorf("looking packages up in nixpkgs: %w", err)
 	}
-	found := map[string][]Package{}
-	for _, p := range pkgs {
-		for _, n := range nixpkgsNames(p.Name) {
-			if q, ok := m[n]; ok {
-				q.Name = n
-				found[p.Name] = append(found[p.Name], q)
-			}
+	return m, nil
+}
+
+// NixpkgsVersions is the version of each attribute in the nixpkgs the flake locks. A
+// missing attribute is left out. Same caveat as InNixpkgs: only with a nixpkgs input.
+func NixpkgsVersions(r run.Runner, repo string, attrs []string) (map[string]string, error) {
+	var quoted []string
+	for _, a := range attrs {
+		if attrName.MatchString(a) {
+			quoted = append(quoted, strconv.Quote(a))
 		}
 	}
-	return found, nil
+	m, err := queryNixpkgs(r, repo, quoted)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for a, p := range m {
+		if p.Version != "" {
+			out[a] = p.Version
+		}
+	}
+	return out, nil
 }
 
 // SameProject reports whether two packages are positively the same software: they share a

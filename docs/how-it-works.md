@@ -17,6 +17,16 @@ lang: en
 nixup reads `flake.lock` and looks at the direct inputs of your flake whose original type is `github`. Inputs that only `follows` another one are skipped, and so are inputs of any other type.
 
 - **Inputs pinned to a release tag.** If the input's `ref` looks like a version (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lists the repository's tags with `git ls-remote --tags` and takes the highest one with the same prefix. Prereleases are only considered when the current tag is a prerelease. `nix flake update` never moves a tag, so `nixup update` rewrites it in `flake.nix` (see [The input step](#the-input-step)). An outdated tag has `nixup update <name>` as its action; an up-to-date one says `pinned tag`.
+- **Inputs that follow a nixpkgs package.** Some flakes are used only for what they add to a package that comes from nixpkgs, such as a Home Manager module. Such an input should stay at the version nixpkgs packages, not at upstream's newest. Mark it in `flake.nix` with a comment above the input; other comments and blank lines may sit in between:
+
+  ```nix
+  # nixup: follows nixpkgs#dux-shell
+  dms = {
+    url = "github:duxlabs-dev/dux-shell/v2.1.1";
+  };
+  ```
+
+  nixup reads that attribute's version in the nixpkgs your flake locks, the same evaluation as the [nixpkgs hint](#packages). If it is newer than the pinned tag, the row is outdated with the upstream tag of that version as the latest, and `nixup update` moves the tag there. Otherwise the row is `ok` (`follows nixpkgs dux-shell 2.1.1`), or `info` when upstream already has a newer tag (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) or the pin is ahead of nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Without a `nixpkgs` input, without that attribute in nixpkgs, or without an upstream tag for its version, the row is an error. The marker applies only to inputs pinned to a tag.
 - **Branch inputs.** Any other `ref`, or none, is a branch. nixup asks `git ls-remote` for the head of that branch (or `HEAD` when there is no `ref`) and compares it with the locked commit. The current column shows the locked commit and its age in days.
 
 ### packages
@@ -46,7 +56,7 @@ nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each
   passthru.nixup.versionUrl = "https://versions.brave.com/latest/origin-release-linux-x64.version";
   ```
 
-  `pinned` and `versionUrl` are the only nixup-specific attributes.
+  `pinned` and `versionUrl` are the only nixup-specific attributes; for inputs there is the `# nixup: follows` comment above.
 
 - If the update script passes `--use-github-releases`, nixup compares against published GitHub releases, ignoring drafts. Otherwise it compares against tags. The aim is to pick the same version `nix-update` would.
 - If the update script passes `--version-regex`, nixup reads versions the same way: only tags the regex matches from their start count, and the version is its non-empty groups joined with `.`. That is how a repository with several tag series (`desktop-v0.6.1` next to `desktop-minimal-v0.6.1`) is followed. Without it, only tags that start with a digit or `v` plus a digit count.

@@ -127,10 +127,106 @@ func (c *Checker) Inputs(repo string, review bool) []Row {
 			names = append(names, n)
 		}
 	}
+	follows := c.Follows(repo, lock)
 	return par.Map(len(names), workers, func(i int) Row {
 		node, _ := lock.Input(names[i])
+		if f, ok := follows[names[i]]; ok && PinnedTag(node) {
+			return c.followedInput(names[i], node, f, review)
+		}
 		return c.input(names[i], node, review)
 	})
+}
+
+// Follow is an input pinned to a tag that follows a nixpkgs package (a `# nixup: follows
+// nixpkgs#<attr>` comment in flake.nix): the flake provides a module for the package
+// nixpkgs builds, so the tag moves to nixpkgs' version, not to upstream's newest.
+type Follow struct {
+	Attr    string
+	Version string // in the locked nixpkgs
+	Err     string // why the version is unknown
+}
+
+// Follows are the followed inputs of the flake, with their package's version in the
+// nixpkgs it locks. Problems are kept per input, so each row can say why.
+func (c *Checker) Follows(repo string, lock *flake.Lock) map[string]Follow {
+	m, err := flake.Follows(repo)
+	if err != nil || len(m) == 0 {
+		return nil
+	}
+	out := map[string]Follow{}
+	var attrs []string
+	for name, attr := range m {
+		out[name] = Follow{Attr: attr}
+		attrs = append(attrs, attr)
+	}
+	var versions map[string]string
+	if _, ok := lock.Input("nixpkgs"); !ok {
+		err = fmt.Errorf("the flake has no nixpkgs input")
+	} else {
+		versions, err = flake.NixpkgsVersions(c.R, repo, attrs)
+	}
+	for name, f := range out {
+		switch {
+		case err != nil:
+			f.Err = err.Error()
+		case versions[f.Attr] == "":
+			f.Err = "nixpkgs has no " + f.Attr
+		default:
+			f.Version = versions[f.Attr]
+		}
+		out[name] = f
+	}
+	return out
+}
+
+// FollowTarget is the tag a followed input moves to: the upstream tag of nixpkgs' version
+// when it is newer than the pinned one, else "".
+func (c *Checker) FollowTarget(node flake.Node, f Follow) (string, error) {
+	if f.Err != "" {
+		return "", fmt.Errorf("follows nixpkgs#%s: %s", f.Attr, f.Err)
+	}
+	ref := node.Original.Ref
+	if !ver.Newer(f.Version, ref) {
+		return "", nil
+	}
+	repo := node.Original.Owner + "/" + node.Original.Repo
+	tags, err := c.GH.Tags(repo)
+	if err != nil {
+		return "", err
+	}
+	prefix := ver.Prefix(ref)
+	for _, t := range tags {
+		if ver.HasPrefix(t, prefix) && ver.Strip(t[len(prefix):]) == f.Version {
+			return t, nil
+		}
+	}
+	return "", fmt.Errorf("nixpkgs has %s %s, but %s has no tag for it", f.Attr, f.Version, repo)
+}
+
+func (c *Checker) followedInput(name string, node flake.Node, f Follow, review bool) Row {
+	ref := node.Original.Ref
+	target, err := c.FollowTarget(node, f)
+	if err != nil {
+		return errRow("inputs", name, err)
+	}
+	what := "nixpkgs " + f.Attr + " " + f.Version
+	if target != "" {
+		row := Row{Section: "inputs", Name: name, Current: ref, Latest: target, Status: Outdated,
+			Note: "nixup update " + name, Warn: ver.Bump(ref, target).Warning()}
+		if review {
+			row.Review = c.GH.Review(node.Original.Owner+"/"+node.Original.Repo, ref, target, true)
+		}
+		return row
+	}
+	row := Row{Section: "inputs", Name: name, Current: ref, Latest: ref, Status: OK, Note: "follows " + what}
+	if ver.Newer(ref, f.Version) {
+		row.Status, row.Note = Info, "ahead of "+what
+		return row
+	}
+	if top, err := c.NewerTag(node); err == nil && top != "" {
+		row.Status, row.Note = Info, "follows "+what+"; upstream has "+top
+	}
+	return row
 }
 
 // PinnedTag reports whether a GitHub input is pinned to a release tag, which

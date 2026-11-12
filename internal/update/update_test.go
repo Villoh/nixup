@@ -1168,3 +1168,26 @@ func TestPkgFollowsTheVersionURL(t *testing.T) {
 		t.Errorf("nixup runs nix-update itself, never the package's script: %v", f.e.Run.Calls())
 	}
 }
+
+// An input that follows a nixpkgs package moves to nixpkgs' version, not upstream's newest.
+func TestLockMovesAFollowedTagToNixpkgs(t *testing.T) {
+	nix := "{ inputs = {\n  # nixup: follows nixpkgs#dms\n  dms.url = \"github:o/dms/v1.0.0\";\n}; }"
+	f := tagFixture(t, "y\n", nix, "v1.0.0", "v1.1.0", "v1.2.0")
+	f.e.Run.On(run.Rule{Prefix: "nix eval --json --inputs-from . nixpkgs#legacyPackages.", Out: `{"dms":{"version":"1.1.0"}}`})
+	if code := f.u.Lock(update.LockOpts{Repo: f.repo}); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); !strings.Contains(string(b), "github:o/dms/v1.1.0") {
+		t.Errorf("flake.nix: %s", b)
+	}
+
+	g := tagFixture(t, "", nix, "v1.0.0", "v1.2.0")
+	g.e.Run.On(run.Rule{Prefix: "nix eval --json --inputs-from . nixpkgs#legacyPackages.", Out: `{"dms":{"version":"1.0.0"}}`})
+	g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: []string{"dms"}, Yes: true})
+	if b, _ := os.ReadFile(filepath.Join(g.repo, "flake.nix")); !strings.Contains(string(b), "github:o/dms/v1.0.0") {
+		t.Errorf("named, at nixpkgs' version: the tag stays: %s", b)
+	}
+	if !strings.Contains(g.out.String(), "dms follows nixpkgs dms 1.0.0: its tag stays.") {
+		t.Errorf("%s", g.out)
+	}
+}
