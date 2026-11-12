@@ -5,6 +5,7 @@ package gh
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -66,6 +67,28 @@ func (c *Client) Get(path string, v any) error {
 		return fmt.Errorf("github %s: %s", path, resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(v)
+}
+
+// Text fetches url and returns its first line, trimmed: a version file such as
+// https://versions.brave.com/latest/origin-release-linux-x64.version.
+func (c *Client) Text(url string) (string, error) {
+	resp, err := c.HTTP.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return "", err
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
+	if line = strings.TrimSpace(line); line == "" || strings.ContainsAny(line, " \t<") {
+		return "", fmt.Errorf("%s: not a version: %q", url, line)
+	}
+	return line, nil
 }
 
 var repoRe = regexp.MustCompile(`github\.com[/:]([^/]+)/([^/#?]+?)(?:\.git)?(?:/|$)`)

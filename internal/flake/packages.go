@@ -22,6 +22,9 @@ type Package struct {
 	Update   []string `json:"update"`   // passthru.updateScript command line, if any
 	Position string   `json:"position"` // meta.position: "<store path>/<file>:<line>"
 	Pinned   string   `json:"pinned"`   // passthru.nixup.pinned: why it is kept where it is
+	// passthru.nixup.versionUrl: a URL whose body is the latest version, for packages
+	// whose updateScript reads it from somewhere nix-update cannot (a release channel).
+	VersionURL string `json:"versionUrl"`
 }
 
 const packagesQuery = `ps: builtins.mapAttrs (n: p: {
@@ -30,9 +33,10 @@ const packagesQuery = `ps: builtins.mapAttrs (n: p: {
   homepage = p.meta.homepage or "";
   position = p.meta.position or "";
   pinned = p.passthru.nixup.pinned or "";
-  update = if p ? passthru && p.passthru ? updateScript
-    then map toString (if builtins.isList p.passthru.updateScript then p.passthru.updateScript else p.passthru.updateScript.command or [])
-    else [];
+  versionUrl = p.passthru.nixup.versionUrl or "";
+  update = let u = p.passthru.updateScript or null; in
+    if u == null then []
+    else map toString (if builtins.isList u then u else if u ? command then u.command else [ u ]);
 }) ps`
 
 // Packages evaluates the flake's own packages. A flake without a packages output has none.
@@ -125,6 +129,12 @@ func (p Package) Upstream() string {
 		}
 	}
 	return ""
+}
+
+// NixUpdate reports whether the update script runs nix-update, whose flags nixup reads.
+// A script of its own (writeShellScript, a path) says nothing nixup can use.
+func (p Package) NixUpdate() bool {
+	return len(p.Update) > 0 && strings.HasPrefix(filepath.Base(p.Update[0]), "nix-update")
 }
 
 // UsesReleases reports whether the package's update script asks nix-update to follow

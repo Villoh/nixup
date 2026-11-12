@@ -3,6 +3,9 @@ package update_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1148,5 +1151,20 @@ func TestActivationBuildsOnlyItsHost(t *testing.T) {
 	g.u.Update(update.Opts{Repo: g.repo, Sources: []string{"input"}, Build: true, Yes: true})
 	if g.e.Run.Count("nh os build") != 2 {
 		t.Errorf("--build alone builds every host: %v", g.e.Run.Calls())
+	}
+}
+
+// A package with its own updateScript and a versionUrl is still updated by nix-update,
+// pinned to the version the URL serves (nix-update then only rewrites version and hash).
+func TestPkgFollowsTheVersionURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "1.1.0\n") }))
+	t.Cleanup(srv.Close)
+	json := strings.Replace(padpollJSON, `"update":["nix-update"]`, `"update":["/nix/store/x-update-padpoll"],"versionUrl":"`+srv.URL+`"`, 1)
+	f := pkgFixture(t, "y\n", run.Rule{Prefix: "nix eval --json .#packages.", Out: json})
+	if code := f.u.Pkg(update.PkgOpts{Repo: f.repo}); code != exit.OK {
+		t.Fatalf("code %d\n%s%s", code, f.out, f.errb)
+	}
+	if !f.called("nix-update --flake padpoll --version=1.1.0") || f.called("x-update-padpoll") {
+		t.Errorf("nixup runs nix-update itself, never the package's script: %v", f.e.Run.Calls())
 	}
 }

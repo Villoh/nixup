@@ -21,7 +21,7 @@ nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original
 
 ### packages
 
-nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee de cada paquete `version`, `src.urls`, `meta.homepage`, `passthru.updateScript` y `passthru.nixup.pinned`.
+nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee de cada paquete `version`, `src.urls`, `meta.homepage`, `passthru.updateScript`, `passthru.nixup.pinned` y `passthru.nixup.versionUrl`.
 
 - El repositorio de origen es el primer `github.com/<owner>/<repo>` que aparezca en el `--url` del script de actualización, después en las URLs del código fuente y, si no, en la homepage. `--url` es como nix-update encuentra las versiones de un código alojado en otro sitio, así que un tarball del servidor propio del proyecto puede seguir los tags de su repositorio de GitHub:
 
@@ -33,11 +33,20 @@ nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee 
 
   Si no hay ninguno, el paquete sale como `info` con `no GitHub upstream: check by hand`.
 - Sin `passthru.updateScript`, el paquete sale como `info` con `no passthru.updateScript`, porque `nixup update` no podría actualizarlo.
-- Un paquete que se queda donde está a propósito puede decirlo con `passthru.nixup.pinned`, un motivo. Entonces nixup no consulta nada: la fila es `ok`, se oculta sin `--all` y `NOTE` muestra `pinned: <motivo>`. Es el único atributo propio de nixup, pensado para un código sin versiones que seguir, como un único fichero de un commit de un repositorio:
+- nixup lee las opciones de un script de actualización que ejecuta nix-update. Un script propio (`writeShellScript`, una ruta) sale como `info` con `updateScript is not nix-update: set passthru.nixup.versionUrl`, porque sus versiones podrían venir de cualquier sitio.
+- Un paquete que se queda donde está a propósito puede decirlo con `passthru.nixup.pinned`, un motivo. Entonces nixup no consulta nada: la fila es `ok`, se oculta sin `--all` y `NOTE` muestra `pinned: <motivo>`. Está pensado para un código sin versiones que seguir, como un único fichero de un commit de un repositorio:
 
   ```nix
   passthru.nixup.pinned = "a font file at a plugin commit; bump it when the font changes";
   ```
+
+- Un paquete cuyas versiones no son los tags ni las releases de su repositorio puede indicar una URL cuyo contenido es la última versión, en `passthru.nixup.versionUrl`. nixup lee la primera línea y la compara con `version`, y `update` ejecuta nix-update fijado a esa versión, como con cualquier paquete. La revisión sigue comparando los tags de GitHub de las dos versiones cuando el paquete tiene un repositorio en GitHub. Brave, por ejemplo, etiqueta igual sus builds Release, Beta y Nightly, y publica aparte la versión de cada canal:
+
+  ```nix
+  passthru.nixup.versionUrl = "https://versions.brave.com/latest/origin-release-linux-x64.version";
+  ```
+
+  `pinned` y `versionUrl` son los únicos atributos propios de nixup.
 
 - Si el script de actualización pasa `--use-github-releases`, nixup compara con las releases publicadas en GitHub, sin contar los borradores. Si no, compara con los tags. La idea es elegir la misma versión que elegiría `nix-update`.
 - Si el script de actualización pasa `--version-regex`, nixup lee las versiones igual que nix-update: solo cuentan los tags en los que la regex encaja desde el principio, y la versión son sus grupos no vacíos unidos con `.`. Así se sigue un repositorio con varias series de tags (`desktop-v0.6.1` junto a `desktop-minimal-v0.6.1`). Sin ella, solo cuentan los tags que empiezan por un dígito o por `v` más un dígito.

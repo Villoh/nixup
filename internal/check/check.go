@@ -221,6 +221,27 @@ func nixpkgsHint(row Row, p flake.Package, candidates []flake.Package) Row {
 	return row
 }
 
+// packageFromURL compares a package with the version its passthru.nixup.versionUrl
+// serves. The review, as for any package, compares the GitHub tags of both versions.
+func (c *Checker) packageFromURL(p flake.Package, id string, review bool) Row {
+	row := Row{Section: "packages", Name: p.Name, Current: p.Version}
+	latest, err := c.GH.Text(p.VersionURL)
+	if err != nil {
+		return errRow("packages", p.Name, err)
+	}
+	if !ver.Newer(latest, p.Version) {
+		row.Status = OK
+		return row
+	}
+	row.Latest, row.Status = latest, Outdated
+	row.Warn = ver.Bump(p.Version, latest).Warning()
+	row.Note = "nixup update " + p.Name
+	if review && id != "" {
+		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version, nil), c.GH.TagFor(id, latest, nil), true)
+	}
+	return row
+}
+
 // Package compares one package with the newest upstream release.
 func (c *Checker) Package(p flake.Package, review bool) Row {
 	row := Row{Section: "packages", Name: p.Name, Current: p.Version}
@@ -229,11 +250,16 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 	case p.Pinned != "": // kept on purpose: nothing to look up
 		row.Status, row.Note = OK, "pinned: "+p.Pinned
 		return row
+	case p.VersionURL != "":
+		return c.packageFromURL(p, id, review)
 	case id == "":
 		row.Status, row.Note = Info, "no GitHub upstream: check by hand"
 		return row
 	case len(p.Update) == 0:
 		row.Status, row.Note = Info, "no passthru.updateScript"
+		return row
+	case !p.NixUpdate():
+		row.Status, row.Note = Info, "updateScript is not nix-update: set passthru.nixup.versionUrl"
 		return row
 	}
 	_, allowPre := p.ExtraArgs()

@@ -17,7 +17,7 @@ lang: es
 ## Solo lo que expone el flake
 
 - La sección `packages` lee la salida `packages.<system>` del propio flake, para el sistema en el que se ejecuta nixup. Un `fetchurl` dentro de un módulo, un `rev` fijado en un overlay o un paquete definido solo para otro sistema son invisibles. Mételo en la salida `packages` si quieres que se compruebe.
-- Un paquete necesita `passthru.updateScript` para que se compruebe. Si no lo tiene, nixup lo marca como `info` con `no passthru.updateScript`.
+- Un paquete necesita `passthru.updateScript` para que se compruebe. Si no lo tiene, nixup lo marca como `info` con `no passthru.updateScript`. Un script de actualización que no ejecuta nix-update necesita además `passthru.nixup.versionUrl`.
 - `nixup update` protege y restaura el directorio del archivo que define cada paquete, sacado de su `meta.position`. Un paquete sin `meta.position`, o definido fuera de este flake, se rechaza.
 - Los inputs transitivos no se comprueban. `update` los actualiza junto con todo lo demás y solo dice cuántos se han movido.
 

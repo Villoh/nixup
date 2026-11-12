@@ -2,6 +2,9 @@ package check_test
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -444,5 +447,76 @@ func TestPackageFollowsVersionRegex(t *testing.T) {
 	}
 	if row.Review == nil || row.Review.From != "desktop-v0.6.1" || row.Review.To != "desktop-v0.7.0" {
 		t.Errorf("the review compares the real tags: %+v", row.Review)
+	}
+}
+
+// versionServer serves body at /version, the way versions.brave.com serves a channel.
+func versionServer(t *testing.T, status int, body string) string {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL + "/version"
+}
+
+// Brave tags Release, Beta and Nightly builds alike: GitHub would say 1.102.1, the release
+// channel says 1.99.56. passthru.nixup.versionUrl makes nixup read the channel.
+func TestPackageReadsTheVersionURL(t *testing.T) {
+	e := testutil.New(t)
+	e.Tags("brave/brave-browser", "v1.99.55", "v1.99.56", "v1.102.1")
+	e.Compare("brave/brave-browser", "v1.99.55", "v1.99.56", 4, "Release v1.99.56")
+	p := flake.Package{Name: "brave-origin", Version: "1.99.55",
+		URLs:       []string{"https://github.com/brave/brave-browser/releases/download/v1.99.55/brave-origin_1.99.55_amd64.deb"},
+		Update:     []string{"/nix/store/x-update-brave-origin"},
+		VersionURL: versionServer(t, 200, "1.99.56\n")}
+	row := checker(e).Package(p, true)
+	if row.Status != check.Outdated || row.Latest != "1.99.56" || row.Note != "nixup update brave-origin" {
+		t.Fatalf("%+v", row)
+	}
+	if row.Review == nil || row.Review.Commits != 4 {
+		t.Errorf("the review compares the two version tags: %+v", row.Review)
+	}
+
+	p.Version = "1.99.56"
+	if row := checker(e).Package(p, false); row.Status != check.OK || row.Latest != "" {
+		t.Errorf("same version: %+v", row)
+	}
+	p.Version = "1.99.57"
+	if row := checker(e).Package(p, false); row.Status != check.OK {
+		t.Errorf("a version newer than the channel is not an update: %+v", row)
+	}
+}
+
+func TestPackageVersionURLNeedsNoGitHubUpstream(t *testing.T) {
+	e := testutil.New(t)
+	noUpstream := flake.Package{Name: "y", Version: "1.0.0", VersionURL: versionServer(t, 200, "1.1.0")}
+	if row := checker(e).Package(noUpstream, true); row.Status != check.Outdated || row.Review != nil {
+		t.Errorf("no GitHub upstream is fine with a versionUrl: %+v", row)
+	}
+}
+
+func TestPackageVersionURLFailuresAreRows(t *testing.T) {
+	e := testutil.New(t)
+	for name, url := range map[string]string{
+		"404":   versionServer(t, 404, "1.1.0"),
+		"html":  versionServer(t, 200, "<html><body>moved</body></html>"),
+		"empty": versionServer(t, 200, "  \n"),
+	} {
+		p := flake.Package{Name: "x", Version: "1.0.0", VersionURL: url}
+		if row := checker(e).Package(p, false); row.Status != check.Error {
+			t.Errorf("%s: %+v", name, row)
+		}
+	}
+}
+
+func TestPackageWithAScriptOfItsOwnSaysSo(t *testing.T) {
+	e := testutil.New(t)
+	e.Tags("brave/brave-browser", "v1.99.55", "v1.102.1")
+	p := flake.Package{Name: "brave-origin", Version: "1.99.55", Homepage: "https://github.com/brave/brave-browser",
+		Update: []string{"/nix/store/x-update-brave-origin"}}
+	row := checker(e).Package(p, false)
+	if row.Status != check.Info || !strings.Contains(row.Note, "passthru.nixup.versionUrl") {
+		t.Errorf("a custom script must not be read as nix-update (it would say 1.102.1): %+v", row)
 	}
 }

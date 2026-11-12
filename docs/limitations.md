@@ -17,7 +17,7 @@ lang: en
 ## Only what the flake exposes
 
 - The `packages` section reads the flake's own `packages.<system>` output, for the system nixup runs on. A `fetchurl` inside a module, a pinned `rev` in an overlay, or a package defined only for another system is invisible. Move it into the `packages` output to have it checked.
-- A package needs `passthru.updateScript` to be checked. Without it nixup reports `info` with `no passthru.updateScript`.
+- A package needs `passthru.updateScript` to be checked. Without it nixup reports `info` with `no passthru.updateScript`. An update script that does not run nix-update needs `passthru.nixup.versionUrl` too.
 - `nixup update` guards and restores the directory of the file that defines each package, from its `meta.position`. A package without `meta.position`, or defined outside this flake, is refused.
 - Transitive inputs are not checked. `update` updates them with everything else and only reports how many moved.
 

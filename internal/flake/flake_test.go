@@ -619,3 +619,17 @@ func TestReplaceTag(t *testing.T) {
 		}
 	}
 }
+
+func TestNixUpdate(t *testing.T) {
+	for update, want := range map[string]bool{
+		"/nix/store/abc-nix-update-1.16.0/bin/nix-update --flake x": true,
+		"nix-update":                                 true,
+		"/nix/store/abc-update-brave-origin":         false,
+		"/nix/store/abc-source/packages/x/update.sh": false,
+		"": false,
+	} {
+		if got := (flake.Package{Update: strings.Fields(update)}).NixUpdate(); got != want {
+			t.Errorf("%q: %v", update, got)
+		}
+	}
+}
