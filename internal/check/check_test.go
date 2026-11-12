@@ -398,7 +398,7 @@ func TestPackagesPointsAtNixpkgs(t *testing.T) {
 	repo := repoWithLock(t, map[string]string{"nixpkgs": "NixOS/nixpkgs@#" + strings.Repeat("e", 40)})
 
 	rows := byName(checker(e).Packages(repo, false))
-	if r := rows["caught-up"]; !strings.Contains(r.Hint, "nixpkgs has caught-up 2.1.0") || r.Status != check.Info {
+	if r := rows["caught-up"]; !strings.Contains(r.Hint, "nixpkgs has caught-up 2.1.0") || r.Status != check.Info || r.Latest != r.Current {
 		t.Errorf("nixpkgs is newer: hint, shown as info: %+v", r)
 	}
 	if r := rows["tool-bin"]; !strings.Contains(r.Hint, "pkgs.tool could replace") {

@@ -311,6 +311,7 @@ func nixpkgsHint(row Row, p flake.Package, candidates []flake.Package) Row {
 		row.Hint = fmt.Sprintf("nixpkgs has %s %s: pkgs.%s could replace this package", q.Name, q.Version, q.Name)
 		if row.Status == OK {
 			row.Status = Info // shown without --all, without changing the exit code
+			row.Latest = row.Current // still up to date: All fills this only for ok rows
 		}
 		break
 	}
