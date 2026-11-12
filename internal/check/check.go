@@ -480,6 +480,10 @@ func (c *Checker) FlatpakUpdates() ([]FlatpakUpdate, error) {
 	if !c.R.Has("flatpak") {
 		return nil, nil
 	}
+	// The versions come from each remote's appstream data, which only `flatpak update`
+	// refreshes: stale, a new release shows as a new build of the old version. It only
+	// touches that cache; offline, the data stays as it was.
+	c.R.Capture("", "flatpak", "update", "--appstream", "--noninteractive")
 	out, errs, err := c.R.Capture("", "flatpak", "remote-ls", "--updates", "--columns=ref,version")
 	if err != nil {
 		return nil, fmt.Errorf("flatpak remote-ls: %s", run.LastLine(errs))

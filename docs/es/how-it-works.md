@@ -71,7 +71,7 @@ Si tienes `nix` instalado, nixup lee `nix profile list --json`. Para cada entrad
 
 ### flatpak
 
-Si tienes `flatpak` instalado, nixup ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). La acción es `nixup update <id de la app>`.
+Si tienes `flatpak` instalado, nixup refresca primero los datos appstream de los remotos (`flatpak update --appstream`), de donde salen las versiones: solo `flatpak update` los refresca, y desactualizados enseñan una release nueva como una build nueva de la versión vieja. No toca nada más, y sin conexión se usan los datos que haya. Después ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). La acción es `nixup update <id de la app>`.
 
 ## Versiones
 
@@ -186,6 +186,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `flatpak search --columns=... <nombre>` | search |
 | `flatpak list --app --columns=application` | search (qué está instalado) |
 | `flatpak list --columns=application` | update (nombres) |
+| `flatpak update --appstream --noninteractive` | flatpak, update (Flatpak), antes de listar |
 | `flatpak remote-ls --updates --columns=ref,version` | flatpak, update (Flatpak) |
 | `flatpak list --columns=ref,version` | flatpak, update (Flatpak), versiones instaladas |
 | `flatpak info --show-commit <ref>` | update (Flatpak), antes de actualizar |

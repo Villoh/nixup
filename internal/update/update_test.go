@@ -771,7 +771,7 @@ func TestFlatpakStep(t *testing.T) {
 
 func TestFlatpakStepNoAndNames(t *testing.T) {
 	f := flatpakFixture(t, "n\n")
-	if code := f.u.Flatpak(update.FlatpakOpts{}); code != exit.OK || !strings.Contains(f.out.String(), "Skipped.") || f.called("flatpak update") {
+	if code := f.u.Flatpak(update.FlatpakOpts{}); code != exit.OK || !strings.Contains(f.out.String(), "Skipped.") || f.called("flatpak update -y") {
 		t.Errorf("a no changes nothing: code %d %s", code, f.out)
 	}
 	g := flatpakFixture(t, "")
@@ -863,13 +863,13 @@ func TestUpdateRunsTheFourStepsInOrder(t *testing.T) {
 	f.u.Update(update.Opts{Repo: f.repo, Yes: true})
 	var order []string
 	for _, c := range f.e.Run.Calls() {
-		for _, step := range []string{"nix flake update", "nix-update", "flatpak update", "nix profile upgrade"} {
+		for _, step := range []string{"nix flake update", "nix-update", "flatpak update -y", "nix profile upgrade"} {
 			if strings.HasPrefix(c.String(), step) {
 				order = append(order, step)
 			}
 		}
 	}
-	if strings.Join(order, ",") != "nix flake update,nix-update,flatpak update,nix profile upgrade" {
+	if strings.Join(order, ",") != "nix flake update,nix-update,flatpak update -y,nix profile upgrade" {
 		t.Errorf("inputs, packages, flatpak, profile: %v", order)
 	}
 

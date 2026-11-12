@@ -598,3 +598,23 @@ inputs.zen.url = "github:o/zen/v1";`})
 		t.Errorf("%v %v", got, err)
 	}
 }
+
+// remote-ls reads versions from the appstream data, which goes stale until something
+// refreshes it: a new release then shows as a new build of the old version.
+func TestFlatpakRefreshesAppstreamFirst(t *testing.T) {
+	e := testutil.New(t)
+	e.Run.On(run.Rule{Prefix: "flatpak update --appstream", Fail: errors.New("offline")})
+	e.Run.On(run.Rule{Prefix: "flatpak remote-ls --updates", Out: "app/io.x.App/x86_64/stable\t2.2.0\n"})
+	e.Run.On(run.Rule{Prefix: "flatpak list", Out: "io.x.App/x86_64/stable\t2.1.10\n"})
+	rows := checker(e).Flatpak()
+	var order []string
+	for _, c := range e.Run.Calls() {
+		order = append(order, strings.Join(strings.Fields(c.String())[:2], " "))
+	}
+	if len(order) < 2 || order[0] != "flatpak update" || order[1] != "flatpak remote-ls" {
+		t.Errorf("refresh first: %v", e.Run.Calls())
+	}
+	if len(rows) != 1 || rows[0].Latest != "2.2.0" || rows[0].Status != check.Outdated {
+		t.Errorf("a failed refresh (offline) still lists the updates: %+v", rows)
+	}
+}
