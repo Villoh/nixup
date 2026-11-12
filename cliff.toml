@@ -1,6 +1,6 @@
 # Release notes for GitHub releases, built from Conventional Commits.
 # Used by .github/workflows/release.yml; try it locally with:
-#   git cliff --unreleased --tag v0.2.0 --strip header
+#   git cliff --unreleased --tag v0.12.0 --strip header
 [changelog]
 body = """
 {% set breaking = commits | filter(attribute="breaking", value=true) %}\

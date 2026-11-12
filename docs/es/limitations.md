@@ -17,7 +17,7 @@ lang: es
 ## Solo lo que expone el flake
 
 - La sección `packages` lee la salida `packages.<system>` del propio flake, para el sistema en el que se ejecuta nixup. Un `fetchurl` dentro de un módulo, un `rev` fijado en un overlay o un paquete definido solo para otro sistema son invisibles. Mételo en la salida `packages` si quieres que se compruebe.
-- Un paquete necesita `passthru.updateScript` para que se compruebe. Si no lo tiene, nixup lo marca como `info` con `no passthru.updateScript`. Un script de actualización que no ejecuta nix-update necesita además `passthru.nixup.versionUrl`.
+- Un paquete necesita `passthru.updateScript`, `passthru.nixup.versionUrl` o `passthru.nixup.pinned` para que se compruebe. Si no tiene ninguno, nixup lo marca como `info` con `no passthru.updateScript`. Un script de actualización que no ejecuta nix-update necesita además `passthru.nixup.versionUrl`.
 - `nixup update` protege y restaura el directorio del archivo que define cada paquete, sacado de su `meta.position`. Un paquete sin `meta.position`, o definido fuera de este flake, se rechaza.
 - Los inputs transitivos no se comprueban. `update` los actualiza junto con todo lo demás y solo dice cuántos se han movido.
 
@@ -42,9 +42,9 @@ El paso de inputs de `update` solo hace el build de los hosts con `--build`, `--
 
 ## search
 
-- Solo busca en los nombres, no en las descripciones: buscar en las descripciones obliga a evaluar todos los paquetes de nixpkgs, y eso tarda cerca de medio minuto (es lo que hace `nix search`).
+- En nixpkgs, en tus paquetes y en tus inputs solo busca en los nombres, no en las descripciones: buscar en las descripciones obliga a evaluar todos los paquetes de nixpkgs, y eso tarda cerca de medio minuto (es lo que hace `nix search`). Los resultados de Flatpak salen de `flatpak search`, que también busca en los resúmenes y las palabras clave.
 - Solo atributos de primer nivel: no busca dentro de `python3Packages.requests` ni de otros conjuntos de paquetes.
-- `●` compara nombre y versión con la clausura del sistema en marcha. Una biblioteca que arrastra otro paquete cuenta como instalada, y no mira Home Manager fuera de NixOS.
+- En los resultados de Nix, `●` compara nombre y versión con la clausura del sistema en marcha. Una biblioteca que arrastra otro paquete cuenta como instalada, y no mira Home Manager fuera de NixOS. En los resultados de Flatpak, `●` significa que la app está instalada (`flatpak list --app`).
 - `search` evalúa el flake con `--impure`, porque `builtins.getFlake` sobre una ruta local lo necesita. Solo lee: no construye ni escribe nada.
 
 ## Otros límites

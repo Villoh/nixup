@@ -16,7 +16,7 @@ lang: es
 
 nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original es `github`. Se saltan los inputs que solo hacen `follows` de otro, y también los de cualquier otro tipo.
 
-- **Inputs fijados a un tag de release.** Si el `ref` del input parece una versión (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lista los tags del repositorio con `git ls-remote --tags` y se queda con el más alto que tenga el mismo prefijo. Las prereleases solo cuentan si el tag actual ya es una prerelease. `nix flake update` nunca mueve un tag, así que `nixup update` lo cambia en `flake.nix` (ver [El paso de inputs](#el-paso-de-inputs)). Un tag desactualizado tiene `nixup update <nombre>` como acción; uno al día dice `pinned tag`.
+- **Inputs fijados a un tag de release.** Si el `ref` del input parece una versión (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lista los tags del repositorio con `git ls-remote --tags` y se queda con el más alto que tenga el mismo prefijo. Las prereleases solo cuentan si el tag actual ya es una prerelease. `nix flake update` nunca mueve un tag, así que `nixup update` lo cambia en `flake.nix` (ver [El paso de inputs](#el-paso-de-inputs)). Un tag desactualizado se aplica con `nixup update <nombre>`; uno al día lleva la nota `pinned tag`.
 - **Inputs que siguen a un paquete de nixpkgs.** Algunos flakes solo se usan por lo que añaden a un paquete que viene de nixpkgs, como un módulo de Home Manager. Ese input debe quedarse en la versión que empaqueta nixpkgs, no en la más nueva de upstream. Márcalo en `flake.nix` con un comentario encima del input; puede haber otros comentarios y líneas en blanco en medio:
 
   ```nix
@@ -26,8 +26,8 @@ nixup lee `flake.lock` y mira los inputs directos de tu flake cuyo tipo original
   };
   ```
 
-  nixup lee la versión de ese atributo en el nixpkgs que bloquea tu flake, con la misma evaluación que la [pista de nixpkgs](#packages). Si es más nueva que el tag fijado, la fila sale desactualizada, con el tag de upstream de esa versión como el más reciente, y `nixup update` mueve el tag ahí. Si no, la fila es `ok` (`follows nixpkgs dux-shell 2.1.1`), o `info` cuando upstream ya tiene un tag más nuevo (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) o el tag va por delante de nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Sin un input `nixpkgs`, sin ese atributo en nixpkgs o sin un tag de upstream para su versión, la fila es un error. La marca solo se aplica a inputs fijados a un tag.
-- **Inputs de rama.** Cualquier otro `ref`, o ninguno, es una rama. nixup pide a `git ls-remote` el último commit de esa rama (o `HEAD` si no hay `ref`) y lo compara con el commit bloqueado. La columna actual muestra el commit bloqueado y su antigüedad en días.
+  nixup lee la versión de ese atributo en el nixpkgs que bloquea tu flake, con la misma evaluación que la [pista de nixpkgs](#packages). Si es más nueva que el tag fijado, la fila sale desactualizada, con el tag de upstream de esa versión como el más reciente, y `nixup update` mueve el tag ahí. Si no, la fila es `ok` (`follows nixpkgs dux-shell 2.1.1`), o `info` cuando upstream ya tiene un tag más nuevo (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) o el tag va por delante de nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Sin un input `nixpkgs`, sin ese atributo en nixpkgs o sin un tag de upstream para su versión, la fila es un error. La marca solo se aplica a inputs fijados a un tag. La versión se lee del `flake.lock` con el que empieza la ejecución: si un mismo `nixup update` también mueve nixpkgs, el input que lo sigue se mueve en la siguiente.
+- **Inputs de rama.** Cualquier otro `ref`, o ninguno, es una rama. nixup pide a `git ls-remote` el último commit de esa rama (o `HEAD` si no hay `ref`) y lo compara con el commit bloqueado. Si el input está desactualizado, `CURRENT` muestra el commit bloqueado y su antigüedad en días (`4839ed6 · 20d`). Una fila al día, que se ve con `--all`, solo lleva el commit corto.
 
 ### packages
 
@@ -61,23 +61,23 @@ nixup evalúa `.#packages.<system>` para la máquina en la que se ejecuta y lee 
 - Si el script de actualización pasa `--use-github-releases`, nixup compara con las releases publicadas en GitHub, sin contar los borradores. Si no, compara con los tags. La idea es elegir la misma versión que elegiría `nix-update`.
 - Si el script de actualización pasa `--version-regex`, nixup lee las versiones igual que nix-update: solo cuentan los tags en los que la regex encaja desde el principio, y la versión son sus grupos no vacíos unidos con `.`. Así se sigue un repositorio con varias series de tags (`desktop-v0.6.1` junto a `desktop-minimal-v0.6.1`). Sin ella, solo cuentan los tags que empiezan por un dígito o por `v` más un dígito.
 - Las prereleases solo cuentan si el script de actualización pasa `--version=unstable` o si la versión actual ya es una prerelease.
-- Si el flake tiene un input llamado `nixpkgs`, nixup busca también cada paquete en ese nixpkgs fijado, por su nombre y, en el caso de `foo-bin`, como `foo`. Si nixpkgs tiene el mismo proyecto (mismo repositorio de GitHub o misma homepage) con la misma versión o una más nueva, la fila lleva una línea de pista, `→ nixpkgs has foo 1.2.0: pkgs.foo could replace this package`, y una fila al día sale como `info` en vez de ocultarse. La pista nunca cambia el código de salida.
+- Si el flake tiene un input llamado `nixpkgs`, nixup busca también cada paquete en ese nixpkgs fijado, por su nombre y, en el caso de `foo-bin`, como `foo`. Si nixpkgs tiene el mismo proyecto (mismo repositorio de GitHub o misma homepage) con la misma versión o una más nueva, la fila lleva una pista: `nixpkgs has foo 1.2.0: pkgs.foo could replace this package`. La salida de texto la pone en `NOTE`, detrás de la nota de la fila y un `·` si la hay. `--markdown`, que solo lista las entradas desactualizadas y las que fallan, la añade debajo de ellas como una línea `→`. En JSON es `hint`. Una fila al día con pista sale como `info` en vez de ocultarse. La pista nunca cambia el código de salida.
 
 Un flake sin salida `packages` no tiene nada en esta sección.
 
 ### profile
 
-Si tienes `nix` instalado, nixup lee `nix profile list --json`. Para cada entrada cuya URL original contiene una revisión de nixpkgs de 40 caracteres, compara esa revisión con la que tiene bloqueada el input `nixpkgs` de tu flake. Si es distinta, sale como desactualizada con `pinned: nix profile remove, then install again`, porque `nix profile upgrade` no puede mover una entrada fijada. Las entradas que siguen una referencia móvil (como `flake:nixpkgs`) en vez de una revisión fija salen como `ok`, con `nixup update <name>` como acción; como todas las filas `ok`, no se muestran sin `--all`. Si falla `nix profile list`, la sección tiene una fila `error`.
+Si tienes `nix` instalado, nixup lee `nix profile list --json`. Para cada entrada cuya URL original contiene una revisión de nixpkgs de 40 caracteres, compara esa revisión con la que tiene bloqueada el input `nixpkgs` de tu flake. Si es distinta, sale como desactualizada con `pinned: nix profile remove, then install again`, porque `nix profile upgrade` no puede mover una entrada fijada. Las entradas que siguen una referencia móvil (como `flake:nixpkgs`) en vez de una revisión fija salen como `ok`, y `nixup update <name>` las actualiza; como todas las filas `ok`, no se muestran sin `--all`. Si falla `nix profile list`, la sección tiene una fila `error`.
 
 ### flatpak
 
-Si tienes `flatpak` instalado, nixup refresca primero los datos appstream de los remotos (`flatpak update --appstream`), de donde salen las versiones: solo `flatpak update` los refresca, y desactualizados enseñan una release nueva como una build nueva de la versión vieja. No toca nada más, y sin conexión se usan los datos que haya. Después ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). La acción es `nixup update <id de la app>`.
+Si tienes `flatpak` instalado, nixup refresca primero los datos appstream de los remotos (`flatpak update --appstream`), de donde salen las versiones: solo `flatpak update` los refresca, y desactualizados enseñan una release nueva como una build nueva de la versión vieja. No toca nada más, y sin conexión se usan los datos que haya. Después ejecuta `flatpak remote-ls --updates` y lista una vez cada aplicación o runtime, con la versión instalada (sacada de `flatpak list`) y la nueva. Los runtimes no tienen versión, así que su rama sale como versión actual. `LATEST` es la versión nueva; dice `new build` cuando se recompila la misma versión, y en todas las actualizaciones de runtimes, porque un runtime solo tiene rama. Dice `unknown` cuando el remoto de la app no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref` (por ejemplo `hylki-origin`). Cada actualización se aplica con `nixup update <id de la app>`.
 
 ## Versiones
 
 Los tags y las versiones se comparan por sus números, ignorando una `v` inicial o un prefijo como `dms/`. Una prerelease va por debajo de su versión final. Palabras como `alpha`, `beta`, `rc`, `pre`, `preview`, `dev`, `nightly` y `snapshot` marcan una prerelease cuando empiezan un segmento, así que `1.2.3-rc.1` es una prerelease y `1.2.3-arch` no.
 
-Un salto lleva aviso cuando cambia el primer número (de `1.x` a `2.x`), o cuando cambia el segundo mientras el primero es `0` (de `0.21` a `0.22`).
+Un salto lleva aviso cuando cambia el primer número (de `1.x` a `2.x`), o cuando cambia el segundo mientras el primero es `0` (de `0.21` a `0.22`). Las versiones basadas en fechas, cuyo primer número es 1000 o más (como `20261106.1`), no llevan aviso.
 
 ## La revisión de upstream
 
@@ -133,7 +133,7 @@ Aquí `nix-update` edita tu repositorio directamente, no una copia. Los archivos
 
 Se salta si `flatpak` no está en el `PATH`.
 
-1. Ejecuta `flatpak remote-ls --updates --columns=ref,version` y `flatpak list --columns=ref,version`, igual que la sección `flatpak` de check, y se queda con los IDs nombrados si has dado nombres.
+1. Refresca los datos appstream con `flatpak update --appstream --noninteractive` y ejecuta `flatpak remote-ls --updates --columns=ref,version` y `flatpak list --columns=ref,version`, igual que la sección `flatpak` de check, y se queda con los IDs nombrados si has dado nombres.
 2. Imprime la tabla de actualizaciones pendientes.
 3. Apunta el commit desplegado de cada ref con `flatpak info --show-commit <ref>`.
 4. Pregunta una vez, salvo con `-y`.
@@ -168,24 +168,25 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `git diff --quiet -- <path>` | update (inputs y paquetes) |
 | `git show HEAD:flake.lock` | update (inputs), para nombrar lo que un `flake.lock` sin commitear lleva además de la actualización |
 | `git diff -- <dir del paquete>` | update (paquetes), tras un éxito |
-| `nix eval --json .#packages.<system> --apply ...` | packages, update |
-| `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs` |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) con `--build` y sin `-H`, autocompletado de `-H` |
-| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), sin `-H` |
+| `nix eval --json .#packages.<system> --apply ...` | packages, update, list |
+| `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, si el flake tiene un input `nixpkgs`; inputs y update (inputs), para los inputs con `# nixup: follows` |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) con `--build` y sin `-H` |
+| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`) sin `-H`, autocompletado de `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | autocompletado de nombres |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) con `--build`, `--test`, `--switch` o `--boot` |
 | `nix-update --flake <name> --version=<v> [args...]` | update (paquetes) |
+| `nix run nixpkgs#nix-update -- --flake <name> --version=<v> [args...]` | update (paquetes), si `nix-update` no está en el `PATH` |
 | `nix build --no-link .#<name>` | update (paquetes) |
 | `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |
-| `nix profile list --json` | profile, update (nombres, nix profile) |
+| `nix profile list --json` | profile, update (nombres, nix profile), list, autocompletado de nombres |
 | `nix profile upgrade <nombre...>` | update (nix profile) |
 | `nix eval --json --impure --expr <getFlake del flake>` | search |
 | `nix-store --query --requisites /run/current-system` | search (qué hay en el sistema) |
-| `flatpak list --app --columns=...` | list, search |
+| `flatpak list --app --columns=application,version,origin` | list |
 | `flatpak search --columns=... <nombre>` | search |
 | `flatpak list --app --columns=application` | search (qué está instalado) |
-| `flatpak list --columns=application` | update (nombres) |
+| `flatpak list --columns=application` | update (nombres), autocompletado de nombres |
 | `flatpak update --appstream --noninteractive` | flatpak, update (Flatpak), antes de listar |
 | `flatpak remote-ls --updates --columns=ref,version` | flatpak, update (Flatpak) |
 | `flatpak list --columns=ref,version` | flatpak, update (Flatpak), versiones instaladas |
@@ -193,7 +194,7 @@ Esta es la lista completa. Todo pasa por un único paquete (`internal/run`), as�
 | `flatpak update -y --noninteractive <ref...>` | update (Flatpak) |
 | `gh auth token` | token de GitHub, si no hay ninguna variable definida |
 
-Las peticiones HTTP propias de nixup solo van a `api.github.com`. `git`, `nix` y `nix-update` salen a la red por su cuenta.
+Las peticiones HTTP propias de nixup solo van a `api.github.com` y a la `passthru.nixup.versionUrl` de un paquete que la defina. `git`, `nix` y `nix-update` salen a la red por su cuenta.
 
 ## Qué se escribe y qué nunca
 

@@ -32,7 +32,7 @@ func versionString() string {
 
 const usage = `nixup — update checker and safe updater for flake-based NixOS
 
-  nixup [check]      what is outdated, read-only (inputs, packages, flatpak, profile)
+  nixup [check]      what is outdated, changes nothing (inputs, packages, flatpak, profile)
   nixup update       review and apply updates: inputs, own packages, Flatpak, nix profile
   nixup list         everything it watches, with current versions, without network
   nixup search       look a package name up in nixpkgs, your packages, your inputs and Flatpak

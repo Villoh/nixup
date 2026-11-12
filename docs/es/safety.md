@@ -12,7 +12,7 @@ nixup está hecho para que una actualización fallida o que no quieres deje tu r
 
 ## Qué garantiza nixup
 
-- **`check` no escribe nada.** Lee `flake.lock`, evalúa tus paquetes y consulta a git, GitHub, `nix profile` y Flatpak.
+- **`check` no escribe nada salvo la caché de Flatpak.** Lee `flake.lock`, evalúa tus paquetes y consulta a git, GitHub, `nix profile` y Flatpak. Lo único que refresca son los datos appstream de Flatpak, el catálogo que también refresca `flatpak update`, para que las versiones estén al día.
 - **El paso de inputs de `update` no toca tu repositorio hasta el final.** La actualización, y los builds de los hosts con `--build`, `--test`, `--switch` o `--boot`, se hacen en una copia temporal. Tu `flake.lock` solo se sustituye cuando contestas que sí, o si has pasado `-y`, y con uno de esos flags solo cuando todos los builds pasan.
 - **Un tag fijado se mueve en `flake.nix` de la misma forma.** nixup solo edita `flake.nix` en la copia temporal. Después Nix tiene la última palabra: si el nuevo `flake.lock` no fija el input al tag nuevo, nixup imprime `after the edit, flake.lock pins <name> to "<old>", not <new>: nothing written` y sale con 2. Tu `flake.nix` solo se escribe junto con el nuevo `flake.lock`, después de los builds (si los hay) y de tu sí. Un tag que no aparece exactamente una vez en `flake.nix` se rechaza antes de ejecutar `nix flake update`.
 - **Con `--build`, `--test`, `--switch` o `--boot`, si falla el build de un host, `flake.lock` no se toca.** nixup imprime `build of <host> FAILED: flake.lock left untouched.` y sale con 2.
@@ -27,7 +27,7 @@ nixup está hecho para que una actualización fallida o que no quieres deje tu r
 - **Las entradas de `nix profile` fijadas nunca se tocan.** Una entrada fijada a una revisión se deja fuera de `nix profile upgrade`. nixup solo te dice cómo actualizarla a mano.
 - **Sin terminal, la respuesta es no.** Si stdin no es una terminal, todas las preguntas se responden que no. En ejecuciones desatendidas tienes que pasar `-y` a propósito.
 - **No se hace commit, y no se activa ninguna generación salvo que lo pidas.** Ni `git commit`. Sin `--test`, `--switch` ni `--boot` no hay ni `switch`, ni `boot`, ni `test`, ni `sudo`: después de actualizar, `git diff`, `nix flake check` y `nh os test` los sigues ejecutando tú. Con uno de esos flags, nh activa un host después del último paso, solo si se ha escrito `flake.lock` o algún paquete y no ha fallado ningún paso. nixup no tiene código de activación propio, y quien pide sudo es nh.
-- **La activación necesita un host, conocido antes de hacer nada.** Con varios hosts y sin `-H`, o con más de un `-H`, `update --test` se niega antes del primer paso: `--test activates one host: name it with -H (this flake has desktop, laptop)`.
+- **La activación necesita un host, conocido antes de hacer nada.** Con varios hosts y sin `-H`, o con más de un `-H`, `update --test` se niega antes del primer paso: `--test activates one host: name it with -H (this flake has desktop, laptop)`. El host solo se comprueba si el paso de inputs o el de paquetes está activo. Con solo los pasos de Flatpak y de `nix profile` no hay host, y nixup imprime `Nothing was written: nothing to activate.`
 
 ## Dónde terminan las garantías
 

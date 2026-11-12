@@ -16,7 +16,7 @@ lang: en
 
 nixup reads `flake.lock` and looks at the direct inputs of your flake whose original type is `github`. Inputs that only `follows` another one are skipped, and so are inputs of any other type.
 
-- **Inputs pinned to a release tag.** If the input's `ref` looks like a version (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lists the repository's tags with `git ls-remote --tags` and takes the highest one with the same prefix. Prereleases are only considered when the current tag is a prerelease. `nix flake update` never moves a tag, so `nixup update` rewrites it in `flake.nix` (see [The input step](#the-input-step)). An outdated tag has `nixup update <name>` as its action; an up-to-date one says `pinned tag`.
+- **Inputs pinned to a release tag.** If the input's `ref` looks like a version (`v1.6.2`, `1.2.0`, `dms/1.11.6`), nixup lists the repository's tags with `git ls-remote --tags` and takes the highest one with the same prefix. Prereleases are only considered when the current tag is a prerelease. `nix flake update` never moves a tag, so `nixup update` rewrites it in `flake.nix` (see [The input step](#the-input-step)). An outdated tag is applied with `nixup update <name>`; an up-to-date one has the note `pinned tag`.
 - **Inputs that follow a nixpkgs package.** Some flakes are used only for what they add to a package that comes from nixpkgs, such as a Home Manager module. Such an input should stay at the version nixpkgs packages, not at upstream's newest. Mark it in `flake.nix` with a comment above the input; other comments and blank lines may sit in between:
 
   ```nix
@@ -26,8 +26,8 @@ nixup reads `flake.lock` and looks at the direct inputs of your flake whose orig
   };
   ```
 
-  nixup reads that attribute's version in the nixpkgs your flake locks, the same evaluation as the [nixpkgs hint](#packages). If it is newer than the pinned tag, the row is outdated with the upstream tag of that version as the latest, and `nixup update` moves the tag there. Otherwise the row is `ok` (`follows nixpkgs dux-shell 2.1.1`), or `info` when upstream already has a newer tag (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) or the pin is ahead of nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Without a `nixpkgs` input, without that attribute in nixpkgs, or without an upstream tag for its version, the row is an error. The marker applies only to inputs pinned to a tag.
-- **Branch inputs.** Any other `ref`, or none, is a branch. nixup asks `git ls-remote` for the head of that branch (or `HEAD` when there is no `ref`) and compares it with the locked commit. The current column shows the locked commit and its age in days.
+  nixup reads that attribute's version in the nixpkgs your flake locks, the same evaluation as the [nixpkgs hint](#packages). If it is newer than the pinned tag, the row is outdated with the upstream tag of that version as the latest, and `nixup update` moves the tag there. Otherwise the row is `ok` (`follows nixpkgs dux-shell 2.1.1`), or `info` when upstream already has a newer tag (`follows nixpkgs dux-shell 2.1.1; upstream has v2.1.2`) or the pin is ahead of nixpkgs (`ahead of nixpkgs dux-shell 2.1.1`). Without a `nixpkgs` input, without that attribute in nixpkgs, or without an upstream tag for its version, the row is an error. The marker applies only to inputs pinned to a tag. The version is read from the `flake.lock` the run starts with: when one `nixup update` also moves nixpkgs, the followed input moves on the next run.
+- **Branch inputs.** Any other `ref`, or none, is a branch. nixup asks `git ls-remote` for the head of that branch (or `HEAD` when there is no `ref`) and compares it with the locked commit. When the input is outdated, `CURRENT` shows the locked commit and its age in days (`4839ed6 · 20d`). An up-to-date row, shown with `--all`, has the short commit only.
 
 ### packages
 
@@ -61,23 +61,23 @@ nixup evaluates `.#packages.<system>` for the machine it runs on, and reads each
 - If the update script passes `--use-github-releases`, nixup compares against published GitHub releases, ignoring drafts. Otherwise it compares against tags. The aim is to pick the same version `nix-update` would.
 - If the update script passes `--version-regex`, nixup reads versions the same way: only tags the regex matches from their start count, and the version is its non-empty groups joined with `.`. That is how a repository with several tag series (`desktop-v0.6.1` next to `desktop-minimal-v0.6.1`) is followed. Without it, only tags that start with a digit or `v` plus a digit count.
 - Prereleases count only when the update script passes `--version=unstable` or the current version is already a prerelease.
-- If the flake has an input called `nixpkgs`, nixup also looks each package up in that locked nixpkgs, by its own name and, for `foo-bin`, as `foo`. When nixpkgs has the same project (same GitHub repository or same homepage) at the same or a newer version, the row gets a hint line, `→ nixpkgs has foo 1.2.0: pkgs.foo could replace this package`, and an up-to-date row is shown as `info` instead of being hidden. The hint never changes the exit code.
+- If the flake has an input called `nixpkgs`, nixup also looks each package up in that locked nixpkgs, by its own name and, for `foo-bin`, as `foo`. When nixpkgs has the same project (same GitHub repository or same homepage) at the same or a newer version, the row gets a hint: `nixpkgs has foo 1.2.0: pkgs.foo could replace this package`. The text output puts it in `NOTE`, after the row's note and a `·` when there is one. `--markdown`, which lists only outdated and failed entries, adds it under them as a `→` line. JSON has it as `hint`. An up-to-date row with a hint is shown as `info` instead of being hidden. The hint never changes the exit code.
 
 A flake without a `packages` output has nothing in this section.
 
 ### profile
 
-If `nix` is installed, nixup reads `nix profile list --json`. For each entry whose original URL contains a 40-character nixpkgs revision, it compares that revision with the one locked for your flake's `nixpkgs` input. A different revision is reported as outdated with `pinned: nix profile remove, then install again`, because `nix profile upgrade` cannot move a pinned entry. Entries that follow a moving reference (such as `flake:nixpkgs`) instead of a fixed revision are `ok`, with `nixup update <name>` as the action; like every `ok` row they are hidden without `--all`. If `nix profile list` fails, the section has one `error` row.
+If `nix` is installed, nixup reads `nix profile list --json`. For each entry whose original URL contains a 40-character nixpkgs revision, it compares that revision with the one locked for your flake's `nixpkgs` input. A different revision is reported as outdated with `pinned: nix profile remove, then install again`, because `nix profile upgrade` cannot move a pinned entry. Entries that follow a moving reference (such as `flake:nixpkgs`) instead of a fixed revision are `ok`, and `nixup update <name>` upgrades them; like every `ok` row they are hidden without `--all`. If `nix profile list` fails, the section has one `error` row.
 
 ### flatpak
 
-If `flatpak` is installed, nixup first refreshes the remotes' appstream data (`flatpak update --appstream`), where the versions come from: only `flatpak update` refreshes it, and stale it shows a new release as a new build of the old version. It touches nothing else, and offline the old data is used. Then it runs `flatpak remote-ls --updates` and lists each application or runtime once, with the installed version (from `flatpak list`) and the new one. Runtimes have no version, so their branch is shown as the current one. `LATEST` is the new version; it says `new build` when the same version is rebuilt, and for every runtime update, since a runtime has only a branch. It says `unknown` when the app's remote does not publish versions, as with a remote added from a `.flatpakref` file (for example `hylki-origin`). The action is `nixup update <app id>`.
+If `flatpak` is installed, nixup first refreshes the remotes' appstream data (`flatpak update --appstream`), where the versions come from: only `flatpak update` refreshes it, and stale it shows a new release as a new build of the old version. It touches nothing else, and offline the old data is used. Then it runs `flatpak remote-ls --updates` and lists each application or runtime once, with the installed version (from `flatpak list`) and the new one. Runtimes have no version, so their branch is shown as the current one. `LATEST` is the new version; it says `new build` when the same version is rebuilt, and for every runtime update, since a runtime has only a branch. It says `unknown` when the app's remote does not publish versions, as with a remote added from a `.flatpakref` file (for example `hylki-origin`). Each update is applied with `nixup update <app id>`.
 
 ## Versions
 
 Tags and versions are compared by their numbers, ignoring a leading `v` or a prefix like `dms/`. A prerelease sorts below its final release. Words like `alpha`, `beta`, `rc`, `pre`, `preview`, `dev`, `nightly` and `snapshot` mark a prerelease when they start a segment, so `1.2.3-rc.1` is a prerelease and `1.2.3-arch` is not.
 
-A jump gets a warning when the first number changes (`1.x` to `2.x`), or when the second number changes while the first is `0` (`0.21` to `0.22`).
+A jump gets a warning when the first number changes (`1.x` to `2.x`), or when the second number changes while the first is `0` (`0.21` to `0.22`). Date-based versions, whose first number is 1000 or more (such as `20261106.1`), get no warning.
 
 ## The upstream review
 
@@ -133,7 +133,7 @@ For each package, in alphabetical order, or in the order you named them. `<pkg d
 
 Skipped when `flatpak` is not on `PATH`.
 
-1. Run `flatpak remote-ls --updates --columns=ref,version` and `flatpak list --columns=ref,version`, as the `flatpak` check section does, and keep the named IDs if names were given.
+1. Refresh the appstream data with `flatpak update --appstream --noninteractive`, then run `flatpak remote-ls --updates --columns=ref,version` and `flatpak list --columns=ref,version`, as the `flatpak` check section does, and keep the named IDs if names were given.
 2. Print the table of pending updates.
 3. Note the deployed commit of each ref with `flatpak info --show-commit <ref>`.
 4. Ask once, unless `-y`.
@@ -168,24 +168,25 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `git diff --quiet -- <path>` | update (inputs and packages) |
 | `git show HEAD:flake.lock` | update (inputs), to name what an uncommitted `flake.lock` carries besides the update |
 | `git diff -- <pkg dir>` | update (packages), after a success |
-| `nix eval --json .#packages.<system> --apply ...` | packages, update |
-| `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input |
-| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) with `--build` and without `-H`, completion of `-H` |
-| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`), without `-H` |
+| `nix eval --json .#packages.<system> --apply ...` | packages, update, list |
+| `nix eval --json --inputs-from . nixpkgs#legacyPackages.<system> --apply ...` | packages, if the flake has a `nixpkgs` input; inputs and update (inputs), for `# nixup: follows` inputs |
+| `nix eval --json <copy>#nixosConfigurations --apply builtins.attrNames` | update (inputs) with `--build` and without `-H` |
+| `nix eval --json <repo>#nixosConfigurations --apply builtins.attrNames` | update (`--test`, `--switch`, `--boot`) without `-H`, completion of `-H` |
 | `nix eval --json .#packages.<system> --apply builtins.attrNames` | completion of names |
 | `nix flake update --flake <copy> [input...]` | update (inputs) |
 | `nh os build <copy> -H <host> -o <copy>/result` | update (inputs) with `--build`, `--test`, `--switch` or `--boot` |
 | `nix-update --flake <name> --version=<v> [args...]` | update (packages) |
+| `nix run nixpkgs#nix-update -- --flake <name> --version=<v> [args...]` | update (packages), when `nix-update` is not on `PATH` |
 | `nix build --no-link .#<name>` | update (packages) |
 | `nh os <test\|switch\|boot> <repo> -H <host>` | update (`--test`, `--switch`, `--boot`) |
-| `nix profile list --json` | profile, update (names, nix profile) |
+| `nix profile list --json` | profile, update (names, nix profile), list, completion of names |
 | `nix profile upgrade <name...>` | update (nix profile) |
 | `nix eval --json --impure --expr <getFlake of the flake>` | search |
 | `nix-store --query --requisites /run/current-system` | search (what is in the system) |
-| `flatpak list --app --columns=...` | list, search |
+| `flatpak list --app --columns=application,version,origin` | list |
 | `flatpak search --columns=... <name>` | search |
 | `flatpak list --app --columns=application` | search (what is installed) |
-| `flatpak list --columns=application` | update (names) |
+| `flatpak list --columns=application` | update (names), completion of names |
 | `flatpak update --appstream --noninteractive` | flatpak, update (Flatpak), before listing |
 | `flatpak remote-ls --updates --columns=ref,version` | flatpak, update (Flatpak) |
 | `flatpak list --columns=ref,version` | flatpak, update (Flatpak), installed versions |
@@ -193,7 +194,7 @@ This is the complete list. Everything goes through one package (`internal/run`),
 | `flatpak update -y --noninteractive <ref...>` | update (Flatpak) |
 | `gh auth token` | GitHub token, if no variable is set |
 
-nixup's own HTTP requests go only to `api.github.com`. `git`, `nix` and `nix-update` reach the network on their own.
+nixup's own HTTP requests go only to `api.github.com` and to the `passthru.nixup.versionUrl` of a package that sets one. `git`, `nix` and `nix-update` reach the network on their own.
 
 ## What is written and what never is
 

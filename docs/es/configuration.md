@@ -8,7 +8,7 @@ lang: es
 
 [English](../configuration.md) | **Español**
 
-nixup no tiene archivo de configuración. Se maneja con un flag, unas pocas variables de entorno y el `passthru.updateScript` de tus paquetes.
+nixup no tiene archivo de configuración. Se maneja con un flag, unas pocas variables de entorno, los atributos `passthru.updateScript` y `passthru.nixup` de tus paquetes y los comentarios `# nixup: follows` de `flake.nix` (ver [Cómo funciona](how-it-works.md)).
 
 ## Qué flake usa
 
@@ -62,7 +62,7 @@ La salida solo lleva color cuando stdout es una terminal. Cualquier valor no vac
 
 ## Preguntas
 
-`update` pregunta antes de escribir o instalar nada. Las preguntas solo se contestan si stdin es una terminal, y solo `y` (en mayúscula o minúscula) cuenta como sí. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
+`update` pregunta antes de escribir o instalar nada. Las preguntas solo se contestan si stdin es una terminal. `y` o `yes` es sí, y Enter, `n` o `no` es no, en mayúscula o minúscula; cualquier otra cosa se vuelve a preguntar. Sin terminal, todas las preguntas se responden que no, así que en ejecuciones desatendidas tienes que pasar `-y`.
 
 ## Token de GitHub
 
@@ -76,11 +76,16 @@ Sin token, las llamadas a la API van sin autenticar y GitHub solo permite 60 por
 
 ## Scripts de actualización de los paquetes
 
-`nixup check` y `nixup update` solo tienen en cuenta los paquetes que definen `passthru.updateScript`. nixup lee esa línea de comandos y usa algunos de sus argumentos:
+Cuando `passthru.updateScript` ejecuta nix-update, `nixup check` y `nixup update` leen su línea de comandos y usan algunos de sus argumentos:
 
+- `--url`: el repositorio de upstream, para un código fuente alojado en otro sitio.
 - `--use-github-releases`: compara con las releases publicadas en GitHub en vez de con todos los tags.
-- `--version=unstable`: permite que la versión más nueva sea una prerelease. Cualquier otro `--version=...` se ignora, porque nixup siempre pasa la versión que has revisado.
-- El resto de argumentos se pasan tal cual a `nix-update`.
+- `--version-regex`: cómo se leen las versiones de los tags.
+- `--version=unstable`: permite que la versión más nueva sea una prerelease.
+
+`--version`, `--version-regex`, `-vr` y sus valores no se pasan a `nix-update`, porque nixup pasa la versión exacta que has revisado. El resto de argumentos se pasan tal cual.
+
+Un paquete sin script de actualización sale como `info`, salvo que defina `passthru.nixup.pinned` o `passthru.nixup.versionUrl`. Un script que no es nix-update necesita `passthru.nixup.versionUrl` (ver [Cómo funciona](how-it-works.md#packages)).
 
 Por ejemplo:
 

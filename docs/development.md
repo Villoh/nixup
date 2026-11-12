@@ -14,9 +14,10 @@ lang: en
 cmd/nixup/          main: wires the real terminal, process runner and GitHub client
 internal/
   cli/              flag parsing, subcommands, exit codes, shell completion
-  check/            the read-only checks: inputs, packages, flatpak, profile
+  check/            the checks: inputs, packages, flatpak, profile
   update/           the command that writes and installs: Lock (flake.lock), Pkg (packages/), Flatpak, Profile
   report/           terminal text and Markdown rendering
+  inventory/        what list and search read: inputs, packages, profile, Flatpak, nixpkgs
   flake/            flake.lock, finding the flake, hosts, own packages, scratch copy
   gh/               tags and heads through git; commits and release notes through the API
   ver/              version ordering, prerelease detection, major-jump warnings
@@ -27,7 +28,7 @@ internal/
   testutil/         fake GitHub API, temporary trees and terminals (tests only)
 ```
 
-Dependencies point one way: `cli → update → report → check → flake → gh → run, ver`. Two rules keep the code testable:
+Dependencies point one way: `cli → update → report → check → flake → gh → run, ver`, and `cli → inventory`, `report → inventory → flake`. Two rules keep the code testable:
 
 - Only `internal/run` starts processes. Everything else receives a `run.Runner`.
 - Only `internal/ui` talks to the terminal. `main` passes stderr to the runner so builds stream there.

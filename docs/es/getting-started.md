@@ -15,7 +15,7 @@ lang: es
 - `nh` si quieres que `nixup update` haga el build de tus hosts con `--build`, o que haga el build de uno y lo active con `--test`, `--switch` o `--boot`. Sin ninguno de esos cuatro flags no hace falta.
 - `nix-update` para actualizar tus propios paquetes con `nixup update`. Si no lo tienes, nixup ejecuta `nix run nixpkgs#nix-update --` en su lugar.
 - `flatpak` es opcional. Sin él, se saltan la sección `flatpak` y el paso de Flatpak de `nixup update`.
-- Acceso de red a github.com y api.github.com.
+- Acceso de red a github.com y api.github.com, y a la `passthru.nixup.versionUrl` de un paquete que la defina.
 
 El flake trae builds para `x86_64-linux` y `aarch64-linux`. En [Configuración](configuration.md) tienes la lista completa de herramientas y para qué se usa cada una.
 
@@ -59,7 +59,7 @@ El flake también tiene un overlay que añade `pkgs.nixup`:
 }
 ```
 
-El paquete también instala el autocompletado para bash, zsh y fish: en una shell nueva, `nixup update <TAB>` te ofrece tus inputs, paquetes y apps de Flatpak. Ver [completion](commands.md#completion).
+El paquete también instala el autocompletado para bash, zsh y fish: en una shell nueva, `nixup update <TAB>` te ofrece tus inputs, paquetes, apps y runtimes de Flatpak y entradas de `nix profile`. Ver [completion](commands.md#completion).
 
 Comprueba que se ha instalado:
 
@@ -97,10 +97,10 @@ Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `flatpak`, 
 - `update`: hay una versión más nueva.
 - `major` o `0.x-minor`: hay una versión más nueva y el salto pinta a cambio incompatible, una versión mayor nueva o una versión menor nueva cuando todavía estás en `0.x`. Lee primero el changelog.
 - `ok`: está al día. Estas filas solo se cuentan; con `--all` se listan.
-- `info`: nixup no puede comprobar esta entrada, y `NOTE` dice por qué (por ejemplo `no GitHub upstream: check by hand`).
+- `info`: no hay nada que aplicar, pero merece un vistazo. nixup no puede comprobar la entrada (por ejemplo `no GitHub upstream: check by hand`), nixpkgs ya tiene el paquete, o un input que sigue a nixpkgs tiene un tag más nuevo en upstream o va por delante de nixpkgs. `NOTE` dice cuál.
 - `error`: la comprobación ha fallado, y `NOTE` trae el motivo.
 
-En los inputs de rama, `CURRENT` muestra el commit bloqueado y cuántos días tiene: `4839ed6 · 20d` se hizo upstream hace 20 días.
+En un input de rama desactualizado, `CURRENT` muestra el commit bloqueado y cuántos días tiene: `4839ed6 · 20d` se hizo upstream hace 20 días. Uno al día, que se ve con `--all`, solo lleva el commit corto.
 
 ## Lee qué ha cambiado
 

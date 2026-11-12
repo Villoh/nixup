@@ -1,5 +1,6 @@
 // Package check answers "what is outdated?" for inputs, own packages, nix profile and
-// Flatpak. Nothing in here writes to disk.
+// Flatpak. It writes nothing to the repository or the system; it only refreshes
+// Flatpak's appstream cache.
 package check
 
 import (

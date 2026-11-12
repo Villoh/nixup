@@ -26,7 +26,7 @@ Flags can go before, between or after names: `nixup update nixpkgs -y home-manag
 
 Every command that works on a flake accepts `-C <dir>`. See [Configuration](configuration.md) for how the flake is found when `-C` is not given.
 
-`nixup <command> -h` prints that command's flags on stderr and exits with 0.
+`nixup check`, `update`, `list` or `search` with `-h` prints that command's flags on stderr and exits with 0. `nixup completion -h` prints its usage and exits with 2, and `nixup version` ignores it.
 
 ## Output streams
 
@@ -38,7 +38,7 @@ So `nixup check --json > out.json` gives clean JSON.
 
 ## check
 
-Lists what is outdated. Read-only.
+Lists what is outdated. It changes nothing in your repository or the system; it only refreshes Flatpak's appstream data.
 
 ```bash
 nixup check
@@ -75,7 +75,7 @@ The text output is one table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` an
 ]
 ```
 
-`latest`, `note`, `warning`, `hint` and `review` are left out when empty. `hint` says that the flake's nixpkgs already has the package (see [How it works](how-it-works.md#packages)). With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
+`section` is `inputs`, `packages`, `flatpak` or `profile`: plural for inputs and packages, unlike `SOURCE` and `--source`. `latest`, `note`, `warning`, `hint` and `review` are left out when empty. `hint` says that the flake's nixpkgs already has the package (see [How it works](how-it-works.md#packages)). With `--review`, `review` holds `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (each with `tag` and `body`), `skipped_prereleases` and, if the GitHub API failed, `error`.
 
 Exit codes:
 
@@ -152,7 +152,7 @@ If the tags of an input cannot be listed, nixup prints `<name>: cannot list its 
 
 The package step goes through the packages one at a time. For each outdated package nixup:
 
-1. Prints the current and new version, the major-jump warning if any, and the upstream review.
+1. Prints the current and new version, the major-jump warning if any, and the upstream review. If the file that defines the package is not part of this flake, it then prints `cannot tell which file in this flake defines <name> (meta.position "…"): not updating it.`, asks nothing and moves on; the exit code is 2.
 2. If `<pkg dir>` has uncommitted changes, asks `<pkg dir> has uncommitted changes. Update on top of them? They are kept. [y/N]`. A no prints `Skipped.` and moves on. With `--allow-dirty` or `-y` there is no question, only `<pkg dir> has uncommitted changes: updating on top of them; they are kept.`
 3. Asks `Update <name> to <version>? [y/N]`, unless `-y`. A no prints `Skipped.` and moves on.
 4. Saves every file under `<pkg dir>`, then runs `nix-update --flake <name> --version=<the reviewed version>`, plus the extra arguments from the package's `passthru.updateScript`. It prints `Updating <file> with nix-update…`, naming the file that defines the package; nix-update's own output is shown only when it fails.
@@ -165,7 +165,7 @@ Packages that are up to date are listed only when you name them. Entries marked 
 
 The Flatpak step runs only when `flatpak` is installed. Without it the step is skipped without a message. In order:
 
-1. List the pending updates with `flatpak remote-ls --updates` and the installed versions with `flatpak list`, the same data as `check`. With names, keep only those IDs; a named one with no update prints `<id> is up to date.` With no names and nothing pending, print `Every Flatpak is up to date.` and stop.
+1. Refresh the appstream data (`flatpak update --appstream`), then list the pending updates with `flatpak remote-ls --updates` and the installed versions with `flatpak list`, the same data as `check`. With names, keep only those IDs; a named one with no update prints `<id> is up to date.` With no names and nothing pending, print `Every Flatpak is up to date.` and stop.
 2. Print a table: `SOURCE`, `NAME`, `CURRENT`, `LATEST`. `LATEST` is the new version, `unknown` when the remote publishes none, or `new build` for runtimes and rebuilds of the same version.
 3. Read the deployed commit of each ref with `flatpak info --show-commit <ref>`.
 4. Ask once, `Update 3 Flatpak refs now? This installs them right away. [y/N]` (`Update 1 Flatpak ref now? This installs it right away.` for one), unless `-y`. A no prints `Skipped.`
@@ -176,7 +176,7 @@ Names are Flatpak IDs of apps or runtimes, as in `nixup update co.hyprlab.Hylki`
 
 ### nix profile
 
-The `nix profile` step, in order:
+The `nix profile` step runs only when `nix` is on `PATH`. Without it the step is skipped without a message. In order:
 
 1. Read `nix profile list --json`. With names, keep only those entries.
 2. Leave out every entry pinned to a revision (`github:NixOS/nixpkgs/<40 hex characters>`), because `nix profile upgrade` cannot move it. For each one print `<name> is pinned to <short rev>: nix profile upgrade cannot move it. To update it, nix profile remove <name> and install it again.`
@@ -191,7 +191,7 @@ Names are `nix profile` entry names, as `nix profile list` shows them.
 
 Without `--test`, `--switch` or `--boot`, `update` activates nothing. With one of them, it hands the result to nh at the end. Only one is allowed: `--test --switch` stops with `--test and --switch: pick one` and exit code 2. In order:
 
-1. Before any step, pick the host: the one given with `-H`, or the only entry in `nixosConfigurations`. With several hosts and no `-H`, or with more than one `-H`, stop before doing any work: `--test activates one host: name it with -H (this flake has desktop, laptop)`, exit code 2.
+1. Before any step, pick the host: the one given with `-H`, or the only entry in `nixosConfigurations`. With several hosts and no `-H`, or with more than one `-H`, stop before doing any work: `--test activates one host: name it with -H (this flake has desktop, laptop)`, exit code 2. The host is picked only when the input or package step is on. With `--source flatpak,profile` there is no host, and step 4 prints `Nothing was written: nothing to activate.`
 2. Run the four steps as usual. The input step builds that host in the scratch copy before asking to write `flake.lock`, as with `--build`.
 3. If a step failed, print `Not activating: a step failed.` and stop. The exit code stays 2.
 4. If neither `flake.lock` nor a package was written, because you answered no or everything was up to date, print `Nothing was written: nothing to activate.` and exit with 0. Flatpak and `nix profile` updates do not count: they are already installed.
@@ -233,11 +233,11 @@ flatpak  md.obsidian.Obsidian  1.15.0         flathub
 2 inputs · 1 package · 1 flatpak
 ```
 
-Inputs show the tag they are pinned to, or the locked commit and its age. Origins use flake syntax (`github:owner/repo/ref`); for a `nix profile` entry it is its flake without the pinned revision, for a Flatpak app its remote. Exit code 0, or 2 if a source failed.
+Inputs show the tag they are pinned to, or the locked commit and its age. Origins use flake syntax (`github:owner/repo/ref`); for an input not from GitHub it is its type (`git`, `path`, ...), for a `nix profile` entry it is its flake without the pinned revision, for a Flatpak app its remote. Flatpak runtimes are not listed, only apps. Exit code 0, or 2 if a source failed.
 
 ## search
 
-Looks a name up in every place a package can come from, and marks in `INSTALLED` with a green `●` what is in the running system.
+Looks a name up in every place a package can come from, and marks in `INSTALLED` with a green `●` what is in the running system or, for Flatpak, installed.
 
 ```bash
 nixup search ripgrep
@@ -261,7 +261,7 @@ flatpak  de.leopoldluley.Clapgrep  26.09               Search through all your f
 3 results (nixpkgs 0bb2eed)
 ```
 
-The query matches package names (attribute names, Flatpak IDs and names), not descriptions, without regard to case. Exact matches come first, then names that start with it, then the rest. It can contain letters, digits and `. _ + -`.
+In nixpkgs, your packages and your inputs the query matches attribute names only, not descriptions, without regard to case. Flatpak results come from `flatpak search`, which also matches summaries and keywords. Exact matches come first, then names that start with it, then the rest. It can contain letters, digits and `. _ + -`.
 
 | Flag | Description |
 |---|---|
@@ -270,13 +270,15 @@ The query matches package names (attribute names, Flatpak IDs and names), not de
 | `--source <list>` | Comma-separated sources: `nixpkgs`, `package`, `input`, `flatpak`. `input` covers every input. Sources not asked for are not searched at all. |
 | `--json` | Same shape as `list --json` (`note` is the description), plus `rev` for nixpkgs, `more` (results left out) and `in_system`. |
 
-`●` means a store path with the same name and version is in `/run/current-system`. On a machine without it (CI, a container) nothing is marked.
+`●` means a store path with the same name and version is in `/run/current-system`. On a machine without it (CI, a container) nothing is marked. For Flatpak results, `●` means the app is installed (`flatpak list --app`).
 
 | Code | Meaning |
 |---|---|
 | 0 | Something was found. |
-| 1 | Nothing was found. |
-| 2 | The query is not a package name, or the flake could not be evaluated. |
+| 1 | Nothing was found. With `--json` the output is `null`. |
+| 2 | No name or more than one, an unknown `--source`, no flake found, a query that is not a package name, or a flake that could not be evaluated. |
+
+A failed `flatpak search` prints `flatpak: <reason>` under the results and never makes the exit code 2.
 
 ## version and help
 
@@ -301,7 +303,7 @@ source <(nixup completion zsh)     # in ~/.zshrc, after compinit
 nixup completion fish | source     # in ~/.config/fish/config.fish
 ```
 
-TAB completes commands, flags with their description, the values of `--source` (also as a comma list), `-H` with the hosts of the flake and `-C` with directories. After `nixup update` it offers the names `update` takes: the flake's inputs and packages, the installed Flatpak apps and runtimes and the `nix profile` entries, each with where it comes from, limited by `--source` and without the names already typed. The flake is the one `-C` names on the line, else the usual one.
+TAB completes commands, flags with their description, the values of `--source` (also as a comma list), `-H` with the hosts of the flake, `-C` with directories and `--report` with file paths. After `nixup update` it offers the names `update` takes: the flake's inputs and packages, the installed Flatpak apps and runtimes and the `nix profile` entries, each with where it comes from, limited by `--source` and without the names already typed. The flake is the one `-C` names on the line, else the usual one.
 
 The scripts only call `nixup __complete <words>`, which prints the candidates, so the three shells offer the same. Reading the names takes `nix eval .#packages.<system> --apply builtins.attrNames`, which nix answers from its evaluation cache, plus `flatpak list` and `nix profile list`.
 

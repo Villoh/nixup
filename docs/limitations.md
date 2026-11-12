@@ -17,7 +17,7 @@ lang: en
 ## Only what the flake exposes
 
 - The `packages` section reads the flake's own `packages.<system>` output, for the system nixup runs on. A `fetchurl` inside a module, a pinned `rev` in an overlay, or a package defined only for another system is invisible. Move it into the `packages` output to have it checked.
-- A package needs `passthru.updateScript` to be checked. Without it nixup reports `info` with `no passthru.updateScript`. An update script that does not run nix-update needs `passthru.nixup.versionUrl` too.
+- A package needs `passthru.updateScript`, `passthru.nixup.versionUrl` or `passthru.nixup.pinned` to be checked. Without any of them nixup reports `info` with `no passthru.updateScript`. An update script that does not run nix-update needs `passthru.nixup.versionUrl` too.
 - `nixup update` guards and restores the directory of the file that defines each package, from its `meta.position`. A package without `meta.position`, or defined outside this flake, is refused.
 - Transitive inputs are not checked. `update` updates them with everything else and only reports how many moved.
 
@@ -42,9 +42,9 @@ The input step of `update` builds hosts only with `--build`, `--test`, `--switch
 
 ## search
 
-- Only names are searched, not descriptions: searching descriptions means evaluating every package in nixpkgs, which takes about half a minute (`nix search` does that).
+- In nixpkgs, your packages and your inputs only names are searched, not descriptions: searching descriptions means evaluating every package in nixpkgs, which takes about half a minute (`nix search` does that). Flatpak results come from `flatpak search`, which also matches summaries and keywords.
 - Only top-level attributes: `python3Packages.requests` and other package sets are not searched.
-- `●` compares names and versions with the running system's closure. A library pulled in by something else counts as in the system, and a Home Manager setup outside NixOS is not looked at.
+- For Nix results, `●` compares names and versions with the running system's closure. A library pulled in by something else counts as in the system, and a Home Manager setup outside NixOS is not looked at. For Flatpak results, `●` means the app is installed (`flatpak list --app`).
 - `search` evaluates the flake with `--impure`, because `builtins.getFlake` on a local path needs it. It reads; it builds and writes nothing.
 
 ## Other limits

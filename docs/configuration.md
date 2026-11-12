@@ -8,7 +8,7 @@ lang: en
 
 **English** | [Español](es/configuration.md)
 
-nixup has no configuration file. It takes a flag, a few environment variables, and the `passthru.updateScript` of your packages.
+nixup has no configuration file. It takes a flag, a few environment variables, the `passthru.updateScript` and `passthru.nixup` attributes of your packages, and `# nixup: follows` comments in `flake.nix` (see [How it works](how-it-works.md)).
 
 ## Which flake
 
@@ -62,7 +62,7 @@ Output is colored only when stdout is a terminal. Any non-empty `NO_COLOR` turns
 
 ## Questions
 
-`update` asks before it writes or installs anything. Questions are answered only when stdin is a terminal, and only `y` (any case) counts as yes. With no terminal every question is answered no, so unattended runs must pass `-y`.
+`update` asks before it writes or installs anything. Questions are answered only when stdin is a terminal. `y` or `yes` is yes, and Enter, `n` or `no` is no, in any case; anything else is asked again. With no terminal every question is answered no, so unattended runs must pass `-y`.
 
 ## GitHub token
 
@@ -76,11 +76,16 @@ Without a token the API calls are unauthenticated, and GitHub allows only 60 of 
 
 ## Package update scripts
 
-`nixup check` and `nixup update` only look at packages that define `passthru.updateScript`. nixup reads that command line and uses some of its arguments:
+When `passthru.updateScript` runs nix-update, `nixup check` and `nixup update` read its command line and use some of its arguments:
 
+- `--url`: the upstream repository, for a source hosted elsewhere.
 - `--use-github-releases`: compare against published GitHub releases instead of every tag.
-- `--version=unstable`: allow prereleases as the newest version. Any other `--version=...` argument is ignored, because nixup always passes the version you reviewed.
-- Every other argument is passed on to `nix-update`.
+- `--version-regex`: how versions are read from tags.
+- `--version=unstable`: allow prereleases as the newest version.
+
+`--version`, `--version-regex`, `-vr` and their values are not passed on to `nix-update`, because nixup passes the exact version you reviewed. Every other argument is passed on.
+
+A package without an update script is listed as `info`, unless it sets `passthru.nixup.pinned` or `passthru.nixup.versionUrl`. A script that is not nix-update needs `passthru.nixup.versionUrl` (see [How it works](how-it-works.md#packages)).
 
 For example:
 

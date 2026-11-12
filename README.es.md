@@ -57,7 +57,7 @@ O añádelo a tu flake y mete `inputs.nixup.packages.${system}.default` en `envi
 ## Primeros pasos
 
 ```bash
-nixup                    # igual que `nixup check`: qué está desactualizado, solo lectura
+nixup                    # igual que `nixup check`: qué está desactualizado, no cambia nada
 nixup check --review     # además, commits y release notes de upstream
 nixup update             # inputs: actualiza flake.lock en una copia temporal, enseña qué se ha movido, pregunta y escribe;
                          # después tus propios paquetes uno a uno, tras revisar cada uno;
@@ -76,7 +76,7 @@ Trabaja sobre el flake en el que estás; en cualquier otro sitio lee `NIXUP_FLAK
 
 ## Por qué es seguro
 
-- `check` solo lee. No escribe nada en tu repositorio.
+- `check` no escribe nada en tu repositorio ni en el sistema. La única caché que refresca es el catálogo de versiones de Flatpak.
 - `update` ejecuta `nix flake update` en una copia de tu árbol de trabajo. Tu `flake.lock` solo cambia si contestas que sí. Con `--build`, `--test`, `--switch` o `--boot` primero se hace el build de los hosts en esa copia, y un build que falla deja `flake.lock` como estaba. Sin ellos no se hace el build de los hosts, así que se puede escribir un `flake.lock` que no compila; `git checkout flake.lock` lo devuelve atrás. En tu propia máquina, usa `update --test`.
 - Con tus propios paquetes, `update` ejecuta `nix-update` fijado a la versión que acabas de revisar y luego hace el build del paquete. Si falla cualquiera de los dos pasos, los archivos del paquete vuelven a quedar como estaban, con los cambios sin commitear incluidos.
 - `update` conserva los cambios sin commitear: avisa cuando `flake.lock` lleva otros además de la actualización, y pregunta antes de actualizar sobre tus ediciones de `flake.nix` o de un paquete.

@@ -57,7 +57,7 @@ Or add it to your flake and put `inputs.nixup.packages.${system}.default` in `en
 ## Quick start
 
 ```bash
-nixup                    # same as `nixup check`: what is outdated, read-only
+nixup                    # same as `nixup check`: what is outdated, changes nothing
 nixup check --review     # plus upstream commits and release notes
 nixup update             # inputs: update flake.lock in a scratch copy, show what moved, ask, write;
                          # then your own packages one by one, after reviewing each;
@@ -76,7 +76,7 @@ It works on the flake you are in; anywhere else it reads `NIXUP_FLAKE`, `NH_OS_F
 
 ## How it stays safe
 
-- `check` only reads. It writes nothing to your repository.
+- `check` writes nothing to your repository or the system. The only cache it refreshes is Flatpak's catalog of versions.
 - `update` runs `nix flake update` in a copy of your working tree. Your `flake.lock` changes only after you answer yes. With `--build`, `--test`, `--switch` or `--boot` the hosts are built in that copy first, and a failed build leaves `flake.lock` untouched. Without them the hosts are not built, so a `flake.lock` that does not build can be written; `git checkout flake.lock` takes it back. Use `update --test` on your own machine.
 - For your own packages, `update` runs `nix-update` pinned to the version you just reviewed, then builds the package. If either step fails, the package's files go back to how they were, uncommitted edits included.
 - `update` keeps uncommitted changes: it says when `flake.lock` carries some besides the update, and asks before it updates over your edits to `flake.nix` or a package.

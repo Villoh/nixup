@@ -18,7 +18,7 @@ import (
 
 // commands are what `nixup <TAB>` offers.
 var commands = [][2]string{
-	{"check", "what is outdated, read-only"},
+	{"check", "what is outdated, changes nothing"},
 	{"update", "review and apply updates"},
 	{"list", "everything it watches, with current versions"},
 	{"search", "look a package name up"},

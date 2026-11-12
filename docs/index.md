@@ -23,7 +23,7 @@ It does not activate a NixOS generation unless you pass `--test`, `--switch` or 
 
 ## The commands
 
-- `nixup check` lists what is outdated. It is the default command and it is read-only.
+- `nixup check` lists what is outdated. It is the default command and changes nothing; it only refreshes Flatpak's catalog of versions.
 - `nixup update` first updates `flake.lock` in a scratch copy, shows what moved upstream and writes the new lock after you confirm. With `--build` it builds every host in the copy before asking. Then it updates the packages your flake defines, one at a time, after showing what changed upstream. Last it installs the pending Flatpak updates and upgrades the `nix profile` entries that follow a moving reference, one question each. Names or `--source` limit it to some inputs, packages, Flatpak apps or profile entries. With `--test`, `--switch` or `--boot`, it ends by running `nh os test`, `switch` or `boot` on one host, if something was written.
 - `nixup list` shows everything it watches with the versions you have, without touching the network.
 - `nixup search <name>` looks a package up in your locked nixpkgs, your own packages, your inputs and Flatpak.

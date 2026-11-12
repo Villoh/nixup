@@ -1,5 +1,6 @@
 // nixup: update checker and safe updater for flake-based NixOS.
-// It never activates anything: no switch, no boot, no sudo, no daemon.
+// It activates nothing unless update gets --test, --switch or --boot, and then nh does
+// it: nixup itself never runs sudo, and it has no daemon.
 package main
 
 import (

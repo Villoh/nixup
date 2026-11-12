@@ -23,7 +23,7 @@ No activa ninguna generación de NixOS salvo que le pases `--test`, `--switch` o
 
 ## Los comandos
 
-- `nixup check` lista lo que está desactualizado. Es el comando por defecto y solo lee.
+- `nixup check` lista lo que está desactualizado. Es el comando por defecto y no cambia nada; solo refresca el catálogo de versiones de Flatpak.
 - `nixup update` primero actualiza `flake.lock` en una copia temporal, te enseña qué ha cambiado upstream y escribe el nuevo lock cuando confirmas. Con `--build` hace el build de todos los hosts en la copia antes de preguntar. Después actualiza los paquetes que define tu flake, de uno en uno, tras enseñarte qué ha cambiado upstream. Por último instala las actualizaciones de Flatpak pendientes y actualiza las entradas de `nix profile` que siguen una referencia móvil, con una pregunta cada uno. Con nombres o `--source` lo limitas a algunos inputs, paquetes, apps de Flatpak o entradas del perfil. Con `--test`, `--switch` o `--boot`, termina ejecutando `nh os test`, `switch` o `boot` en un host, si ha escrito algo.
 - `nixup list` enseña todo lo que vigila con las versiones que tienes, sin tocar la red.
 - `nixup search <nombre>` busca un paquete en tu nixpkgs fijado, tus paquetes, tus inputs y Flatpak.

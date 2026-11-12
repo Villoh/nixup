@@ -33,7 +33,7 @@ func completionFixture(t *testing.T) *fixture {
 func TestCompleteCommands(t *testing.T) {
 	f := completionFixture(t)
 	got := f.completions(t, "")
-	if len(got) < 6 || got[0] != "check\twhat is outdated, read-only" || !strings.HasPrefix(got[1], "update\t") {
+	if len(got) < 6 || got[0] != "check\twhat is outdated, changes nothing" || !strings.HasPrefix(got[1], "update\t") {
 		t.Errorf("the first word is a command, with what it does: %q", got)
 	}
 	if got := f.completions(t, "completion", ""); strings.Join(got, " ") != "bash zsh fish" {

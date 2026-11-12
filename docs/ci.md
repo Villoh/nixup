@@ -48,7 +48,7 @@ jobs:
       GH_TOKEN: ${{ github.token }} # gh, and nixup's GitHub API calls
       TITLE: Pending updates
       LABEL: updates
-      NIXUP: github:Villoh/nixup/v0.8.0 # or the rev your flake.lock pins
+      NIXUP: github:Villoh/nixup/v0.11.1 # or the rev your flake.lock pins
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v23
@@ -92,8 +92,8 @@ jobs:
             echo "Pending updates as of $(date -u +%F)."
             echo "Apply them locally with \`nixup update\`."
             echo
-            # The ACTION column is left out: it is "nixup update <name>"
-            # but for the rows that need something else, kept as Notes.
+            # The JSON note is "nixup update <name>" for every update:
+            # keep only other notes and the hint.
             jq -r '
               def kind: {inputs: "input", packages: "package"}[.] // .;
               def status: if .status != "outdated" then .status
@@ -206,7 +206,7 @@ Notes on this workflow:
 - The input step needs no flag to skip the host build: without `--build` it builds no host.
 - The runner has no `nix-update`, so `update` runs it through `nix run nixpkgs#nix-update`.
 - `update --source package -y` builds each updated package on the runner. If one fails, its files are restored, nixup exits with 2 and the job stops before the pull request.
-- To get the same nixup every week, pin a release tag in `NIXUP`, for example `github:Villoh/nixup/v0.8.0`.
+- To get the same nixup every week, pin a release tag in `NIXUP`, for example `github:Villoh/nixup/v0.11.1`.
 - The commit and the pull request come from `create-pull-request`. nixup itself never commits.
 
 ## Full-system builds

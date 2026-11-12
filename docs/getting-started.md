@@ -15,7 +15,7 @@ lang: en
 - `nh` if you want `nixup update` to build your hosts with `--build`, or to build and activate one with `--test`, `--switch` or `--boot`. Without those four flags it is not needed.
 - `nix-update` for updating your own packages with `nixup update`. Without it, nixup runs `nix run nixpkgs#nix-update --` instead.
 - `flatpak` is optional. Without it the `flatpak` section and the Flatpak step of `nixup update` are skipped.
-- Network access to github.com and api.github.com.
+- Network access to github.com and api.github.com, and to the `passthru.nixup.versionUrl` of a package that sets one.
 
 The flake ships builds for `x86_64-linux` and `aarch64-linux`. See [Configuration](configuration.md) for the full list of tools and what each one is used for.
 
@@ -59,7 +59,7 @@ The flake also has an overlay that adds `pkgs.nixup`:
 }
 ```
 
-The package also installs completions for bash, zsh and fish: in a new shell, `nixup update <TAB>` offers your inputs, packages and Flatpak apps. See [completion](commands.md#completion).
+The package also installs completions for bash, zsh and fish: in a new shell, `nixup update <TAB>` offers your inputs, packages, Flatpak apps and runtimes, and `nix profile` entries. See [completion](commands.md#completion).
 
 Check the install:
 
@@ -97,10 +97,10 @@ One row per entry: where it comes from (`SOURCE`: `input`, `package`, `flatpak`,
 - `update`: a newer version exists.
 - `major` or `0.x-minor`: a newer version exists and the jump looks breaking, a new major version or a new minor version while still at `0.x`. Read the changelog first.
 - `ok`: up to date. These rows are only counted; `--all` lists them.
-- `info`: nixup cannot check this entry, and `NOTE` says why (for example `no GitHub upstream: check by hand`).
+- `info`: nothing to apply, but worth a look. nixup cannot check the entry (for example `no GitHub upstream: check by hand`), nixpkgs already has the package, or a followed input has a newer upstream tag or is ahead of nixpkgs. `NOTE` says which.
 - `error`: the check failed, and `NOTE` has the reason.
 
-For branch inputs `CURRENT` shows the locked commit and how many days old it is: `4839ed6 · 20d` was committed upstream 20 days ago.
+For an outdated branch input `CURRENT` shows the locked commit and how many days old it is: `4839ed6 · 20d` was committed upstream 20 days ago. An up-to-date one, shown with `--all`, has the short commit only.
 
 ## Read what changed
 

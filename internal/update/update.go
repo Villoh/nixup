@@ -1,7 +1,7 @@
 // Package update is `nixup update`: flake.lock (Lock) and own packages (Pkg), which only
 // edit the repository, and Flatpak and nix profile, which install right away. Every step
-// shows what changes first, asks, and says how to undo it; none activates a NixOS
-// generation.
+// shows what changes first, asks, and says how to undo it. No step activates a NixOS
+// generation: only --test, --switch or --boot hand the result to nh os at the end.
 package update
 
 import (

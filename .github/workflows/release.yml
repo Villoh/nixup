@@ -1,6 +1,6 @@
 name: release
 
-# Run from the Actions tab or: gh workflow run release -f version=0.2.0
+# Run from the Actions tab or: gh workflow run release -f version=0.12.0
 # Bumps the version in flake.nix, commits it to main, and publishes v<version> on that commit.
 on:
   workflow_dispatch:

@@ -15,8 +15,8 @@ Releases are made by a manual GitHub Actions workflow. Do not edit the version o
 From the Actions tab, or with the GitHub CLI:
 
 ```bash
-gh workflow run release -f version=0.3.0                  # bump, commit, tag and publish
-gh workflow run release -f version=0.3.0 -f dry_run=true  # check everything, publish nothing
+gh workflow run release -f version=0.12.0                  # bump, commit, tag and publish
+gh workflow run release -f version=0.12.0 -f dry_run=true  # check everything, publish nothing
 ```
 
 The workflow only runs from `main`.
@@ -54,5 +54,5 @@ No binaries are attached. Users install from the flake, and `nix run github:Vill
 Preview the notes for the next release locally:
 
 ```bash
-nix run nixpkgs#git-cliff -- --unreleased --tag v0.3.0 --strip header
+nix run nixpkgs#git-cliff -- --unreleased --tag v0.12.0 --strip header
 ```
