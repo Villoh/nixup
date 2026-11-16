@@ -285,17 +285,19 @@ func TestReviewShowsTheSizeOfTheChange(t *testing.T) {
 	}
 }
 
-func TestReviewMarkdownDoesNotPing(t *testing.T) {
+func TestReviewMarkdownReachesNobody(t *testing.T) {
 	r := sampleReview()
-	r.Subjects = []string{"fix: thanks @octocat and @org/team"}
-	r.Releases = []gh.Note{{Tag: "v2", Body: "* a fix by @zxsleebu in https://x/pull/1\nmail me@host.com"}}
+	r.Subjects = []string{"fix: thanks @octocat and @org/team (#1692)"}
+	r.Releases = []gh.Note{{Tag: "v2", Body: "* a fix by @zxsleebu in https://github.com/o/r/pull/72\nsee o/r#5, mail me@host.com, &#8217;"}}
 	md := report.ReviewMarkdown(r)
-	for _, bad := range []string{"@octocat", "@org", "@zxsleebu"} {
+	for _, bad := range []string{"@octocat", "@org", "@zxsleebu", "#1692", "o/r#5", "https://github.com/o/r/pull"} {
 		if strings.Contains(md, bad) {
-			t.Errorf("%s would ping:\n%s", bad, md)
+			t.Errorf("%s would ping or backlink:\n%s", bad, md)
 		}
 	}
-	if !strings.Contains(md, "me@host.com") {
-		t.Errorf("emails are left alone:\n%s", md)
+	for _, keep := range []string{"me@host.com", "&#8217;", "https://redirect.github.com/o/r/pull/72", "[14 commits](https://github.com/lgse/strata/compare/"} {
+		if !strings.Contains(md, keep) {
+			t.Errorf("%q should stay:\n%s", keep, md)
+		}
 	}
 }

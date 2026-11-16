@@ -258,12 +258,21 @@ func ReviewText(r *gh.Review, indent string) string {
 	return b.String()
 }
 
-// mention matches an @user or @org/team that GitHub would notify.
-var mention = regexp.MustCompile(`(^|\W)@(\w)`)
+var (
+	mention = regexp.MustCompile(`(^|\W)@(\w)`)   // @user, @org/team: GitHub notifies them
+	issueNo = regexp.MustCompile(`(^|[^&])#(\d)`) // #123, owner/repo#123: GitHub links and backlinks them
+)
 
-// noPing breaks every @mention with a zero-width space: release notes and commit
-// subjects name real people, and pasted into an issue or PR body they would be pinged.
-func noPing(s string) string { return mention.ReplaceAllString(s, "$1@\u200b$2") }
+// quiet keeps pasted upstream text from reaching people and threads that have nothing
+// to do with this report. Release notes and commit subjects name real users, issues and
+// PRs, and in an issue or PR body of yours each of those would be pinged or would get a
+// "mentioned this" entry in its timeline. A zero-width space breaks @user and #123, and
+// redirect.github.com, the host Dependabot uses for this, keeps the links but not the backlinks.
+func quiet(s string) string {
+	s = mention.ReplaceAllString(s, "$1@\u200b$2")
+	s = issueNo.ReplaceAllString(s, "$1#\u200b$2")
+	return strings.ReplaceAll(s, "https://github.com/", "https://redirect.github.com/")
+}
 
 // ReviewMarkdown renders a review for a PR body.
 func ReviewMarkdown(r *gh.Review) string {
@@ -273,13 +282,13 @@ func ReviewMarkdown(r *gh.Review) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[%s](https://github.com/%s) · [%d commits](%s)%s\n\n", r.Repo, r.Repo, r.Commits, r.CompareURL, size(r))
 	for _, s := range r.Subjects {
-		fmt.Fprintf(&b, "- %s\n", noPing(s))
+		fmt.Fprintf(&b, "- %s\n", quiet(s))
 	}
 	for i, n := range r.Releases {
 		if i == maxNotes {
 			break
 		}
-		fmt.Fprintf(&b, "\n<details><summary>%s</summary>\n\n%s\n\n</details>\n", n.Tag, noPing(firstLines(n.Body, 25)))
+		fmt.Fprintf(&b, "\n<details><summary>%s</summary>\n\n%s\n\n</details>\n", n.Tag, quiet(firstLines(n.Body, 25)))
 	}
 	return b.String()
 }
