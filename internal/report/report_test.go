@@ -284,3 +284,18 @@ func TestReviewShowsTheSizeOfTheChange(t *testing.T) {
 		t.Errorf("markdown: %q", md)
 	}
 }
+
+func TestReviewMarkdownDoesNotPing(t *testing.T) {
+	r := sampleReview()
+	r.Subjects = []string{"fix: thanks @octocat and @org/team"}
+	r.Releases = []gh.Note{{Tag: "v2", Body: "* a fix by @zxsleebu in https://x/pull/1\nmail me@host.com"}}
+	md := report.ReviewMarkdown(r)
+	for _, bad := range []string{"@octocat", "@org", "@zxsleebu"} {
+		if strings.Contains(md, bad) {
+			t.Errorf("%s would ping:\n%s", bad, md)
+		}
+	}
+	if !strings.Contains(md, "me@host.com") {
+		t.Errorf("emails are left alone:\n%s", md)
+	}
+}

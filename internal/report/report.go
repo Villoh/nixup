@@ -3,6 +3,7 @@ package report
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -267,6 +268,13 @@ func ReviewText(r *gh.Review, indent string) string {
 	return b.String()
 }
 
+// mention matches an @user or @org/team that GitHub would notify.
+var mention = regexp.MustCompile(`(^|\W)@(\w)`)
+
+// noPing breaks every @mention with a zero-width space: release notes and commit
+// subjects name real people, and pasted into an issue or PR body they would be pinged.
+func noPing(s string) string { return mention.ReplaceAllString(s, "$1@\u200b$2") }
+
 // ReviewMarkdown renders a review for a PR body.
 func ReviewMarkdown(r *gh.Review) string {
 	if r.Err != "" {
@@ -275,13 +283,13 @@ func ReviewMarkdown(r *gh.Review) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[%s](https://github.com/%s) · [%d commits](%s)%s\n\n", r.Repo, r.Repo, r.Commits, r.CompareURL, size(r))
 	for _, s := range r.Subjects {
-		fmt.Fprintf(&b, "- %s\n", s)
+		fmt.Fprintf(&b, "- %s\n", noPing(s))
 	}
 	for i, n := range r.Releases {
 		if i == maxNotes {
 			break
 		}
-		fmt.Fprintf(&b, "\n<details><summary>%s</summary>\n\n%s\n\n</details>\n", n.Tag, firstLines(n.Body, 25))
+		fmt.Fprintf(&b, "\n<details><summary>%s</summary>\n\n%s\n\n</details>\n", n.Tag, noPing(firstLines(n.Body, 25)))
 	}
 	return b.String()
 }
