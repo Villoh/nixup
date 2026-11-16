@@ -23,6 +23,8 @@ body = """
 {% if previous.version %}**Full Changelog**: https://github.com/Villoh/nixup/compare/{{ previous.version }}...{{ version }}{% endif %}
 """
 trim = true
+# Commit subjects name people: break every @mention so the release does not ping them.
+postprocessors = [{ pattern = '(^|\W)@(\w)', replace = "$1@\u200b$2" }]
 
 [git]
 conventional_commits = true
