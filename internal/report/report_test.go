@@ -27,7 +27,7 @@ func rows() []check.Row {
 	return []check.Row{
 		{Section: "inputs", Name: "nixpkgs", Current: "aaa1111", Status: check.OK},
 		{Section: "inputs", Name: "dms", Current: "v1.6.2", Latest: "v2.0.0", Status: check.Outdated,
-			Note: "nixup update dms", Warn: ver.Major.Warning(), Review: sampleReview()},
+			Note: "nixup update dms", Bump: ver.Major, Review: sampleReview()},
 		{Section: "packages", Name: "strata", Current: "0.21.0", Status: check.Info, Note: "no updateScript"},
 		{Section: "flatpak", Name: "broken", Status: check.Error, Note: "no remotes"},
 	}
@@ -57,7 +57,7 @@ func TestTextIsOneTable(t *testing.T) {
 		"package  strata  0.21.0           info    no updateScript",
 		"flatpak  broken                   error   no remotes",
 		"",
-		"1 to update (1 likely breaking) · 1 info · 1 error · 1 up to date (--all to show them)",
+		"1 to update · 1 info · 1 error · 1 up to date (--all to show them)",
 	}
 	if got := l[1:]; strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -88,17 +88,17 @@ func TestTextAllAndReview(t *testing.T) {
 func TestTextStatusKinds(t *testing.T) {
 	term, out, _ := testutil.Term("")
 	report.Text(term, []check.Row{
-		{Section: "packages", Name: "a", Current: "0.6.1", Latest: "0.7.0", Status: check.Outdated, Warn: ver.ZeroMinor.Warning()},
+		{Section: "packages", Name: "a", Current: "0.6.1", Latest: "0.7.0", Status: check.Outdated, Bump: ver.Minor},
 		{Section: "packages", Name: "b", Current: "1.0", Latest: "1.1", Status: check.Outdated, Note: "nixup update b",
 			Hint: "nixpkgs has b 1.1: pkgs.b could replace this package"},
 		{Section: "packages", Name: "c", Current: "1", Status: check.Info, Hint: "nixpkgs has c 2: pkgs.c could replace this package"},
 	}, false, false)
 	l := lines(out.String())
-	if !strings.Contains(l[1], "0.x-minor") || !strings.Contains(l[2], " update ") {
+	if !strings.HasSuffix(l[1], " minor") || !strings.Contains(l[2], " update ") {
 		t.Errorf("status names the kind of jump:\n%s", out)
 	}
-	if !strings.HasSuffix(l[2], "update     nixpkgs has b 1.1: pkgs.b could replace this package") ||
-		!strings.HasSuffix(l[3], "info       nixpkgs has c 2: pkgs.c could replace this package") {
+	if !strings.HasSuffix(l[2], "update  nixpkgs has b 1.1: pkgs.b could replace this package") ||
+		!strings.HasSuffix(l[3], "info    nixpkgs has c 2: pkgs.c could replace this package") {
 		t.Errorf("the nixpkgs hint goes in NOTE, without the usual nixup update:\n%s", out)
 	}
 }
@@ -166,7 +166,7 @@ func TestTableColorsDoNotBreakAlignment(t *testing.T) {
 func TestMarkdown(t *testing.T) {
 	md := report.Markdown(rows())
 	for _, want := range []string{
-		"### inputs / dms `v1.6.2 → v2.0.0`", "> ⚠ MAJOR version jump",
+		"### inputs / dms `v1.6.2 → v2.0.0`",
 		"[14 commits](https://github.com/lgse/strata/compare/v0.21.0...v1.1.1)", "- feat: a",
 		"<details><summary>v1.1.1</summary>", "### flatpak / broken", "Error: no remotes",
 	} {

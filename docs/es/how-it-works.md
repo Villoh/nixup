@@ -77,7 +77,7 @@ Si tienes `flatpak` instalado, nixup refresca primero los datos appstream de los
 
 Los tags y las versiones se comparan por sus números, ignorando una `v` inicial o un prefijo como `dms/`. Una prerelease va por debajo de su versión final. Palabras como `alpha`, `beta`, `rc`, `pre`, `preview`, `dev`, `nightly` y `snapshot` marcan una prerelease cuando empiezan un segmento, así que `1.2.3-rc.1` es una prerelease y `1.2.3-arch` no.
 
-Un salto lleva aviso cuando cambia el primer número (de `1.x` a `2.x`), o cuando cambia el segundo mientras el primero es `0` (de `0.21` a `0.22`). Las versiones basadas en fechas, cuyo primer número es 1000 o más (como `20261106.1`), no llevan aviso.
+Un salto se mide por el primer número que cambia: `major` si es el primero (de `1.x` a `2.x`), `minor` si es el segundo, `patch` en el resto. Las versiones basadas en fechas, cuyo primer número es 1000 o más (como `20261106.1`), y un prerelease que se mueve bajo el mismo número (un nightly) no tienen tamaño y muestran `update`.
 
 ## La revisión de upstream
 
@@ -101,7 +101,7 @@ Los pasos de inputs y de paquetes solo editan archivos de tu repositorio; nada l
 ### El paso de inputs
 
 1. Si `git diff --quiet -- flake.lock` detecta cambios, lee el lock del último commit con `git show HEAD:flake.lock` e imprime una línea con los inputs ya movidos que esta actualización no cubre. No pregunta: la actualización se hace sobre el `flake.lock` de trabajo, así que esos cambios se conservan y solo se enseña lo que mueve nixup.
-2. Para cada input del alcance (los nombres que hayas dado, o todos) fijado a un tag de release, lista sus tags igual que `check`. Si hay un tag más nuevo, el tag del input se moverá. Si no se pueden listar los tags, el tag se queda como está y nixup lo dice. Sin nombres, un salto que pinta a cambio incompatible se deja donde está y se avisa; con el nombre del input se mueve, con el aviso.
+2. Para cada input del alcance (los nombres que hayas dado, o todos) fijado a un tag de release, lista sus tags igual que `check`. Si hay un tag más nuevo, el tag del input se moverá. Si no se pueden listar los tags, el tag se queda como está y nixup lo dice. Sin nombres, un salto mayor se deja donde está y se avisa; con el nombre del input se mueve.
 3. Si se va a mover algún tag y `git diff --quiet -- flake.nix` detecta cambios, pregunta, salvo con `--allow-dirty` o `-y`. Si dices que no, el paso termina con código de salida 0.
 4. Crea un directorio temporal y copia en él todos los archivos que lista `git ls-files --cached --others --exclude-standard`: los archivos versionados con sus cambios sin commitear, más los archivos sin versionar que no están ignorados. Se saltan los enlaces simbólicos y los archivos borrados del árbol de trabajo. Esta es la copia temporal.
 5. Para cada tag que se mueve, cambia el tag antiguo por el nuevo en el `flake.nix` de la copia. El tag antiguo se lee de `original.ref` en `flake.lock` y el nuevo de la lista de tags, los dos tal cual. El tag antiguo tiene que aparecer exactamente una vez en `flake.nix` como palabra completa, no dentro de una versión más larga; si no, el paso para con código de salida 2 antes de ejecutar `nix flake update`.

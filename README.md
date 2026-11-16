@@ -30,7 +30,7 @@ input    lanzaboote    v0.4.1         v1.2.0   major
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update
 package  ripgrep       14.0.0         15.2.0   major
 
-4 to update (2 likely breaking) · 1 up to date (--all to show them)
+4 to update · 1 up to date (--all to show them)
 ```
 
 Add `--review` to see, after the table and for every update, the source repository, the commit count and size of the change with a compare link, the latest commit subjects and, for tagged versions, the release notes in between.

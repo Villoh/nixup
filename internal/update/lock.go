@@ -68,9 +68,6 @@ func (u *Updater) Lock(o LockOpts) int {
 			return u.fail(fmt.Errorf("%s: %w; change it in flake.nix by hand", b.input, err))
 		}
 		t.Printf("Moving the %s tag in flake.nix: %s -> %s\n", b.input, b.old, b.new)
-		if b.warn != "" {
-			t.Println("  " + t.Paint("⚠ "+b.warn, 33))
-		}
 	}
 
 	what := "every input"
@@ -150,10 +147,10 @@ func (u *Updater) Lock(o LockOpts) int {
 }
 
 // tagBump is an input pinned to a release tag that Lock moves by rewriting flake.nix.
-type tagBump struct{ input, old, new, warn string }
+type tagBump struct{ input, old, new string }
 
 // tagBumps are the pinned tags with a newer release, or for an input that follows a
-// nixpkgs package, the tag of nixpkgs' version. Without names a likely breaking jump is
+// nixpkgs package, the tag of nixpkgs' version. Without names a major jump is
 // left alone and only reported: it moves when you name the input.
 func (u *Updater) tagBumps(repo string, lock *flake.Lock, names []string) []tagBump {
 	scope := names
@@ -184,9 +181,9 @@ func (u *Updater) tagBumps(repo string, lock *flake.Lock, names []string) []tagB
 		if top == "" {
 			continue
 		}
-		b := tagBump{name, node.Original.Ref, top, ver.Bump(node.Original.Ref, top).Warning()}
-		if b.warn != "" && len(names) == 0 {
-			u.T.Printf("%s %s -> %s is a likely breaking jump: left alone. Run nixup update %s to move it.\n", name, b.old, b.new, name)
+		b := tagBump{name, node.Original.Ref, top}
+		if ver.Bump(b.old, b.new) == ver.Major && len(names) == 0 {
+			u.T.Printf("%s %s -> %s is a major jump: left alone. Run nixup update %s to move it.\n", name, b.old, b.new, name)
 			continue
 		}
 		bumps = append(bumps, b)

@@ -99,26 +99,23 @@ func TestBump(t *testing.T) {
 	cases := []struct {
 		from, to string
 		want     Kind
-		warns    bool
 	}{
-		{"0.21.0", "1.1.1", Major, true},
-		{"v1.6.2", "v2.0.0", Major, true},
-		{"0.21.0", "0.22.0", ZeroMinor, true},
-		{"0.21.0", "0.21.1", Patch, false},
-		{"1.1.0", "1.2.0", Minor, false},
-		{"1.1.12", "1.1.13", Patch, false},
-		{"1.01", "1.02", Minor, false},                // two components: 1.01 is [1 1]
-		{"20261106.1", "20261108.1", Calendar, false}, // date-based: not a major jump
-		{"2026.10.14", "2026.11.2", Calendar, false},
-		{"999.0", "1000.0", Calendar, false}, // crossing into date-like numbers is not semver either
+		{"0.21.0", "1.1.1", Major},
+		{"v1.6.2", "v2.0.0", Major},
+		{"0.48.1", "0.50.0", Minor},
+		{"0.21.0", "0.21.1", Patch},
+		{"1.1.0", "1.2.0", Minor},
+		{"1.1.12", "1.1.13", Patch},
+		{"1.01", "1.02", Minor},                // two components: 1.01 is [1 1]
+		{"20261106.1", "20261108.1", Calendar}, // date-based: not a major jump
+		{"2026.10.14", "2026.11.2", Calendar},
+		{"999.0", "1000.0", Calendar},                                // crossing into date-like numbers is not semver either
+		{"0.68.0-nightly.20261112.3", "0.68.0-nightly.20261116", ""}, // a nightly moves, the version does not
 	}
 	for _, c := range cases {
 		got := Bump(c.from, c.to)
 		if got != c.want {
 			t.Errorf("Bump(%q, %q) = %s, want %s", c.from, c.to, got, c.want)
-		}
-		if (got.Warning() != "") != c.warns {
-			t.Errorf("Bump(%q, %q).Warning() = %q, warns=%v", c.from, c.to, got.Warning(), c.warns)
 		}
 	}
 }

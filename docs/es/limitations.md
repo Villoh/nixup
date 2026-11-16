@@ -31,12 +31,12 @@ El paso de inputs de `update` solo hace el build de los hosts con `--build`, `--
 - Flatpak no tiene revisión del changelog: el paso de Flatpak enseña versiones, no commits ni release notes. `LATEST` dice `unknown` cuando el remoto no publica versiones, como pasa con un remoto añadido desde un archivo `.flatpakref`.
 - Una app instalada desde un bundle cuyo remoto está desactivado, como un bundle `.flatpak` que construye tu propio paquete, nunca tiene actualizaciones en Flatpak. Actualízala a través de su paquete.
 - Inputs fijados a un tag: `update` mueve un tag cambiándolo como texto en `flake.nix`. El tag tiene que aparecer ahí exactamente una vez como palabra completa. Un tag escrito dos veces, construido con una variable (`${version}`) o escrito en otro archivo se rechaza con código de salida 2; cámbialo a mano. Solo se mueven los inputs de tipo `github`.
-- Sin nombres, `update` deja donde está un salto de tag que pinta a cambio incompatible y solo lo avisa. Nombra el input (`nixup update dms`) para moverlo.
+- Sin nombres, `update` deja donde está un salto de tag mayor y solo lo avisa. Nombra el input (`nixup update dms`) para moverlo.
 
 ## Heurísticas de versiones
 
 - Un `ref` que empieza por un dígito, por `v` más un dígito, o por un prefijo `palabra/` seguido de eso (`v1.2`, `1.2`, `dms/1.2`) se trata como tag de release. Todo lo demás es una rama.
-- Las versiones basadas en fechas, como `20240101.1`, no reciben aviso de salto mayor: un primer número de 1000 o más se interpreta como año o fecha, así que una versión mayor real tan alta tampoco se avisaría.
+- Las versiones basadas en fechas, como `20240101.1`, no tienen tamaño (`update`): un primer número de 1000 o más se interpreta como año o fecha, así que una versión mayor real tan alta tampoco se avisaría.
 - La pista de nixpkgs solo encuentra un paquete por su nombre o, en el caso de `foo-bin`, como `foo`. Si en nixpkgs se llama de otra forma, no lo ve. Además necesita pruebas de que es el mismo proyecto (repositorio u homepage): nunca sugiere un homónimo, pero tampoco el paquete correcto si sus metadatos no coinciden.
 - Las release notes se leen de las 50 releases más recientes de GitHub, y nixup enseña como mucho tres por actualización.
 

@@ -41,7 +41,7 @@ nixup is built so that a failed or unwanted update leaves your repository as it 
 - **A failed rollback is reported, not retried.** If writing the files back fails, nixup prints `nixup: restore failed:` with the reason and you have to clean up by hand.
 - **The scratch copy is your working tree, not your last commit.** Uncommitted and untracked (but not ignored) files go into the host builds. Symlinks are not copied.
 - **The review depends on GitHub.** If the API is unreachable or rate-limited, you see `review unavailable` and can still accept the update.
-- **The breaking-change warning is a guess from version numbers.** A patch release can break things. Date-based versions (`20261106.1`, `2026.10.14`) are recognised and get no warning, since their numbers carry no compatibility meaning.
+- **`major`, `minor` and `patch` only size the version number.** A patch release can break things, and nixup does not say which will. Date-based versions (`20261106.1`, `2026.10.14`) and nightlies show `update`, since their numbers carry no compatibility meaning.
 - **`--report` is written before the `flake.lock` question.** The report describes the proposed change even if you then answer no.
 - **The Flatpak and `nix profile` steps change the machine at once.** There is no scratch copy, no build check and no diff to review: what you accept is installed when the step ends. With `-y` that happens without a question.
 - **Going back depends on Flatpak and Nix.** `flatpak update --commit` needs the previous commit to still be available from the remote, and a ref whose commit could not be read gets no line. `nix profile rollback` returns to the previous profile generation, which is the one before the upgrade only if nothing changed the profile since.

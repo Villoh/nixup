@@ -97,8 +97,8 @@ jobs:
             jq -r '
               def kind: {inputs: "input", packages: "package"}[.] // .;
               def status: if .status != "outdated" then .status
-                elif (.warning // "") | test("MAJOR") then "**major**"
-                elif (.warning // "") != "" then "**0.x-minor**"
+                elif .bump == "major" then "**major**"
+                elif (.bump // "") | IN("minor", "patch") then .bump
                 else "update" end;
               def notes: [(.note // "" | select(startswith("nixup update")
                 | not)), (.hint // empty)] | map(select(. != ""))

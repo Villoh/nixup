@@ -87,15 +87,15 @@ input    lanzaboote    v0.4.1         v1.2.0   major
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update
 package  ripgrep       14.0.0         15.2.0   major
 
-4 to update (2 likely breaking) · 1 up to date (--all to show them)
+4 to update · 1 up to date (--all to show them)
 ```
 
 One row per entry: where it comes from (`SOURCE`: `input`, `package`, `flatpak`, `profile`), its name, the current and newest version, and a status. Every update is applied with `nixup update <name>` (or `nixup update` for all), so the table does not repeat it; a `NOTE` column appears only for rows that need something else. The last line counts it all.
 
 `STATUS` is one of:
 
-- `update`: a newer version exists.
-- `major` or `0.x-minor`: a newer version exists and the jump looks breaking, a new major version or a new minor version while still at `0.x`. Read the changelog first.
+- `major`, `minor` or `patch`: a newer version exists, named after the first number that changed (`1.x` to `2.x` is `major`, `0.48` to `0.50` is `minor`). nixup sizes the jump and does not judge it: read the changelog.
+- `update`: a newer version exists, but its number has no size: a commit, a date-based version (`20261106.1`) or a nightly.
 - `ok`: up to date. These rows are only counted; `--all` lists them.
 - `info`: nothing to apply, but worth a look. nixup cannot check the entry (for example `no GitHub upstream: check by hand`), nixpkgs already has the package, or a followed input has a newer upstream tag or is ahead of nixpkgs. `NOTE` says which.
 - `error`: the check failed, and `NOTE` has the reason.
@@ -146,6 +146,6 @@ nixup update -H desktop --test
 
 After the four steps, if `flake.lock` or a package was written, nixup prints `Activating desktop (nh os test)…` and runs `nh os test <repo> -H desktop`. nh asks for sudo and activates. If nothing was written, or a step failed, nh is not run. A flake with several hosts needs `-H`. See [Activation](commands.md#activation).
 
-Pinned tags (`lanzaboote` above) are not moved by `nix flake update`, so nixup moves them itself. In the scratch copy it replaces the tag in `flake.nix` with the newest release, and after your yes it writes `flake.nix` together with `flake.lock`. A plain `nixup update` leaves a likely breaking jump, such as `v0.4.1` to `v1.2.0`, where it is and says so. `nixup update lanzaboote` moves it.
+Pinned tags (`lanzaboote` above) are not moved by `nix flake update`, so nixup moves them itself. In the scratch copy it replaces the tag in `flake.nix` with the newest release, and after your yes it writes `flake.nix` together with `flake.lock`. A plain `nixup update` leaves a major jump, such as `v0.4.1` to `v1.2.0`, where it is and says so. `nixup update lanzaboote` moves it.
 
 Next: [Commands](commands.md) for every flag, or [How it works](how-it-works.md) for what happens underneath.

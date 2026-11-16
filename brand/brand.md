@@ -110,7 +110,7 @@ nixup reads like a careful colleague reporting what they found. Rules:
 2. **Never claim more than happened.** "Updated" means written to disk. Say what is
    still up to the user: not committed, not activated.
 3. **Calm.** No exclamation marks, no emoji, no hype words ("blazing", "magic",
-   "effortless", "seamless"). The only symbol is `⚠` for a likely breaking change.
+   "effortless", "seamless"). No symbols in the output.
 4. **The user decides.** Questions default to No. When something is refused or
    discarded, say what was left untouched and how to go on.
 5. **Short.** One line per fact. Lowercase CLI messages, no trailing chatter.
@@ -122,7 +122,7 @@ nixup reads like a careful colleague reporting what they found. Rules:
 | `flake.lock updated (not committed, nothing activated).` | `✅ All done! Your system is now up to date 🎉` |
 | `Discarded. Nothing changed.` | `Oops! Update cancelled.` |
 | `flake.lock has uncommitted changes: commit or stash it, then re-run.` | `Error: invalid state.` |
-| `⚠ MAJOR version jump 1.x → 2.x` | `🚨 WARNING!!! This update may BREAK your system!` |
+| `dms v1.0.0 -> v2.0.0 is a major jump: left alone.` | `🚨 WARNING!!! This update may BREAK your system!` |
 | `Build of desktop failed: flake.lock left untouched.` | `Something went wrong. Please try again.` |
 | `Everything is up to date.` | `Awesome, you're all caught up! ✨` |
 

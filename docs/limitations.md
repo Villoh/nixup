@@ -31,12 +31,12 @@ The input step of `update` builds hosts only with `--build`, `--test`, `--switch
 - Flatpak has no changelog review: the Flatpak step shows versions, not commits or release notes. `LATEST` says `unknown` when the remote publishes no versions, as with a remote added from a `.flatpakref` file.
 - An app installed from a bundle whose remote is disabled, such as a `.flatpak` bundle built by your own package, never has an update in Flatpak. Update it through its package.
 - Pinned tag inputs: `update` moves a tag by replacing it as text in `flake.nix`. The tag must appear there exactly once as a whole word. A tag written twice, built from a variable (`${version}`) or written in another file is refused with exit code 2; change it by hand. Only inputs of type `github` are moved.
-- Without names, `update` leaves a likely breaking tag jump alone and only reports it. Name the input (`nixup update dms`) to move it.
+- Without names, `update` leaves a major tag jump alone and only reports it. Name the input (`nixup update dms`) to move it.
 
 ## Version heuristics
 
 - A `ref` that starts with a digit, `v` plus a digit, or a `word/` prefix followed by those (`v1.2`, `1.2`, `dms/1.2`) is treated as a release tag. Everything else is a branch.
-- Date-based versions such as `20240101.1` get no major-jump warning: a first number of 1000 or more is read as a year or a date, so a real major version that high would be missed too.
+- Date-based versions such as `20240101.1` get no size (`update`): a first number of 1000 or more is read as a year or a date, so a real major version that high would be missed too.
 - The nixpkgs hint only finds a package under its own name or, for `foo-bin`, as `foo`. A package called differently in nixpkgs is missed. It also needs proof that both are the same project (repository or homepage), so a namesake is never suggested, but neither is the real thing if its metadata differs.
 - Release notes are read from the 50 most recent GitHub releases, and nixup shows at most three per update.
 

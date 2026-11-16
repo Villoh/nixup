@@ -104,14 +104,13 @@ func HasPrefix(tag, prefix string) bool {
 type Kind string
 
 const (
-	Calendar  Kind = "calendar" // date-based versions (20261106.1, 2026.10.14): no semantic meaning
-	Major     Kind = "major"
-	ZeroMinor Kind = "0.x-minor"
-	Minor     Kind = "minor"
-	Patch     Kind = "patch"
+	Calendar Kind = "calendar" // date-based versions (20261106.1, 2026.10.14): no semantic meaning
+	Major    Kind = "major"
+	Minor    Kind = "minor"
+	Patch    Kind = "patch"
 )
 
-// Bump classifies from -> to. A minor jump while still at 0.x counts as breaking, by convention.
+// Bump classifies from -> to by the first number that changed, or "" when none did.
 func Bump(from, to string) Kind {
 	a, b := Parse(from).nums, Parse(to).nums
 	at := func(n []int, i int) int {
@@ -123,23 +122,12 @@ func Bump(from, to string) Kind {
 	switch {
 	case at(a, 0) >= 1000 || at(b, 0) >= 1000: // a year or a date, not a major version
 		return Calendar
+	case cmpInts(a, b) == 0: // only the prerelease moved (a nightly): no jump to size
+		return ""
 	case at(a, 0) != at(b, 0):
 		return Major
-	case at(a, 0) == 0 && at(a, 1) != at(b, 1):
-		return ZeroMinor
 	case at(a, 1) != at(b, 1):
 		return Minor
 	}
 	return Patch
-}
-
-// Warning is the text shown for jumps that are probably breaking, or "".
-func (k Kind) Warning() string {
-	switch k {
-	case Major:
-		return "MAJOR version jump: read the changelog, expect breaking changes"
-	case ZeroMinor:
-		return "0.x minor jump: may be breaking"
-	}
-	return ""
 }

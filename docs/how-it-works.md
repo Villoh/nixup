@@ -77,7 +77,7 @@ If `flatpak` is installed, nixup first refreshes the remotes' appstream data (`f
 
 Tags and versions are compared by their numbers, ignoring a leading `v` or a prefix like `dms/`. A prerelease sorts below its final release. Words like `alpha`, `beta`, `rc`, `pre`, `preview`, `dev`, `nightly` and `snapshot` mark a prerelease when they start a segment, so `1.2.3-rc.1` is a prerelease and `1.2.3-arch` is not.
 
-A jump gets a warning when the first number changes (`1.x` to `2.x`), or when the second number changes while the first is `0` (`0.21` to `0.22`). Date-based versions, whose first number is 1000 or more (such as `20261106.1`), get no warning.
+A jump is sized by the first number that changes: `major` for the first (`1.x` to `2.x`), `minor` for the second, `patch` for the rest. Date-based versions, whose first number is 1000 or more (such as `20261106.1`), and a prerelease that moves under the same number (a nightly) have no size and show `update`.
 
 ## The upstream review
 
@@ -101,7 +101,7 @@ The input and package steps only edit files in your repository; nothing reaches 
 ### The input step
 
 1. If `git diff --quiet -- flake.lock` reports changes, read the committed lock with `git show HEAD:flake.lock` and print one line naming the inputs already moved that this update does not cover. There is no question: the update runs on top of the working `flake.lock`, so those changes are kept and only what nixup moves is shown.
-2. For each input in scope (the names you gave, or every input) pinned to a release tag, list its tags as `check` does. If a newer tag exists, the input's tag will move. If the tags cannot be listed, the tag stays and nixup says so. Without names, a likely breaking jump is left alone and reported; with the input's name it moves, with the warning.
+2. For each input in scope (the names you gave, or every input) pinned to a release tag, list its tags as `check` does. If a newer tag exists, the input's tag will move. If the tags cannot be listed, the tag stays and nixup says so. Without names, a major jump is left alone and reported; with the input's name it moves.
 3. If a tag will move and `git diff --quiet -- flake.nix` reports changes, ask, unless `--allow-dirty` or `-y`. A no ends the step with exit code 0.
 4. Create a temporary directory and copy into it every file `git ls-files --cached --others --exclude-standard` lists: tracked files with their uncommitted edits, plus untracked files that are not ignored. Symlinks and files deleted from the working tree are skipped. This is the scratch copy.
 5. For each tag that moves, replace the old tag with the new one in the copy's `flake.nix`. The old tag is read from `original.ref` in `flake.lock` and the new one from the tag list, both as written. The old tag must appear exactly once in `flake.nix` as a whole word, not inside a longer version; otherwise the step stops with exit code 2 before `nix flake update` runs.

@@ -20,7 +20,7 @@ internal/
   inventory/        what list and search read: inputs, packages, profile, Flatpak, nixpkgs
   flake/            flake.lock, finding the flake, hosts, own packages, scratch copy
   gh/               tags and heads through git; commits and release notes through the API
-  ver/              version ordering, prerelease detection, major-jump warnings
+  ver/              version ordering, prerelease detection, jump sizes
   run/              the only place that starts processes (Runner), plus a scripted Fake
   ui/               terminal output, color, yes/no questions
   par/              bounded concurrency

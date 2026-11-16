@@ -87,15 +87,15 @@ input    lanzaboote    v0.4.1         v1.2.0   major
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update
 package  ripgrep       14.0.0         15.2.0   major
 
-4 to update (2 likely breaking) · 1 up to date (--all to show them)
+4 to update · 1 up to date (--all to show them)
 ```
 
 Una fila por entrada: de dónde viene (`SOURCE`: `input`, `package`, `flatpak`, `profile`), su nombre, la versión actual y la más nueva, y un estado. Toda actualización se aplica con `nixup update <nombre>` (o `nixup update` para todo), así que la tabla no lo repite; la columna `NOTE` solo aparece en las filas que necesitan otra cosa. La última línea lo resume todo.
 
 `STATUS` puede ser:
 
-- `update`: hay una versión más nueva.
-- `major` o `0.x-minor`: hay una versión más nueva y el salto pinta a cambio incompatible, una versión mayor nueva o una versión menor nueva cuando todavía estás en `0.x`. Lee primero el changelog.
+- `major`, `minor` o `patch`: hay una versión más nueva, con el nombre del primer número que cambió (`1.x` a `2.x` es `major`, `0.48` a `0.50` es `minor`). nixup mide el salto y no lo juzga: lee el changelog.
+- `update`: hay una versión más nueva, pero su número no tiene tamaño: un commit, una versión basada en fecha (`20261106.1`) o un nightly.
 - `ok`: está al día. Estas filas solo se cuentan; con `--all` se listan.
 - `info`: no hay nada que aplicar, pero merece un vistazo. nixup no puede comprobar la entrada (por ejemplo `no GitHub upstream: check by hand`), nixpkgs ya tiene el paquete, o un input que sigue a nixpkgs tiene un tag más nuevo en upstream o va por delante de nixpkgs. `NOTE` dice cuál.
 - `error`: la comprobación ha fallado, y `NOTE` trae el motivo.
@@ -146,6 +146,6 @@ nixup update -H desktop --test
 
 Después de los cuatro pasos, si se ha escrito `flake.lock` o algún paquete, nixup imprime `Activating desktop (nh os test)…` y ejecuta `nh os test <repo> -H desktop`. nh pide sudo y activa. Si no se ha escrito nada, o ha fallado algún paso, no se ejecuta nh. Un flake con varios hosts necesita `-H`. Ver [Activación](commands.md#activación).
 
-Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`, así que los mueve nixup. En la copia temporal cambia el tag de `flake.nix` por la release más nueva, y si dices que sí escribe `flake.nix` junto con `flake.lock`. Un `nixup update` sin nombres deja donde está un salto que pinta a cambio incompatible, como `v0.4.1` a `v1.2.0`, y lo avisa. `nixup update lanzaboote` lo mueve.
+Los tags fijados (`lanzaboote` en el ejemplo) no los mueve `nix flake update`, así que los mueve nixup. En la copia temporal cambia el tag de `flake.nix` por la release más nueva, y si dices que sí escribe `flake.nix` junto con `flake.lock`. Un `nixup update` sin nombres deja donde está un salto mayor, como `v0.4.1` a `v1.2.0`, y lo avisa. `nixup update lanzaboote` lo mueve.
 
 Siguiente: [Comandos](commands.md) para ver todos los flags, o [Cómo funciona](how-it-works.md) para saber qué pasa por debajo.

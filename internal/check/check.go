@@ -51,7 +51,7 @@ type Row struct {
 	Latest  string     `json:"latest,omitempty"`
 	Status  string     `json:"status"`
 	Note    string     `json:"note,omitempty"`
-	Warn    string     `json:"warning,omitempty"`
+	Bump    ver.Kind   `json:"bump,omitempty"` // size of the jump, for versions that have one
 	Hint    string     `json:"hint,omitempty"`
 	Review  *gh.Review `json:"review,omitempty"`
 }
@@ -213,7 +213,7 @@ func (c *Checker) followedInput(name string, node flake.Node, f Follow, review b
 	what := "nixpkgs " + f.Attr + " " + f.Version
 	if target != "" {
 		row := Row{Section: "inputs", Name: name, Current: ref, Latest: target, Status: Outdated,
-			Note: "nixup update " + name, Warn: ver.Bump(ref, target).Warning()}
+			Note: "nixup update " + name, Bump: ver.Bump(ref, target)}
 		if review {
 			row.Review = c.GH.Review(node.Original.Owner+"/"+node.Original.Repo, ref, target, true)
 		}
@@ -261,7 +261,7 @@ func (c *Checker) input(name string, node flake.Node, review bool) Row {
 			return Row{Section: "inputs", Name: name, Current: ref, Status: OK, Note: "pinned tag"}
 		}
 		row := Row{Section: "inputs", Name: name, Current: ref, Latest: top, Status: Outdated,
-			Note: "nixup update " + name, Warn: ver.Bump(ref, top).Warning()}
+			Note: "nixup update " + name, Bump: ver.Bump(ref, top)}
 		if review {
 			row.Review = c.GH.Review(id, ref, top, true)
 		}
@@ -332,7 +332,7 @@ func (c *Checker) packageFromURL(p flake.Package, id string, review bool) Row {
 		return row
 	}
 	row.Latest, row.Status = latest, Outdated
-	row.Warn = ver.Bump(p.Version, latest).Warning()
+	row.Bump = ver.Bump(p.Version, latest)
 	row.Note = "nixup update " + p.Name
 	if review && id != "" {
 		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version, nil), c.GH.TagFor(id, latest, nil), true)
@@ -380,7 +380,7 @@ func (c *Checker) Package(p flake.Package, review bool) Row {
 		return row
 	}
 	row.Latest, row.Status = latest, Outdated
-	row.Warn = ver.Bump(p.Version, latest).Warning()
+	row.Bump = ver.Bump(p.Version, latest)
 	row.Note = "nixup update " + p.Name
 	if review {
 		row.Review = c.GH.Review(id, c.GH.TagFor(id, p.Version, extract), top, true)

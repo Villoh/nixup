@@ -66,10 +66,6 @@ func (u *Updater) updateOne(o PkgOpts, p flake.Package, row check.Row) int {
 	t := u.T
 	t.Printf("\n%s  %s -> %s\n", t.Bold(p.Name), row.Current, row.Latest)
 	md := fmt.Sprintf("### %s `%s` → `%s`\n\n", p.Name, row.Current, row.Latest)
-	if row.Warn != "" {
-		t.Println("  " + t.Paint("⚠ "+row.Warn, 33))
-		md += "> ⚠ " + row.Warn + "\n\n"
-	}
 	if row.Review != nil {
 		t.Printf("%s", report.ReviewText(row.Review, "  "))
 		md += report.ReviewMarkdown(row.Review)

@@ -13,6 +13,7 @@ import (
 	"github.com/Villoh/nixup/internal/flake"
 	"github.com/Villoh/nixup/internal/run"
 	"github.com/Villoh/nixup/internal/testutil"
+	"github.com/Villoh/nixup/internal/ver"
 )
 
 func checker(e *testutil.Env) *check.Checker { return &check.Checker{R: e.Run, GH: e.GH} }
@@ -44,7 +45,7 @@ func TestInputsPinnedTag(t *testing.T) {
 	if dms.Status != check.Outdated || dms.Latest != "v2.0.0" || dms.Note != "nixup update dms" {
 		t.Errorf("dms: %+v (prereleases must not count)", dms)
 	}
-	if !strings.Contains(dms.Warn, "MAJOR") || dms.Review != nil {
+	if dms.Bump != ver.Major || dms.Review != nil {
 		t.Errorf("a major jump warns; no review unless asked: %+v", dms)
 	}
 	if lz := rows["lanzaboote"]; lz.Status != check.OK || lz.Note != "pinned tag" {
@@ -146,7 +147,7 @@ func TestPackages(t *testing.T) {
 		t.Fatalf("rows: %+v", rows)
 	}
 	p := rows["padpoll"]
-	if p.Status != check.Outdated || p.Latest != "1.1.0" || p.Note != "nixup update padpoll" || p.Warn != "" {
+	if p.Status != check.Outdated || p.Latest != "1.1.0" || p.Note != "nixup update padpoll" || p.Bump != ver.Minor {
 		t.Errorf("padpoll: %+v", p)
 	}
 	if p.Review == nil || p.Review.Commits != 5 {
@@ -174,7 +175,7 @@ func TestPackageMajorJumpWarns(t *testing.T) {
 	e.Tags("lgse/strata", "v0.21.0", "v1.1.1")
 	p := flake.Package{Name: "strata", Version: "0.21.0", Homepage: "https://github.com/lgse/strata", Update: []string{"nix-update"}}
 	row := checker(e).Package(p, false)
-	if row.Status != check.Outdated || !strings.Contains(row.Warn, "MAJOR") {
+	if row.Status != check.Outdated || row.Bump != ver.Major {
 		t.Errorf("0.21 -> 1.1 must warn: %+v", row)
 	}
 }
@@ -442,7 +443,7 @@ func TestPackageFollowsVersionRegex(t *testing.T) {
 	p := flake.Package{Name: "meiro", Version: "0.6.1", Homepage: "https://github.com/elianiva/meiro",
 		Update: []string{"nix-update", "--version-regex", "desktop-v(.*)"}}
 	row := checker(e).Package(p, true)
-	if row.Status != check.Outdated || row.Latest != "0.7.0" || !strings.Contains(row.Warn, "0.x") {
+	if row.Status != check.Outdated || row.Latest != "0.7.0" || row.Bump != ver.Minor {
 		t.Errorf("the update script's regex picks the series and reads the version: %+v", row)
 	}
 	if row.Review == nil || row.Review.From != "desktop-v0.6.1" || row.Review.To != "desktop-v0.7.0" {

@@ -19,7 +19,7 @@ import (
 const maxNotes = 3
 
 // statusColor is the SGR color of each STATUS value.
-var statusColor = map[string]int{"ok": 32, "update": 33, "major": 31, "0.x-minor": 31, "info": 36, "error": 31}
+var statusColor = map[string]int{"ok": 32, "major": 31, "minor": 33, "info": 36, "error": 31}
 
 func firstLines(s string, n int) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
@@ -29,27 +29,26 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// status is the STATUS column: ok, update, info, error, or the kind of a likely
-// breaking jump (major, 0.x-minor).
+// status is the STATUS column: ok, info, error, or for an update the size of its jump
+// (major, minor, patch), or "update" when the version has none (a commit, a date).
 func status(r check.Row) string {
-	switch {
-	case r.Status == check.Outdated && r.Warn == ver.Major.Warning():
-		return string(ver.Major)
-	case r.Status == check.Outdated && r.Warn == ver.ZeroMinor.Warning():
-		return string(ver.ZeroMinor)
-	case r.Status == check.Outdated:
-		return "update"
+	if r.Status != check.Outdated {
+		return r.Status
 	}
-	return r.Status
+	switch r.Bump {
+	case ver.Major, ver.Minor, ver.Patch:
+		return string(r.Bump)
+	}
+	return "update"
 }
 
 // Text prints check results as one table. Up-to-date rows are always counted, and only
 // shown when all is set; with review, the upstream changes of each update follow the table.
 func Text(t *ui.Term, rows []check.Row, all, review bool) {
 	var shown []check.Row
-	updates, breaking, info, errs, ok := 0, 0, 0, 0, 0
+	updates, info, errs, ok := 0, 0, 0, 0
 	for _, r := range rows {
-		switch st := status(r); {
+		switch {
 		case r.Status == check.OK:
 			ok++
 			if !all {
@@ -57,9 +56,6 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 			}
 		case r.Status == check.Outdated:
 			updates++
-			if st != "update" {
-				breaking++
-			}
 		case r.Status == check.Info:
 			info++
 		case r.Status == check.Error:
@@ -100,9 +96,6 @@ func Text(t *ui.Term, rows []check.Row, all, review bool) {
 	var sum []string
 	if updates > 0 {
 		u := fmt.Sprintf("%d to update", updates)
-		if breaking > 0 {
-			u += fmt.Sprintf(" (%d likely breaking)", breaking)
-		}
 		sum = append(sum, u)
 	}
 	if info > 0 {
@@ -199,9 +192,6 @@ func Markdown(rows []check.Row) string {
 		fmt.Fprintf(&b, "### %s / %s `%s`\n\n", r.Section, r.Name, version)
 		if r.Status == check.Error {
 			fmt.Fprintf(&b, "Error: %s\n\n", r.Note)
-		}
-		if r.Warn != "" {
-			fmt.Fprintf(&b, "> ⚠ %s\n\n", r.Warn)
 		}
 		if r.Hint != "" {
 			fmt.Fprintf(&b, "> → %s\n\n", r.Hint)

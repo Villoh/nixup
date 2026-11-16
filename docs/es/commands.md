@@ -59,7 +59,7 @@ nixup check --markdown --review
 
 `check` no recibe nombres; lo que escribas detrás se ignora.
 
-La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` y, cuando alguna fila la tiene, `NOTE`, seguida de una línea de resumen y, con `--review`, un bloque de cambios de upstream por cada actualización. `STATUS` es `update`, `major` o `0.x-minor` (probablemente incompatible), `ok`, `info` o `error`; ver [Primeros pasos](getting-started.md#cómo-leer-el-informe). Una fila `ok` repite su versión en `LATEST`, y el resumen cuenta las filas `ok` aunque estén ocultas. En JSON los estados son `outdated`, `ok`, `info` y `error`, y un salto probablemente incompatible lleva `warning`:
+La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS` y, cuando alguna fila la tiene, `NOTE`, seguida de una línea de resumen y, con `--review`, un bloque de cambios de upstream por cada actualización. `STATUS` es `ok`, `info`, `error`, o para una actualización el tamaño de su salto: `major`, `minor`, `patch`, o `update` cuando la versión no lo tiene (un commit, una fecha); ver [Primeros pasos](getting-started.md#cómo-leer-el-informe). Una fila `ok` repite su versión en `LATEST`, y el resumen cuenta las filas `ok` aunque estén ocultas. En JSON los estados son `outdated`, `ok`, `info` y `error`, y una actualización cuya versión se puede medir lleva `bump` (`major`, `minor`, `patch` o `calendar`):
 
 ```json
 [
@@ -70,12 +70,12 @@ La salida de texto es una tabla: `SOURCE`, `NAME`, `CURRENT`, `LATEST`, `STATUS`
     "latest": "15.2.0",
     "status": "outdated",
     "note": "nixup update ripgrep",
-    "warning": "MAJOR version jump: read the changelog, expect breaking changes"
+    "bump": "major"
   }
 ]
 ```
 
-`section` es `inputs`, `packages`, `flatpak` o `profile`: en plural para inputs y paquetes, a diferencia de `SOURCE` y `--source`. `latest`, `note`, `warning`, `hint` y `review` no aparecen si están vacíos. `hint` indica que el nixpkgs del flake ya tiene el paquete (ver [Cómo funciona](how-it-works.md#packages)). Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
+`section` es `inputs`, `packages`, `flatpak` o `profile`: en plural para inputs y paquetes, a diferencia de `SOURCE` y `--source`. `latest`, `note`, `bump`, `hint` y `review` no aparecen si están vacíos. `hint` indica que el nixpkgs del flake ya tiene el paquete (ver [Cómo funciona](how-it-works.md#packages)). Con `--review`, `review` contiene `repo`, `from`, `to`, `compare_url`, `commits`, `files`, `additions`, `deletions`, `subjects`, `releases` (cada una con `tag` y `body`), `skipped_prereleases` y, si la API de GitHub ha fallado, `error`.
 
 Códigos de salida:
 
@@ -131,9 +131,9 @@ Las preguntas aceptan `y` o `yes`, `n` o `no`; Enter es no, y cualquier otra cos
 El paso de inputs, en orden:
 
 1. Si `flake.lock` tiene cambios sin commitear, sigue sin preguntar: no se pierde nada, la actualización parte de tu `flake.lock` de trabajo y los cambios que enseña son solo los que mueve nixup. Si el resultado va a llevar también inputs que esta actualización no cubre, lo dice: `flake.lock already has uncommitted changes (holded-tt): they stay, and this update goes on top.` Los nombres son los inputs que tu `flake.lock` de trabajo ha movido desde el último commit (`git show HEAD:flake.lock`) y que no has nombrado; sin nombres se cubren todos y no imprime nada. Si nixup no puede saber qué ha cambiado, la línea sale sin nombres.
-2. Busca inputs fijados a un tag de release (`v1.6.2`, `1.2.0`, `dms/1.11.6`) con un tag más nuevo upstream, entre los inputs que nombres o, sin nombres, entre todos. Sin nombres, un salto que pinta a cambio incompatible se deja donde está: `dms v1.6.2 -> v2.1.2 is a likely breaking jump: left alone. Run nixup update dms to move it.` Si lo nombras, se mueve. Un input con un comentario `# nixup: follows nixpkgs#<attr>` se mueve, en cambio, al tag de la versión de ese paquete en el nixpkgs bloqueado, nunca más allá; si lo nombras cuando ya está ahí, imprime `dms follows nixpkgs dux-shell 2.1.1: its tag stays.` (ver [Cómo funciona](how-it-works.md#inputs)).
+2. Busca inputs fijados a un tag de release (`v1.6.2`, `1.2.0`, `dms/1.11.6`) con un tag más nuevo upstream, entre los inputs que nombres o, sin nombres, entre todos. Sin nombres, un salto mayor se deja donde está: `dms v1.6.2 -> v2.1.2 is a major jump: left alone. Run nixup update dms to move it.` Si lo nombras, se mueve. Un input con un comentario `# nixup: follows nixpkgs#<attr>` se mueve, en cambio, al tag de la versión de ese paquete en el nixpkgs bloqueado, nunca más allá; si lo nombras cuando ya está ahí, imprime `dms follows nixpkgs dux-shell 2.1.1: its tag stays.` (ver [Cómo funciona](how-it-works.md#inputs)).
 3. Si se va a mover algún tag y `flake.nix` tiene cambios sin commitear, pregunta `flake.nix has uncommitted changes. Update on top of them? They are kept. [y/N]`. Si dices que no, imprime `Skipped.` y termina el paso. `--allow-dirty` y `-y` se saltan la pregunta.
-4. Copia el árbol de trabajo a un directorio temporal. Para cada tag que se mueve, lo cambia en el `flake.nix` de la copia e imprime `Moving the dms tag in flake.nix: v1.6.2 -> v2.1.2`, seguido de `⚠ MAJOR version jump: read the changelog, expect breaking changes` si el salto pinta a cambio incompatible. Después ejecuta allí `nix flake update --flake <copia> [input...]`.
+4. Copia el árbol de trabajo a un directorio temporal. Para cada tag que se mueve, lo cambia en el `flake.nix` de la copia e imprime `Moving the dms tag in flake.nix: v1.6.2 -> v2.1.2` Después ejecuta allí `nix flake update --flake <copia> [input...]`.
 5. Si no ha cambiado nada, imprime `flake.lock is already up to date.` y para.
 6. Si en el lock nuevo un input movido no está fijado a su tag nuevo, para con código de salida 2: `after the edit, flake.lock pins dms to "v1.6.2", not v2.1.2: nothing written`.
 7. Para cada input directo que se ha movido, imprime el commit antiguo y el nuevo y los commits de upstream. Los inputs que no son directos se cuentan en una línea.
@@ -152,7 +152,7 @@ Si no se pueden listar los tags de un input, nixup imprime `<name>: cannot list 
 
 El paso de paquetes los recorre de uno en uno. Para cada paquete desactualizado, nixup:
 
-1. Imprime la versión actual y la nueva, el aviso de salto mayor si lo hay y la revisión de upstream. Si el archivo que define el paquete no es parte de este flake, imprime después `cannot tell which file in this flake defines <name> (meta.position "…"): not updating it.`, no pregunta nada y pasa al siguiente; el código de salida es 2.
+1. Imprime la versión actual y la nueva, y la revisión de upstream. Si el archivo que define el paquete no es parte de este flake, imprime después `cannot tell which file in this flake defines <name> (meta.position "…"): not updating it.`, no pregunta nada y pasa al siguiente; el código de salida es 2.
 2. Si `<dir del paquete>` tiene cambios sin commitear, pregunta `<dir del paquete> has uncommitted changes. Update on top of them? They are kept. [y/N]`. Si dices que no, imprime `Skipped.` y sigue con el siguiente. Con `--allow-dirty` o `-y` no pregunta, solo imprime `<dir del paquete> has uncommitted changes: updating on top of them; they are kept.`
 3. Pregunta `Update <name> to <version>? [y/N]`, salvo con `-y`. Si dices que no, imprime `Skipped.` y sigue con el siguiente.
 4. Guarda todos los archivos de `<dir del paquete>` y después ejecuta `nix-update --flake <name> --version=<la versión revisada>`, más los argumentos extra del `passthru.updateScript` del paquete. Imprime `Updating <archivo> with nix-update…`, con el archivo que define el paquete; la salida de nix-update solo se muestra si falla.

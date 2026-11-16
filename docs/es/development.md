@@ -20,7 +20,7 @@ internal/
   inventory/        lo que leen list y search: inputs, paquetes, perfil, Flatpak, nixpkgs
   flake/            flake.lock, localizar el flake, hosts, paquetes propios, copia temporal
   gh/               tags y ramas con git; commits y release notes con la API
-  ver/              orden de versiones, detección de prereleases, avisos de salto mayor
+  ver/              orden de versiones, detección de prereleases, tamaño del salto
   run/              el único sitio que lanza procesos (Runner), más un Fake programable
   ui/               salida por terminal, color, preguntas de sí/no
   par/              concurrencia acotada

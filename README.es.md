@@ -30,7 +30,7 @@ input    lanzaboote    v0.4.1         v1.2.0   major
 input    nixpkgs       0bb2eed · 8d   f4a03c0  update
 package  ripgrep       14.0.0         15.2.0   major
 
-4 to update (2 likely breaking) · 1 up to date (--all to show them)
+4 to update · 1 up to date (--all to show them)
 ```
 
 Con `--review` verás, después de la tabla y para cada actualización, el repositorio de origen, el número de commits y el tamaño del cambio con un enlace de comparación, los últimos mensajes de commit y, si la versión es un tag, las release notes entre ambas versiones.

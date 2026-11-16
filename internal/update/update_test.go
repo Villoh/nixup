@@ -972,14 +972,14 @@ func TestLockLeavesAMajorTagUnlessNamed(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(f.repo, "flake.nix")); string(b) != dmsNix {
 		t.Errorf("without names a major jump stays: %s", b)
 	}
-	if !strings.Contains(f.out.String(), "dms v1.0.0 -> v2.0.0 is a likely breaking jump: left alone. Run nixup update dms to move it.") {
+	if !strings.Contains(f.out.String(), "dms v1.0.0 -> v2.0.0 is a major jump: left alone. Run nixup update dms to move it.") {
 		t.Errorf("and says how to move it:\n%s", f.out)
 	}
 
 	g := tagFixture(t, "", dmsNix, "v1.0.0", "v2.0.0")
 	g.u.Lock(update.LockOpts{Repo: g.repo, Inputs: []string{"dms"}, Yes: true})
-	if b, _ := os.ReadFile(filepath.Join(g.repo, "flake.nix")); !strings.Contains(string(b), "v2.0.0") || !strings.Contains(g.out.String(), "⚠ MAJOR") {
-		t.Errorf("named, it moves, with the warning: %s\n%s", b, g.out)
+	if b, _ := os.ReadFile(filepath.Join(g.repo, "flake.nix")); !strings.Contains(string(b), "v2.0.0") || !strings.Contains(g.out.String(), "Moving the dms tag in flake.nix: v1.0.0 -> v2.0.0") {
+		t.Errorf("named, it moves: %s\n%s", b, g.out)
 	}
 }
 
