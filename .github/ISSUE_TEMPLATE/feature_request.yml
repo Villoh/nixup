@@ -1,0 +1,16 @@
+name: Feature request
+description: Something nixup should check, update or show.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you need
+      description: The situation you are in, not only the solution. Link the docs or upstream that motivate it.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would expect
+      description: An example of the command and its output, if you have one.

@@ -1,0 +1,27 @@
+name: Bug report
+description: nixup does something wrong or fails.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Check [docs/limitations.md](https://github.com/Villoh/nixup/blob/main/docs/limitations.md) first: it may be a known limit.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, its output and what you expected. Paste errors as they are.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: nixup version
+      description: Output of `nixup --version`.
+    validations:
+      required: true
+  - type: textarea
+    id: flake
+    attributes:
+      label: Relevant flake.nix / flake.lock
+      description: The input, package or host involved. Remove anything private.
+      render: nix
