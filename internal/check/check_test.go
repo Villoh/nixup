@@ -627,6 +627,12 @@ func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f
 
 // A channel tarball input has no branch to ls-remote: the channel's git-revision is the head.
 func TestInputsChannelTarball(t *testing.T) {
+	for _, ext := range []string{"xz", "gz", "zst"} {
+		t.Run(ext, func(t *testing.T) { inputsChannelTarball(t, ext) })
+	}
+}
+
+func inputsChannelTarball(t *testing.T, ext string) {
 	const oldRev, newRev = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	e := testutil.New(t)
 	var asked string
@@ -640,8 +646,8 @@ func TestInputsChannelTarball(t *testing.T) {
 	e.Compare("NixOS/nixpkgs", oldRev, newRev, 7, "fix: z")
 	repo := testutil.Tree(t, map[string]string{"flake.lock": `{"root":"root","version":7,"nodes":{
 		"root":{"inputs":{"nixpkgs":"nixpkgs"}},
-		"nixpkgs":{"locked":{"type":"tarball","url":"https://releases.nixos.org/x/nixexprs.tar.zst?lastModified=1&rev=` + oldRev + `"},
-			"original":{"type":"tarball","url":"https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst"}}}}`})
+		"nixpkgs":{"locked":{"type":"tarball","url":"https://releases.nixos.org/x/nixexprs.tar.` + ext + `?lastModified=1&rev=` + oldRev + `"},
+			"original":{"type":"tarball","url":"https://channels.nixos.org/nixos-unstable/nixexprs.tar.` + ext + `"}}}}`})
 
 	row := checker(e).Inputs(repo, true)[0]
 	if row.Status != check.Outdated || row.Latest != flake.ShortRev(newRev) || row.Current[:7] != flake.ShortRev(oldRev) {
