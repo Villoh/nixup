@@ -28,8 +28,8 @@ type Node struct {
 }
 
 // channelRe matches a NixOS channel tarball, the way the NixOS wiki writes the nixpkgs input:
-// https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz
-var channelRe = regexp.MustCompile(`^(https://(?:channels\.nixos\.org|nixos\.org/channels)/[^/?]+)/nixexprs\.tar\.(?:xz|gz)(?:\?|$)`)
+// https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst
+var channelRe = regexp.MustCompile(`^(https://(?:channels\.nixos\.org|nixos\.org/channels)/[^/?]+)/nixexprs\.tar\.(?:xz|gz|zst)(?:\?|$)`)
 
 // Channel is the URL of a channel tarball input's directory, "" for any other input.
 func (n Node) Channel() string {
