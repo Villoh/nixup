@@ -640,8 +640,8 @@ func TestInputsChannelTarball(t *testing.T) {
 	e.Compare("NixOS/nixpkgs", oldRev, newRev, 7, "fix: z")
 	repo := testutil.Tree(t, map[string]string{"flake.lock": `{"root":"root","version":7,"nodes":{
 		"root":{"inputs":{"nixpkgs":"nixpkgs"}},
-		"nixpkgs":{"locked":{"type":"tarball","url":"https://releases.nixos.org/x/nixexprs.tar.xz?lastModified=1&rev=` + oldRev + `"},
-			"original":{"type":"tarball","url":"https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"}}}}`})
+		"nixpkgs":{"locked":{"type":"tarball","url":"https://releases.nixos.org/x/nixexprs.tar.zst?lastModified=1&rev=` + oldRev + `"},
+			"original":{"type":"tarball","url":"https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst"}}}}`})
 
 	row := checker(e).Inputs(repo, true)[0]
 	if row.Status != check.Outdated || row.Latest != flake.ShortRev(newRev) || row.Current[:7] != flake.ShortRev(oldRev) {

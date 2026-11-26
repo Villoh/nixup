@@ -10,7 +10,7 @@ lang: es
 
 ## Solo upstreams de GitHub
 
-- Inputs: solo se comprueban los inputs directos de tipo `github` y los tarballs de canales de NixOS (`https://channels.nixos.org/<canal>/nixexprs.tar.xz`, que se comparan con el `git-revision` del canal y se revisan contra `NixOS/nixpkgs`). Los `gitlab:`, `git+https:`, `path:` y demás tarballs no aparecen en el informe.
+- Inputs: solo se comprueban los inputs directos de tipo `github` y los tarballs de canales de NixOS (`https://channels.nixos.org/<canal>/nixexprs.tar.zst`, que se comparan con el `git-revision` del canal y se revisan contra `NixOS/nixpkgs`). Los `gitlab:`, `git+https:`, `path:` y demás tarballs no aparecen en el informe.
 - Paquetes: un paquete cuyo `--url`, URLs de código fuente y homepage no apuntan a github.com sale como `info` con `no GitHub upstream: check by hand`.
 - Las revisiones (commits, enlaces de comparación, release notes) salen solo de la API de GitHub.
 
