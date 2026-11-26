@@ -5,7 +5,9 @@ package flake
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"sort"
 )
 
@@ -13,6 +15,7 @@ type Node struct {
 	Inputs map[string]json.RawMessage `json:"inputs"`
 	Locked struct {
 		Rev          string `json:"rev"`
+		URL          string `json:"url"`
 		LastModified int64  `json:"lastModified"`
 	} `json:"locked"`
 	Original struct {
@@ -20,7 +23,45 @@ type Node struct {
 		Owner string `json:"owner"`
 		Repo  string `json:"repo"`
 		Ref   string `json:"ref"`
+		URL   string `json:"url"`
 	} `json:"original"`
+}
+
+// channelRe matches a NixOS channel tarball, the way the NixOS wiki writes the nixpkgs input:
+// https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz
+var channelRe = regexp.MustCompile(`^(https://(?:channels\.nixos\.org|nixos\.org/channels)/[^/?]+)/nixexprs\.tar\.(?:xz|gz)(?:\?|$)`)
+
+// Channel is the URL of a channel tarball input's directory, "" for any other input.
+func (n Node) Channel() string {
+	if n.Original.Type != "tarball" {
+		return ""
+	}
+	if m := channelRe.FindStringSubmatch(n.Original.URL); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// Repo is "owner/name" for a github input, or NixOS/nixpkgs for a channel tarball; else "".
+func (n Node) Repo() string {
+	switch {
+	case n.Original.Type == "github":
+		return n.Original.Owner + "/" + n.Original.Repo
+	case n.Channel() != "":
+		return "NixOS/nixpkgs"
+	}
+	return ""
+}
+
+// Rev is the locked commit. A tarball lock may carry it only as `rev=` in the locked URL.
+func (n Node) Rev() string {
+	if n.Locked.Rev != "" {
+		return n.Locked.Rev
+	}
+	if u, err := url.Parse(n.Locked.URL); err == nil {
+		return u.Query().Get("rev")
+	}
+	return ""
 }
 
 type Lock struct {
@@ -93,17 +134,14 @@ func Diff(old, cur *Lock) ([]Change, int) {
 	for _, name := range cur.Names() {
 		node := cur.Nodes[cd[name]]
 		isDirect[cd[name]] = true
-		if o := old.Nodes[od[name]]; o.Locked.Rev != node.Locked.Rev {
-			c := Change{Name: name, Ref: node.Original.Ref, Old: o.Locked.Rev, New: node.Locked.Rev}
-			if node.Original.Type == "github" {
-				c.Repo = node.Original.Owner + "/" + node.Original.Repo
-			}
+		if o := old.Nodes[od[name]]; o.Rev() != node.Rev() {
+			c := Change{Name: name, Ref: node.Original.Ref, Old: o.Rev(), New: node.Rev(), Repo: node.Repo()}
 			out = append(out, c)
 		}
 	}
 	transitive := 0
 	for key, node := range cur.Nodes {
-		if key != cur.Root && !isDirect[key] && node.Locked.Rev != old.Nodes[key].Locked.Rev {
+		if key != cur.Root && !isDirect[key] && node.Rev() != old.Nodes[key].Rev() {
 			transitive++
 		}
 	}

@@ -92,9 +92,9 @@ func listInputs(repo string) Group {
 		switch o := node.Original; {
 		case o.Ref != "" && ver.Looks(o.Ref):
 			it.Version = o.Ref
-		case node.Locked.Rev != "":
+		case node.Rev() != "":
 			age := int(time.Since(time.Unix(node.Locked.LastModified, 0)).Hours() / 24)
-			it.Version = fmt.Sprintf("%s · %dd", flake.ShortRev(node.Locked.Rev), age)
+			it.Version = fmt.Sprintf("%s · %dd", flake.ShortRev(node.Rev()), age)
 		}
 		if o := node.Original; o.Type == "github" {
 			it.Note = "github:" + o.Owner + "/" + o.Repo

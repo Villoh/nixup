@@ -124,7 +124,7 @@ func (c *Checker) Inputs(repo string, review bool) []Row {
 	}
 	var names []string
 	for _, n := range lock.Names() {
-		if node, _ := lock.Input(n); node.Original.Type == "github" {
+		if node, _ := lock.Input(n); node.Repo() != "" {
 			names = append(names, n)
 		}
 	}
@@ -248,8 +248,8 @@ func (c *Checker) NewerTag(node flake.Node) (string, error) {
 }
 
 func (c *Checker) input(name string, node flake.Node, review bool) Row {
-	id := node.Original.Owner + "/" + node.Original.Repo
-	ref, rev := node.Original.Ref, node.Locked.Rev
+	id := node.Repo()
+	ref, rev := node.Original.Ref, node.Rev()
 	age := int(time.Since(time.Unix(node.Locked.LastModified, 0)).Hours() / 24)
 
 	if PinnedTag(node) {
@@ -268,9 +268,18 @@ func (c *Checker) input(name string, node flake.Node, review bool) Row {
 		return row
 	}
 
-	head, err := c.GH.Head(id, ref)
+	var head string
+	var err error
+	if ch := node.Channel(); ch != "" {
+		head, err = c.GH.Text(ch + "/git-revision")
+	} else {
+		head, err = c.GH.Head(id, ref)
+	}
 	if err != nil {
 		return errRow("inputs", name, err)
+	}
+	if rev == "" {
+		return errRow("inputs", name, fmt.Errorf("no revision in flake.lock"))
 	}
 	if head == rev {
 		return Row{Section: "inputs", Name: name, Current: flake.ShortRev(rev), Status: OK}
@@ -437,7 +446,7 @@ func (c *Checker) Profile(repo string) []Row {
 	system := ""
 	if lock, err := flake.ReadLock(filepath.Join(repo, "flake.lock")); err == nil {
 		node, _ := lock.Input("nixpkgs")
-		system = node.Locked.Rev
+		system = node.Rev()
 	}
 	var rows []Row
 	for _, e := range entries {
