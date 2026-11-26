@@ -4,7 +4,7 @@ labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: Check [docs/limitations.md](https://github.com/Villoh/nixup/blob/main/docs/limitations.md) first: it may be a known limit.
+      value: "Check [docs/limitations.md](https://github.com/Villoh/nixup/blob/main/docs/limitations.md) first: it may be a known limit."
   - type: textarea
     id: what
     attributes:
