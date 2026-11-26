@@ -3,6 +3,7 @@ package check_test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -617,5 +618,39 @@ func TestFlatpakRefreshesAppstreamFirst(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].Latest != "2.2.0" || rows[0].Status != check.Outdated {
 		t.Errorf("a failed refresh (offline) still lists the updates: %+v", rows)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// A channel tarball input has no branch to ls-remote: the channel's git-revision is the head.
+func TestInputsChannelTarball(t *testing.T) {
+	const oldRev, newRev = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	e := testutil.New(t)
+	var asked string
+	e.GH.HTTP = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host != "channels.nixos.org" {
+			return http.DefaultTransport.RoundTrip(r) // the fake GitHub API
+		}
+		asked = r.URL.String()
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(newRev + "\n"))}, nil
+	})}
+	e.Compare("NixOS/nixpkgs", oldRev, newRev, 7, "fix: z")
+	repo := testutil.Tree(t, map[string]string{"flake.lock": `{"root":"root","version":7,"nodes":{
+		"root":{"inputs":{"nixpkgs":"nixpkgs"}},
+		"nixpkgs":{"locked":{"type":"tarball","url":"https://releases.nixos.org/x/nixexprs.tar.xz?lastModified=1&rev=` + oldRev + `"},
+			"original":{"type":"tarball","url":"https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"}}}}`})
+
+	row := checker(e).Inputs(repo, true)[0]
+	if row.Status != check.Outdated || row.Latest != flake.ShortRev(newRev) || row.Current[:7] != flake.ShortRev(oldRev) {
+		t.Fatalf("%+v", row)
+	}
+	if asked != "https://channels.nixos.org/nixos-unstable/git-revision" {
+		t.Errorf("asked %s", asked)
+	}
+	if row.Review == nil || row.Review.Commits != 7 {
+		t.Errorf("review = %+v", row.Review)
 	}
 }
